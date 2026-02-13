@@ -1,0 +1,915 @@
+/* ============================================
+   TALKABIZ - Soft UI Dashboard Compatible
+   Consistent with Creative Tim Soft UI
+   ============================================ */
+
+/* ============================================
+   SOFT UI COLOR PALETTE (Official)
+   ============================================ */
+:root {
+    /* Primary Soft UI Colors */
+    --soft-primary: #cb0c9f;
+    --soft-secondary: #8392ab;
+    --soft-info: #17c1e8;
+    --soft-success: #82d616;
+    --soft-warning: #fbcf33;
+    --soft-danger: #ea0606;
+    --soft-dark: #344767;
+    --soft-white: #ffffff;
+    
+    /* Talkabiz Brand - Harmonized with Soft UI */
+    --talkabiz-primary: #5e72e4;
+    --talkabiz-primary-dark: #324cdd;
+    --talkabiz-gradient: linear-gradient(310deg, #5e72e4 0%, #825ee4 100%);
+    --talkabiz-gradient-soft: linear-gradient(310deg, rgba(94, 114, 228, 0.1) 0%, rgba(130, 94, 228, 0.1) 100%);
+    
+    /* WhatsApp Accent */
+    --whatsapp-green: #25D366;
+    --whatsapp-dark: #128C7E;
+    --whatsapp-gradient: linear-gradient(310deg, #25D366 0%, #128C7E 100%);
+    
+    /* Soft UI Grays */
+    --soft-gray-100: #f8f9fa;
+    --soft-gray-200: #e9ecef;
+    --soft-gray-300: #dee2e6;
+    --soft-gray-400: #ced4da;
+    --soft-gray-500: #adb5bd;
+    --soft-gray-600: #6c757d;
+    --soft-gray-700: #495057;
+    --soft-gray-800: #343a40;
+    --soft-gray-900: #212529;
+    
+    /* Shadows - Soft UI Style */
+    --soft-shadow-sm: 0 .3125rem .625rem 0 rgba(0,0,0,.12);
+    --soft-shadow: 0 .25rem .375rem -.0625rem hsla(0,0%,8%,.12), 0 .125rem .25rem -.0625rem hsla(0,0%,8%,.07);
+    --soft-shadow-lg: 0 8px 26px -4px hsla(0,0%,8%,.15), 0 8px 9px -5px hsla(0,0%,8%,.06);
+    --soft-shadow-inset: inset 0 1px 2px hsla(0,0%,8%,.075);
+}
+
+/* ============================================
+   SIDEBAR - SOFT UI STYLE
+   ============================================ */
+
+/* Sidebar Container - Match Soft UI exactly */
+.sidenav {
+    background: linear-gradient(195deg, #42424a 0%, #191919 100%) !important;
+    border-radius: 1rem !important;
+    margin: 1rem !important;
+    height: calc(100vh - 2rem) !important;
+    box-shadow: var(--soft-shadow-lg) !important;
+    border: none !important;
+}
+
+/* For light sidebar variant */
+.sidenav.bg-white {
+    background: var(--soft-white) !important;
+    box-shadow: var(--soft-shadow-lg) !important;
+}
+
+/* Sidenav Header */
+.sidenav .sidenav-header {
+    padding: 0 !important;
+}
+
+.sidenav .sidenav-header .navbar-brand {
+    padding: 1.5rem 1.5rem 0.5rem !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+/* Brand Icon - WhatsApp Style */
+.sidenav .navbar-brand .brand-icon {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    background: var(--whatsapp-gradient) !important;
+    border-radius: 0.75rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 4px 7px -1px rgba(37, 211, 102, 0.4) !important;
+}
+
+.sidenav .navbar-brand .brand-icon i {
+    color: var(--soft-white) !important;
+    font-size: 1.25rem !important;
+}
+
+/* Brand Text */
+.sidenav .navbar-brand .brand-text {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    color: var(--soft-white) !important;
+    letter-spacing: -0.025em !important;
+}
+
+.sidenav.bg-white .navbar-brand .brand-text {
+    color: var(--soft-dark) !important;
+}
+
+/* Horizontal Rule */
+.sidenav hr.horizontal {
+    margin: 0.5rem 1rem 1rem !important;
+    background-color: transparent !important;
+    border-top: none !important;
+    background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent) !important;
+    height: 1px !important;
+    opacity: 0.25 !important;
+}
+
+.sidenav.bg-white hr.horizontal {
+    background-image: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.4), transparent) !important;
+}
+
+/* Navigation */
+.sidenav .navbar-nav {
+    padding: 0 1rem !important;
+}
+
+.sidenav .nav-item {
+    margin-bottom: 0.25rem !important;
+}
+
+/* Nav Link - Soft UI Style */
+.sidenav .nav-link {
+    display: flex !important;
+    align-items: center !important;
+    padding: 0.675rem 1rem !important;
+    margin: 0 !important;
+    border-radius: 0.5rem !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    white-space: nowrap !important;
+    transition: all 0.15s ease-in !important;
+}
+
+.sidenav.bg-white .nav-link {
+    color: var(--soft-dark) !important;
+}
+
+/* Icon Wrapper - Soft UI Standard */
+.sidenav .nav-link .icon-wrapper {
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
+    background: var(--soft-white) !important;
+    border-radius: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-right: 0.75rem !important;
+    box-shadow: var(--soft-shadow-sm) !important;
+    transition: all 0.15s ease-in !important;
+}
+
+.sidenav .nav-link .icon-wrapper i {
+    font-size: 0.8rem !important;
+    color: var(--talkabiz-primary) !important;
+    background: var(--talkabiz-gradient) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+}
+
+/* Nav Link Text */
+.sidenav .nav-link .nav-link-text {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    opacity: 1 !important;
+    transition: all 0.15s ease-in !important;
+}
+
+/* Hover State */
+.sidenav .nav-link:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.sidenav.bg-white .nav-link:hover {
+    background: var(--soft-gray-100) !important;
+}
+
+/* Active State - Soft UI Gradient */
+.sidenav .nav-link.active {
+    background: var(--talkabiz-gradient) !important;
+    color: var(--soft-white) !important;
+    box-shadow: 0 4px 7px -1px rgba(94, 114, 228, 0.4), 0 2px 4px -1px rgba(94, 114, 228, 0.3) !important;
+}
+
+.sidenav .nav-link.active .icon-wrapper {
+    background: var(--soft-white) !important;
+    box-shadow: none !important;
+}
+
+.sidenav .nav-link.active .icon-wrapper i {
+    background: var(--talkabiz-gradient) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+.sidenav .nav-link.active .nav-link-text {
+    color: var(--soft-white) !important;
+    font-weight: 600 !important;
+}
+
+/* ============================================
+   SIDEBAR FOOTER - USER PROFILE
+   ============================================ */
+.sidenav .sidenav-footer {
+    padding: 0 1rem 1rem !important;
+    margin-top: auto !important;
+}
+
+.sidenav .sidenav-footer hr {
+    margin: 1rem 0.5rem !important;
+    background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent) !important;
+    height: 1px !important;
+    border: none !important;
+    opacity: 0.25 !important;
+}
+
+.sidenav.bg-white .sidenav-footer hr {
+    background-image: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.4), transparent) !important;
+}
+
+/* User Card - Soft UI Card Style */
+.sidenav .user-card {
+    background: rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-radius: 0.75rem !important;
+    padding: 1rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.sidenav.bg-white .user-card {
+    background: var(--soft-gray-100) !important;
+    backdrop-filter: none !important;
+    border: 1px solid var(--soft-gray-200) !important;
+}
+
+.sidenav .user-card .user-info {
+    display: flex !important;
+    align-items: center !important;
+    margin-bottom: 0.75rem !important;
+}
+
+/* User Avatar */
+.sidenav .user-card .user-avatar {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-width: 2.5rem !important;
+    background: var(--talkabiz-gradient) !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-right: 0.75rem !important;
+    box-shadow: 0 3px 6px -1px rgba(94, 114, 228, 0.4) !important;
+}
+
+.sidenav .user-card .user-avatar span {
+    color: var(--soft-white) !important;
+    font-size: 0.875rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+}
+
+/* User Details */
+.sidenav .user-card .user-details {
+    flex: 1 !important;
+    min-width: 0 !important;
+}
+
+.sidenav .user-card .user-name {
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: var(--soft-white) !important;
+    margin: 0 0 0.125rem 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.sidenav.bg-white .user-card .user-name {
+    color: var(--soft-dark) !important;
+}
+
+.sidenav .user-card .user-role {
+    font-size: 0.75rem !important;
+    color: rgba(255, 255, 255, 0.6) !important;
+    margin: 0 !important;
+}
+
+.sidenav.bg-white .user-card .user-role {
+    color: var(--soft-gray-600) !important;
+}
+
+/* Logout Button - Soft UI Outline Style */
+.sidenav .btn-logout {
+    width: 100% !important;
+    height: 2.375rem !important;
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    border-radius: 0.5rem !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+    transition: all 0.15s ease-in !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+}
+
+.sidenav .btn-logout:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.6) !important;
+    color: var(--soft-white) !important;
+}
+
+.sidenav.bg-white .btn-logout {
+    border-color: var(--soft-gray-400) !important;
+    color: var(--soft-dark) !important;
+}
+
+.sidenav.bg-white .btn-logout:hover {
+    background: var(--soft-gray-200) !important;
+    border-color: var(--soft-gray-500) !important;
+}
+
+.sidenav .btn-logout i {
+    font-size: 0.75rem !important;
+}
+
+/* ============================================
+   MAIN CONTENT
+   ============================================ */
+.main-content {
+    background: var(--soft-gray-100) !important;
+    min-height: 100vh !important;
+}
+
+/* ============================================
+   NAVBAR - Soft UI Style
+   ============================================ */
+.navbar-main {
+    background: transparent !important;
+    padding: 0.5rem 0 !important;
+}
+
+.navbar-main .container-fluid {
+    padding: 0.5rem 1.5rem !important;
+}
+
+/* Breadcrumb */
+.navbar-main .breadcrumb {
+    background: transparent !important;
+    padding: 0 !important;
+    margin-bottom: 0.25rem !important;
+    font-size: 0.875rem !important;
+}
+
+.navbar-main .breadcrumb-item a {
+    color: var(--soft-gray-500) !important;
+    font-size: 0.875rem !important;
+    opacity: 0.8 !important;
+}
+
+.navbar-main .breadcrumb-item.active,
+.navbar-main .breadcrumb-item + .breadcrumb-item::before {
+    color: var(--soft-dark) !important;
+}
+
+.navbar-main h6 {
+    font-size: 0.875rem !important;
+    font-weight: 700 !important;
+    color: var(--soft-dark) !important;
+    margin: 0 !important;
+    text-transform: capitalize !important;
+}
+
+/* ============================================
+   CARDS - Soft UI Style
+   ============================================ */
+.card {
+    background: var(--soft-white) !important;
+    border: 0 !important;
+    border-radius: 1rem !important;
+    box-shadow: var(--soft-shadow-lg) !important;
+}
+
+.card-header {
+    background: transparent !important;
+    border-bottom: 1px solid var(--soft-gray-200) !important;
+    padding: 1.5rem !important;
+}
+
+.card-body {
+    padding: 1.5rem !important;
+}
+
+/* ============================================
+   BUTTONS - Soft UI Style
+   ============================================ */
+.btn {
+    font-weight: 700 !important;
+    font-size: 0.75rem !important;
+    border-radius: 0.5rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+    transition: all 0.15s ease-in !important;
+}
+
+.btn-sm {
+    padding: 0.5rem 1.25rem !important;
+    font-size: 0.75rem !important;
+}
+
+/* Gradient Primary Button */
+.bg-gradient-primary,
+.btn-primary,
+.btn.bg-gradient-primary {
+    background: var(--talkabiz-gradient) !important;
+    border: none !important;
+    color: var(--soft-white) !important;
+    box-shadow: 0 3px 5px -1px rgba(94, 114, 228, 0.4), 0 2px 3px -1px rgba(94, 114, 228, 0.3) !important;
+}
+
+.bg-gradient-primary:hover,
+.btn-primary:hover,
+.btn.bg-gradient-primary:hover {
+    box-shadow: 0 5px 10px -2px rgba(94, 114, 228, 0.5), 0 3px 5px -1px rgba(94, 114, 228, 0.4) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Success Gradient */
+.bg-gradient-success {
+    background: linear-gradient(310deg, #17ad37 0%, #98ec2d 100%) !important;
+    box-shadow: 0 3px 5px -1px rgba(23, 173, 55, 0.4) !important;
+}
+
+/* Info Gradient */
+.bg-gradient-info {
+    background: linear-gradient(310deg, #2152ff 0%, #21d4fd 100%) !important;
+    box-shadow: 0 3px 5px -1px rgba(33, 82, 255, 0.4) !important;
+}
+
+/* ============================================
+   ICON SHAPES - Soft UI Dashboard
+   ============================================ */
+.icon-shape {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 0.75rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.icon-shape.icon-sm {
+    width: 32px !important;
+    height: 32px !important;
+}
+
+.icon-shape.icon-lg {
+    width: 64px !important;
+    height: 64px !important;
+}
+
+/* ============================================
+   FOOTER
+   ============================================ */
+.footer {
+    padding: 1.5rem 0 !important;
+    background: transparent !important;
+}
+
+.footer p,
+.footer a {
+    color: var(--soft-gray-600) !important;
+    font-size: 0.875rem !important;
+}
+
+/* ============================================
+   CUSTOM SCROLLBAR - Soft UI Style
+   ============================================ */
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--soft-gray-400);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--soft-gray-500);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+.shadow-soft {
+    box-shadow: var(--soft-shadow) !important;
+}
+
+.shadow-soft-lg {
+    box-shadow: var(--soft-shadow-lg) !important;
+}
+
+.rounded-soft {
+    border-radius: 1rem !important;
+}
+
+.text-gradient {
+    background: var(--talkabiz-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ============================================
+   HIDE DEMO ELEMENTS - Creative Tim
+   ============================================ */
+.fixed-plugin,
+.g-sidenav-show .fixed-plugin,
+.sidenav-toggler,
+.btn-close {
+    display: none !important;
+}
+
+/* ============================================
+   INBOX PAGE SYNC WITH SIDEBAR
+   ============================================ */
+
+/* Make inbox container match sidebar visual style */
+.inbox-container {
+    border-radius: 1rem !important;
+    box-shadow: var(--soft-shadow-lg) !important;
+    border: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Inbox header gradient background option */
+.inbox-list-header {
+    background: linear-gradient(180deg, var(--soft-white) 0%, var(--soft-gray-100) 100%) !important;
+}
+
+/* Filter buttons - Soft UI pill style */
+.inbox-filter-btn {
+    border-radius: 0.5rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+    padding: 0.5rem 1rem !important;
+    border: 1px solid var(--soft-gray-300) !important;
+    background: var(--soft-white) !important;
+    color: var(--soft-dark) !important;
+    transition: all 0.15s ease-in !important;
+}
+
+.inbox-filter-btn:hover {
+    background: var(--soft-gray-100) !important;
+    border-color: var(--soft-gray-400) !important;
+}
+
+.inbox-filter-btn.active {
+    background: var(--talkabiz-gradient) !important;
+    border: none !important;
+    color: var(--soft-white) !important;
+    box-shadow: 0 3px 5px -1px rgba(94, 114, 228, 0.4) !important;
+}
+
+/* Empty state styling */
+.inbox-empty-state {
+    padding: 3rem !important;
+}
+
+.inbox-empty-state i {
+    font-size: 3rem !important;
+    background: var(--talkabiz-gradient) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    opacity: 0.5 !important;
+    margin-bottom: 1rem !important;
+}
+
+.inbox-empty-state p {
+    color: var(--soft-gray-500) !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    width: 2rem !important;
+    height: 2rem !important;
+    border: 2px solid var(--soft-gray-200) !important;
+    border-top-color: var(--talkabiz-primary) !important;
+    border-radius: 50% !important;
+}
+
+/* Conversation items */
+.conversation-item {
+    border-radius: 0.5rem !important;
+    transition: all 0.15s ease-in !important;
+}
+
+.conversation-item:hover {
+    background: var(--soft-gray-100) !important;
+}
+
+.conversation-item.active {
+    background: var(--talkabiz-gradient-soft) !important;
+    border-left: 3px solid var(--talkabiz-primary) !important;
+}
+
+/* Avatar gradients */
+.conversation-avatar,
+.chat-header-avatar,
+.detail-avatar {
+    box-shadow: var(--soft-shadow-sm) !important;
+}
+
+/* Badges */
+.conversation-badge {
+    background: var(--talkabiz-gradient) !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.65rem !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 4px -1px rgba(94, 114, 228, 0.4) !important;
+}
+
+/* Chat actions buttons */
+.btn-action,
+.btn-primary-action {
+    background: var(--talkabiz-gradient) !important;
+    border: none !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.025em !important;
+    box-shadow: 0 3px 5px -1px rgba(94, 114, 228, 0.4) !important;
+    transition: all 0.15s ease-in !important;
+}
+
+.btn-action:hover,
+.btn-primary-action:hover {
+    box-shadow: 0 5px 10px -2px rgba(94, 114, 228, 0.5) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Composer send button */
+.btn-send {
+    background: var(--talkabiz-gradient) !important;
+    box-shadow: 0 3px 5px -1px rgba(94, 114, 228, 0.4) !important;
+}
+
+.btn-send:hover {
+    transform: scale(1.05) !important;
+    box-shadow: 0 5px 10px -2px rgba(94, 114, 228, 0.5) !important;
+}
+
+/* Detail panel buttons */
+.detail-btn-primary {
+    background: var(--talkabiz-gradient) !important;
+    border: none !important;
+    box-shadow: 0 3px 5px -1px rgba(94, 114, 228, 0.4) !important;
+}
+
+.detail-btn-secondary {
+    background: var(--soft-gray-100) !important;
+    border: 1px solid var(--soft-gray-300) !important;
+    color: var(--soft-dark) !important;
+}
+
+.detail-btn-danger {
+    background: transparent !important;
+    border: 1px solid var(--soft-gray-300) !important;
+    color: var(--soft-danger) !important;
+}
+
+.detail-btn-danger:hover {
+    background: rgba(234, 6, 6, 0.05) !important;
+    border-color: var(--soft-danger) !important;
+}
+
+/* Detail tags */
+.detail-tag {
+    background: var(--talkabiz-gradient-soft) !important;
+    color: var(--talkabiz-primary) !important;
+    border-radius: 0.375rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+}
+
+/* Message bubbles - Soft UI colors */
+.message-bubble.outgoing .message-content {
+    background: linear-gradient(310deg, #e9ecef 0%, #f8f9fa 100%) !important;
+    border-radius: 1rem 0.25rem 1rem 1rem !important;
+}
+
+.message-bubble.incoming .message-content {
+    background: var(--soft-white) !important;
+    border-radius: 0.25rem 1rem 1rem 1rem !important;
+    box-shadow: var(--soft-shadow-sm) !important;
+}
+/* ============================================
+   SIDEBAR SUBMENU NAVIGATION (Settings)
+   Unique classes to avoid conflicts with .nav-link.active
+   ============================================ */
+
+/* Parent Menu Item Container */
+.sidenav .nav-item-parent {
+    margin-bottom: 0.25rem !important;
+}
+
+/* Parent Toggle Button - NOT a page, just toggle */
+.sidenav .nav-toggle-parent {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    padding: 0.675rem 1rem !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0.5rem !important;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    white-space: nowrap !important;
+    text-align: left !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in !important;
+}
+
+.sidenav.bg-white .nav-toggle-parent {
+    color: var(--soft-dark) !important;
+}
+
+/* Parent Icon Wrapper */
+.sidenav .nav-toggle-parent .icon-wrapper {
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
+    background: var(--soft-white) !important;
+    border-radius: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-right: 0.75rem !important;
+    box-shadow: var(--soft-shadow-sm) !important;
+    transition: all 0.15s ease-in !important;
+}
+
+.sidenav .nav-toggle-parent .icon-wrapper i {
+    font-size: 0.8rem !important;
+    color: var(--talkabiz-primary) !important;
+    background: var(--talkabiz-gradient) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+}
+
+/* Parent Hover - Subtle background */
+.sidenav .nav-toggle-parent:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.sidenav.bg-white .nav-toggle-parent:hover {
+    background: var(--soft-gray-100) !important;
+}
+
+/* Parent Expanded State - Soft highlight only */
+.sidenav .nav-item-parent.is-expanded > .nav-toggle-parent {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.sidenav.bg-white .nav-item-parent.is-expanded > .nav-toggle-parent {
+    background: var(--soft-gray-100) !important;
+    color: var(--soft-dark) !important;
+}
+
+/* Submenu Arrow */
+.sidenav .nav-toggle-parent .submenu-arrow {
+    transition: transform 0.25s ease !important;
+    opacity: 0.7 !important;
+}
+
+/* Arrow rotates when submenu is open */
+.sidenav .nav-item-parent.is-expanded .submenu-arrow,
+.sidenav .nav-toggle-parent[aria-expanded="true"] .submenu-arrow {
+    transform: rotate(180deg) !important;
+}
+
+/* Submenu Container */
+.sidenav .nav-submenu {
+    padding: 0.5rem 0 0.25rem 0 !important;
+    margin-left: 1rem !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+    list-style: none !important;
+}
+
+.sidenav.bg-white .nav-submenu {
+    border-left: 1px solid var(--soft-gray-200) !important;
+}
+
+/* Child Menu Item */
+.sidenav .nav-item-child {
+    margin-bottom: 0.125rem !important;
+    list-style: none !important;
+}
+
+/* Child Link - Normal State (separate class, no .nav-link) */
+.sidenav .nav-link-child {
+    display: flex !important;
+    align-items: center !important;
+    padding: 0.5rem 0.75rem 0.5rem 1rem !important;
+    margin: 0 !important;
+    border-radius: 0.375rem !important;
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.65) !important;
+    font-size: 0.8125rem !important;
+    font-weight: 400 !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease-in !important;
+    position: relative !important;
+}
+
+.sidenav.bg-white .nav-link-child {
+    color: var(--soft-secondary) !important;
+}
+
+/* Child Indicator Dot */
+.sidenav .nav-child-dot {
+    width: 6px !important;
+    height: 6px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.3) !important;
+    margin-right: 0.75rem !important;
+    transition: all 0.15s ease !important;
+    flex-shrink: 0 !important;
+}
+
+.sidenav.bg-white .nav-child-dot {
+    background: var(--soft-gray-300) !important;
+}
+
+/* Child Text */
+.sidenav .nav-child-text {
+    font-size: 0.8125rem !important;
+    transition: all 0.15s ease !important;
+}
+
+/* Child Hover State */
+.sidenav .nav-link-child:hover {
+    color: rgba(255, 255, 255, 0.9) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.sidenav.bg-white .nav-link-child:hover {
+    color: var(--soft-dark) !important;
+    background: var(--soft-gray-100) !important;
+}
+
+.sidenav .nav-link-child:hover .nav-child-dot {
+    background: rgba(255, 255, 255, 0.6) !important;
+}
+
+.sidenav.bg-white .nav-link-child:hover .nav-child-dot {
+    background: var(--soft-gray-400) !important;
+}
+
+/* ============================================
+   CHILD ACTIVE STATE - THE ONLY ACTIVE
+   Uses .is-active to avoid .nav-link.active conflicts
+   ============================================ */
+.sidenav .nav-link-child.is-active {
+    background: var(--talkabiz-gradient) !important;
+    color: var(--soft-white) !important;
+    font-weight: 600 !important;
+    box-shadow: 0 3px 5px -1px rgba(94, 114, 228, 0.35), 0 1px 3px -1px rgba(94, 114, 228, 0.25) !important;
+}
+
+.sidenav .nav-link-child.is-active .nav-child-dot {
+    background: var(--soft-white) !important;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+.sidenav .nav-link-child.is-active .nav-child-text {
+    color: var(--soft-white) !important;
+}

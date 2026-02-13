@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Session data (sensitive!)
+sessions/
+
+# Logs
+logs/
+
+# Environment
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# PM2
+*.pid
