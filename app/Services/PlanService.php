@@ -165,7 +165,7 @@ class PlanService
             Subscription::where('klien_id', $klien->id)
                 ->where('status', Subscription::STATUS_ACTIVE)
                 ->update([
-                    'status' => Subscription::STATUS_CANCELLED,
+                    'status' => Subscription::STATUS_EXPIRED,
                     'cancelled_at' => now(),
                 ]);
 
@@ -184,7 +184,7 @@ class PlanService
                     'plan_snapshot' => $snapshot,
                     'price' => $plan->price_monthly,
                     'currency' => 'IDR',
-                    'status' => Subscription::STATUS_PENDING,
+                    'status' => Subscription::STATUS_TRIAL_SELECTED,
                     'started_at' => null,
                     'expires_at' => null,
                 ]);

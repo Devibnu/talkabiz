@@ -36,13 +36,26 @@ class Subscription extends Model
 
     protected $table = 'subscriptions';
 
-    // ==================== CONSTANTS ====================
+    // ==================== STATUS CONSTANTS (LOCKED — 3 ONLY) ====================
+    // Revenue Lock Phase 1: hanya 3 status yang diizinkan.
+    // trial_selected = user pilih paket tapi belum bayar (invoice belum paid)
+    // active         = invoice paid + transaction success + expires_at > now()
+    // expired        = expires_at < now(), atau di-cancel, atau di-replace
 
-    const STATUS_PENDING = 'pending';
+    const STATUS_TRIAL_SELECTED = 'trial_selected';
     const STATUS_ACTIVE = 'active';
     const STATUS_EXPIRED = 'expired';
-    const STATUS_CANCELLED = 'cancelled';
-    const STATUS_REPLACED = 'replaced'; // Replaced by upgrade
+
+    /** @deprecated Use STATUS_EXPIRED — kept for backward compat in transition */
+    const STATUS_PENDING = 'trial_selected';
+    const STATUS_CANCELLED = 'expired';
+    const STATUS_REPLACED = 'expired';
+
+    const VALID_STATUSES = [
+        self::STATUS_TRIAL_SELECTED,
+        self::STATUS_ACTIVE,
+        self::STATUS_EXPIRED,
+    ];
 
     // Change types
     const CHANGE_TYPE_NEW = 'new';
@@ -110,11 +123,19 @@ class Subscription extends Model
     }
 
     /**
-     * Scope: Pending subscriptions
+     * Scope: Trial selected subscriptions (belum bayar)
+     */
+    public function scopeTrialSelected(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_TRIAL_SELECTED);
+    }
+
+    /**
+     * @deprecated Use scopeTrialSelected
      */
     public function scopePending(Builder $query): Builder
     {
-        return $query->where('status', self::STATUS_PENDING);
+        return $this->scopeTrialSelected($query);
     }
 
     /**
@@ -134,6 +155,14 @@ class Subscription extends Model
     }
 
     /**
+     * Scope: Not expired (active or trial_selected)
+     */
+    public function scopeNotExpired(Builder $query): Builder
+    {
+        return $query->where('status', '!=', self::STATUS_EXPIRED);
+    }
+
+    /**
      * Scope: Expiring soon (within X days)
      */
     public function scopeExpiringSoon(Builder $query, int $days = 7): Builder
@@ -141,6 +170,17 @@ class Subscription extends Model
         return $query->where('status', self::STATUS_ACTIVE)
             ->whereNotNull('expires_at')
             ->whereBetween('expires_at', [now(), now()->addDays($days)]);
+    }
+
+    /**
+     * Scope: Should be expired (active but expires_at is past)
+     * Used by auto-expire scheduler.
+     */
+    public function scopeShouldBeExpired(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_ACTIVE)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<', now());
     }
 
     // ==================== ACCESSORS ====================
@@ -186,11 +226,34 @@ class Subscription extends Model
     }
 
     /**
-     * Check if subscription is active
+     * Check if subscription is active (attribute accessor)
      */
     public function getIsActiveAttribute(): bool
     {
-        return $this->status === self::STATUS_ACTIVE;
+        return $this->isActive();
+    }
+
+    /**
+     * Check if subscription is truly active (status + not expired).
+     * 
+     * FAIL-CLOSED: Both conditions MUST be true.
+     * - status === 'active'
+     * - expires_at is null (unlimited) OR expires_at > now()
+     * 
+     * Use this method instead of hardcoding status strings.
+     */
+    public function isActive(): bool
+    {
+        if ($this->status !== self::STATUS_ACTIVE) {
+            return false;
+        }
+
+        // If expires_at is set and in the past, NOT active
+        if ($this->expires_at && $this->expires_at->isPast()) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -246,7 +309,7 @@ class Subscription extends Model
         $subscription->plan_snapshot = $plan->toSnapshot();
         $subscription->price = $plan->price_monthly;
         $subscription->currency = 'IDR';
-        $subscription->status = self::STATUS_PENDING;
+        $subscription->status = self::STATUS_TRIAL_SELECTED;
         $subscription->save();
 
         return $subscription;
@@ -272,11 +335,12 @@ class Subscription extends Model
     }
 
     /**
-     * Cancel subscription
+     * Cancel subscription (sets to expired)
+     * Revenue Lock: cancelled = expired (tidak ada status cancelled terpisah)
      */
     public function cancel(): self
     {
-        $this->status = self::STATUS_CANCELLED;
+        $this->status = self::STATUS_EXPIRED;
         $this->cancelled_at = now();
         $this->save();
         
@@ -371,10 +435,11 @@ class Subscription extends Model
 
     /**
      * Mark subscription as replaced (by upgrade)
+     * Revenue Lock: replaced = expired (status baru tidak ada 'replaced')
      */
     public function markReplaced(int $newSubscriptionId): self
     {
-        $this->status = self::STATUS_REPLACED;
+        $this->status = self::STATUS_EXPIRED;
         $this->replaced_by = $newSubscriptionId;
         $this->replaced_at = now();
         $this->save();
@@ -383,11 +448,11 @@ class Subscription extends Model
     }
 
     /**
-     * Check if subscription was replaced
+     * Check if subscription was replaced (expired + has replaced_by)
      */
     public function isReplaced(): bool
     {
-        return $this->status === self::STATUS_REPLACED;
+        return $this->status === self::STATUS_EXPIRED && $this->replaced_by !== null;
     }
 
     /**

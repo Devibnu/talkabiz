@@ -432,7 +432,8 @@ class PlanTransaction extends Model
         ?string $promoCode = null,
         ?float $promoDiscount = null,
         ?string $ipAddress = null,
-        ?string $userAgent = null
+        ?string $userAgent = null,
+        ?string $idempotencyKey = null
     ): self {
         // Validate: Corporate plan cannot be purchased
         if ($plan->isCorporate()) {
@@ -456,6 +457,7 @@ class PlanTransaction extends Model
             'status' => self::STATUS_PENDING,
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
+            'idempotency_key' => $idempotencyKey, // Stable key dari PlanActivationService
         ]);
     }
 

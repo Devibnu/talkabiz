@@ -88,6 +88,10 @@ class SubscriptionPolicy
     /**
      * Validate user has active subscription
      * 
+     * FAIL-CLOSED: Jika ragu, DENY.
+     * Real-time check: cek expires_at langsung, bukan hanya status DB.
+     * Auto-expire: jika ditemukan subscription yang seharusnya expired, langsung update DB.
+     * 
      * @param User $user
      * @return array{allowed: bool, reason: string, message: string, subscription?: Subscription}
      */
@@ -107,11 +111,36 @@ class SubscriptionPolicy
             );
         }
 
-        // Check expiration from snapshot/model
-        if ($subscription->is_expired) {
+        // REAL-TIME EXPIRY CHECK (fail-closed)
+        // Jika expires_at ada dan sudah lewat → auto-expire di DB + clear cache
+        if ($subscription->expires_at && $subscription->expires_at->isPast()) {
+            try {
+                $subscription->markExpired();
+                Cache::forget("subscription:policy:{$user->klien_id}");
+
+                Log::info('[SubscriptionPolicy] Auto-expired stale subscription', [
+                    'subscription_id' => $subscription->id,
+                    'klien_id' => $subscription->klien_id,
+                    'expires_at' => $subscription->expires_at,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('[SubscriptionPolicy] Failed to auto-expire', [
+                    'subscription_id' => $subscription->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             return $this->deny(
                 self::REASON_SUBSCRIPTION_EXPIRED,
                 'Paket Anda sudah berakhir. Perpanjang paket untuk melanjutkan.'
+            );
+        }
+
+        // Final check: status must be active (defense in depth)
+        if ($subscription->status !== Subscription::STATUS_ACTIVE) {
+            return $this->deny(
+                self::REASON_NO_SUBSCRIPTION,
+                'Subscription Anda tidak dalam status aktif.'
             );
         }
 

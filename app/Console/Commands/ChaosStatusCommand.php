@@ -45,6 +45,11 @@ class ChaosStatusCommand extends Command
 
     public function handle(ChaosMetricsCollectorService $metricsCollector): int
     {
+        if (!config('app.chaos_enabled')) {
+            $this->error('❌ Chaos module is disabled. Set CHAOS_ENABLED=true in .env to enable.');
+            return 1;
+        }
+
         $this->info('🔥 CHAOS STATUS');
         $this->info('Environment: ' . app()->environment());
         $this->newLine();

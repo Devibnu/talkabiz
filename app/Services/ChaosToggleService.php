@@ -45,6 +45,10 @@ class ChaosToggleService
      */
     public static function isEnabled(string $flagKey): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         // Never enable chaos in production
         if (app()->environment('production')) {
             return false;
@@ -62,6 +66,10 @@ class ChaosToggleService
      */
     public static function getConfig(string $flagKey): ?array
     {
+        if (!config('app.chaos_enabled')) {
+            return null;
+        }
+
         if (!self::isEnabled($flagKey)) {
             return null;
         }
@@ -78,6 +86,10 @@ class ChaosToggleService
      */
     public static function hasChaosFor(string $component): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         if (app()->environment('production')) {
             return false;
         }
@@ -96,6 +108,10 @@ class ChaosToggleService
      */
     public static function getMockResponse(string $provider, string $endpoint, string $method = 'POST'): ?array
     {
+        if (!config('app.chaos_enabled')) {
+            return null;
+        }
+
         if (app()->environment('production')) {
             return null;
         }
@@ -127,6 +143,10 @@ class ChaosToggleService
      */
     public static function getMockForScenario(string $provider, string $scenario): ?array
     {
+        if (!config('app.chaos_enabled')) {
+            return null;
+        }
+
         $mocks = ChaosMockResponse::getForScenario($provider, $scenario);
         
         if ($mocks->isEmpty()) {
@@ -150,6 +170,10 @@ class ChaosToggleService
      */
     public static function getDelay(string $component): int
     {
+        if (!config('app.chaos_enabled')) {
+            return 0;
+        }
+
         $flagKey = "chaos.delay.{$component}";
         $config = self::getConfig($flagKey);
         
@@ -172,6 +196,10 @@ class ChaosToggleService
      */
     public static function shouldTimeout(string $component): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         $flagKey = "chaos.timeout.{$component}";
         $config = self::getConfig($flagKey);
         
@@ -188,6 +216,10 @@ class ChaosToggleService
      */
     public static function shouldFail(string $component): ?array
     {
+        if (!config('app.chaos_enabled')) {
+            return null;
+        }
+
         $flagKey = "chaos.failure.{$component}";
         $config = self::getConfig($flagKey);
         
@@ -213,6 +245,10 @@ class ChaosToggleService
      */
     public static function shouldDropWebhook(string $source = 'whatsapp'): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         $flagKey = "chaos.drop_webhook.{$source}";
         $config = self::getConfig($flagKey);
         
@@ -231,6 +267,10 @@ class ChaosToggleService
      */
     public static function getRunningExperiment(): ?ChaosExperiment
     {
+        if (!config('app.chaos_enabled')) {
+            return null;
+        }
+
         return Cache::remember(
             self::CACHE_PREFIX . 'running_experiment',
             self::CACHE_TTL,
@@ -243,6 +283,10 @@ class ChaosToggleService
      */
     public static function isExperimentRunning(): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         return self::getRunningExperiment() !== null;
     }
 
@@ -253,6 +297,10 @@ class ChaosToggleService
      */
     public static function enable(string $flagKey, int $enabledBy, array $config = [], ?int $durationSeconds = null): ChaosFlag
     {
+        if (!config('app.chaos_enabled')) {
+            throw new \RuntimeException('Chaos module is disabled. Set CHAOS_ENABLED=true to enable.');
+        }
+
         $flag = ChaosFlag::firstOrCreate(
             ['flag_key' => $flagKey],
             [
@@ -282,6 +330,10 @@ class ChaosToggleService
      */
     public static function disable(string $flagKey): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         $flag = ChaosFlag::where('flag_key', $flagKey)->first();
         
         if (!$flag) {
@@ -303,6 +355,10 @@ class ChaosToggleService
      */
     public static function disableAll(): int
     {
+        if (!config('app.chaos_enabled')) {
+            return 0;
+        }
+
         $count = ChaosFlag::where('is_enabled', true)->count();
         ChaosFlag::where('is_enabled', true)->update(['is_enabled' => false]);
         
@@ -377,6 +433,17 @@ class ChaosToggleService
      */
     public static function getStatus(): array
     {
+        if (!config('app.chaos_enabled')) {
+            return [
+                'chaos_enabled' => false,
+                'environment' => app()->environment(),
+                'running_experiment' => null,
+                'active_flags' => [],
+                'active_flag_count' => 0,
+                'reason' => 'Chaos module is disabled (CHAOS_ENABLED=false)',
+            ];
+        }
+
         $runningExperiment = self::getRunningExperiment();
         $activeFlags = ChaosFlag::active()->get();
 

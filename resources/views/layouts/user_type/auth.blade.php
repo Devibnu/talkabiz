@@ -60,6 +60,12 @@
         @include('components.fixed-plugin')
     @endif
 
+    {{-- Growth Engine: Activation Modal (auto-show for trial_selected users) --}}
+    @include('components.activation-modal')
+
+    {{-- Growth Engine: KPI Tracker JavaScript --}}
+    @include('components.activation-kpi-tracker')
+
     {{-- Topup Modal Integration — ONLY on billing pages (not subscription) --}}
     @if(auth()->check() && !in_array(auth()->user()->role ?? '', ['super_admin', 'superadmin']) && (request()->routeIs('billing') || request()->is('billing*')))
         <div id="topupModalContainer"></div>

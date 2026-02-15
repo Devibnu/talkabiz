@@ -43,6 +43,11 @@ class ChaosReportCommand extends Command
 
     public function handle(ChaosObservabilityService $observability): int
     {
+        if (!config('app.chaos_enabled')) {
+            $this->error('❌ Chaos module is disabled. Set CHAOS_ENABLED=true in .env to enable.');
+            return 1;
+        }
+
         $experimentId = $this->argument('experiment');
         $experiment = ChaosExperiment::with(['scenario', 'results', 'eventLogs'])
             ->where('experiment_id', $experimentId)

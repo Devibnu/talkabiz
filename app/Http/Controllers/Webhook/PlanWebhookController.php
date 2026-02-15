@@ -126,39 +126,7 @@ class PlanWebhookController extends Controller
         }
     }
 
-    /**
-     * Manual check status endpoint
-     * Untuk admin check status transaksi
-     * 
-     * GET /webhook/midtrans/plan/check/{orderId}
-     * 
-     * @param string $orderId
-     * @return JsonResponse
-     */
-    public function checkStatus(string $orderId): JsonResponse
-    {
-        // Validate order ID prefix
-        if (!str_starts_with($orderId, 'PLAN-')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid order ID format',
-            ], 400);
-        }
-
-        $status = $this->midtransService->checkStatus($orderId);
-
-        if (!$status) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get status from Midtrans',
-            ], 500);
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => $status,
-        ]);
-    }
+    // checkStatus() REMOVED → Webhook-only architecture
 
     /**
      * Callback redirect dari Snap (finish)

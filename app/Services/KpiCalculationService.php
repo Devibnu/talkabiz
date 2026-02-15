@@ -239,10 +239,7 @@ class KpiCalculationService
         $newClients = Klien::whereBetween('created_at', [$start, $end])->count();
 
         // Churned clients (subscription expired/cancelled this month, no renewal)
-        $churnedClients = Subscription::whereIn('status', [
-                Subscription::STATUS_EXPIRED, 
-                Subscription::STATUS_CANCELLED
-            ])
+        $churnedClients = Subscription::where('status', Subscription::STATUS_EXPIRED)
             ->whereBetween('updated_at', [$start, $end])
             ->whereNotExists(function ($query) use ($end) {
                 $query->select(DB::raw(1))
@@ -403,10 +400,7 @@ class KpiCalculationService
 
         $newSignups = Klien::whereDate('created_at', $snapshotDate)->count();
 
-        $churned = Subscription::whereIn('status', [
-                Subscription::STATUS_EXPIRED, 
-                Subscription::STATUS_CANCELLED
-            ])
+        $churned = Subscription::where('status', Subscription::STATUS_EXPIRED)
             ->whereDate('updated_at', $snapshotDate)
             ->distinct('klien_id')
             ->count('klien_id');

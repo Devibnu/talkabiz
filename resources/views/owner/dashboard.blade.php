@@ -463,6 +463,129 @@
 </div>
 
 {{-- Section 5: Usage Monitor & Quick Stats --}}
+
+{{-- Section 4.5: Trial Activation Monitor --}}
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header pb-0 p-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h6 class="mb-0">
+                            <i class="fas fa-user-clock me-1 text-warning"></i>
+                            Trial Belum Aktif
+                        </h6>
+                        <p class="text-xs text-secondary mb-0">User trial_selected yang belum bayar</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <span class="badge bg-gradient-warning">
+                            {{ $trialStats['total_trial'] ?? 0 }} Total Trial
+                        </span>
+                        <span class="badge bg-gradient-danger">
+                            {{ $trialStats['overdue_24h'] ?? 0 }} > 24 Jam
+                        </span>
+                        <span class="badge bg-gradient-success">
+                            {{ $trialStats['conversion_rate'] ?? 0 }}% Konversi (30d)
+                        </span>
+                        <span class="badge bg-gradient-info">
+                            {{ $trialStats['reminders_sent_7d'] ?? 0 }} Reminder (7d)
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {{-- KPI Mini Cards --}}
+            <div class="card-body pt-3 pb-0 px-3">
+                <div class="row">
+                    <div class="col-md-3 col-6 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <p class="text-xs text-secondary mb-0">Total Trial</p>
+                            <h4 class="font-weight-bolder mb-0 text-warning">{{ $trialStats['total_trial'] ?? 0 }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <p class="text-xs text-secondary mb-0">Sudah > 24 Jam</p>
+                            <h4 class="font-weight-bolder mb-0 text-danger">{{ $trialStats['overdue_24h'] ?? 0 }}</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <p class="text-xs text-secondary mb-0">Konversi 30d</p>
+                            <h4 class="font-weight-bolder mb-0 text-success">{{ $trialStats['conversion_rate'] ?? 0 }}%</h4>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <p class="text-xs text-secondary mb-0">Reminder 7d</p>
+                            <h4 class="font-weight-bolder mb-0 text-info">{{ $trialStats['reminders_sent_7d'] ?? 0 }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Overdue Trial Users Table --}}
+            @if(!empty($trialStats['overdue_list']) && count($trialStats['overdue_list']) > 0)
+            <div class="card-body px-0 pt-0 pb-2">
+                <div class="px-3 pb-2">
+                    <p class="text-xs text-danger font-weight-bold mb-0">
+                        <i class="fas fa-exclamation-circle me-1"></i> User > 24 Jam Belum Bayar (Top 10)
+                    </p>
+                </div>
+                <div class="table-responsive p-0">
+                    <table class="table align-items-center mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">User</th>
+                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Telepon</th>
+                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Daftar</th>
+                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Lama (jam)</th>
+                                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($trialStats['overdue_list'] as $trial)
+                            <tr>
+                                <td>
+                                    <div class="d-flex px-2 py-1">
+                                        <div class="avatar avatar-sm bg-gradient-warning rounded-circle me-2 d-flex align-items-center justify-content-center">
+                                            <span class="text-white text-xs">{{ strtoupper(substr($trial['name'], 0, 1)) }}</span>
+                                        </div>
+                                        <div class="d-flex flex-column justify-content-center">
+                                            <h6 class="mb-0 text-sm">{{ $trial['name'] }}</h6>
+                                            <p class="text-xs text-secondary mb-0">{{ $trial['email'] }}</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="text-xs">{{ $trial['phone'] ?? '-' }}</span></td>
+                                <td><span class="text-xs">{{ $trial['registered_at'] }}</span></td>
+                                <td>
+                                    <span class="badge bg-gradient-{{ $trial['hours_since'] >= 48 ? 'danger' : 'warning' }}">
+                                        {{ $trial['hours_since'] }} jam
+                                    </span>
+                                </td>
+                                <td class="align-middle text-center">
+                                    <button class="btn btn-link text-info p-1 mb-0" onclick="followUpTrial({{ $trial['id'] }})" title="Follow Up Manual">
+                                        <i class="fas fa-phone text-sm"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            @else
+            <div class="card-body text-center py-4">
+                <i class="fas fa-check-circle text-success" style="font-size: 2rem;"></i>
+                <p class="text-sm text-secondary mt-2 mb-0">Tidak ada user trial overdue > 24 jam 🎉</p>
+            </div>
+            @endif
+        </div>
+    </div>
+</div>
+
+{{-- Section 5: Usage Monitor & Quick Stats --}}
 <div class="row">
     {{-- Chart: Messages per Day --}}
     <div class="col-lg-8 mb-4">
@@ -659,6 +782,10 @@ async function pauseClient(clientId) {
 
 function followUp(clientId) {
     OwnerPopup.info('Feature follow up coming soon!', 'Coming Soon');
+}
+
+function followUpTrial(userId) {
+    OwnerPopup.info('Feature follow up trial coming soon! User ID: ' + userId, 'Coming Soon');
 }
 </script>
 @endpush

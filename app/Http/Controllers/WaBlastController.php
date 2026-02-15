@@ -393,7 +393,7 @@ class WaBlastController extends Controller
         }
 
         try {
-            // ============ REVENUE GUARD LAYER 4: Atomic Deduction ============
+            // ============ REVENUE GUARD LAYER 4: chargeAndExecute (atomic) ============
             $revenueGuard = app(RevenueGuardService::class);
             $recipientCount = $campaign->total_recipients ?? 0;
             if ($recipientCount <= 0) {
@@ -403,35 +403,38 @@ class WaBlastController extends Controller
                 ], 400);
             }
 
-            $guardResult = $revenueGuard->executeDeduction(
+            $guardResult = $revenueGuard->chargeAndExecute(
                 userId: Auth::id(),
                 messageCount: $recipientCount,
                 category: 'marketing',
                 referenceType: 'wa_blast',
                 referenceId: $campaign->id,
+                dispatchCallable: function ($transaction) use ($campaign, $klienId) {
+                    $result = $this->executeBlastCampaign($campaign, $transaction->id);
+
+                    Log::channel('wa-blast')->info('WA Blast completed via chargeAndExecute', [
+                        'campaign_id' => $campaign->id,
+                        'klien_id' => $klienId,
+                        'sent' => $result->totalSent,
+                        'failed' => $result->totalFailed,
+                        'cost' => $result->totalCost,
+                        'transaction_code' => $result->transactionCode,
+                        'revenue_guard_tx' => $transaction->id,
+                    ]);
+
+                    return $result;
+                },
                 costPreview: request()->attributes->get('revenue_guard', []),
             );
 
-            if (!$guardResult['success'] && !($guardResult['duplicate'] ?? false)) {
+            if ($guardResult['duplicate'] ?? false) {
                 return response()->json([
-                    'success' => false,
-                    'error' => 'revenue_guard_failed',
-                    'message' => $guardResult['message'] ?? 'Gagal memproses pembayaran',
-                ], 402);
+                    'success' => true,
+                    'message' => $guardResult['message'],
+                ]);
             }
 
-            // Execute via MessageDispatchService — preAuthorized karena RGS sudah deduct
-            $result = $this->executeBlastCampaign($campaign, $guardResult['transaction']?->id);
-            
-            Log::channel('wa-blast')->info('WA Blast completed via MessageDispatch + RevenueGuard L4', [
-                'campaign_id' => $campaign->id,
-                'klien_id' => $klienId,
-                'sent' => $result->totalSent,
-                'failed' => $result->totalFailed,
-                'cost' => $result->totalCost,
-                'transaction_code' => $result->transactionCode,
-                'revenue_guard_tx' => $guardResult['transaction']?->id,
-            ]);
+            $result = $guardResult['dispatch_result'];
 
             return response()->json([
                 'success' => $result->success,
@@ -455,6 +458,7 @@ class WaBlastController extends Controller
                 'success' => false,
                 'error' => 'insufficient_balance',
                 'message' => $e->getMessage(),
+                'topup_url' => route('billing'),
                 'balance_info' => $e->toApiResponse()
             ], 402); // 402 Payment Required
 
@@ -492,7 +496,7 @@ class WaBlastController extends Controller
             ], 404);
         }
 
-        // ============ REVENUE GUARD LAYER 4: Atomic Deduction ============
+        // ============ REVENUE GUARD LAYER 4: chargeAndExecute (atomic) ============
         try {
             $revenueGuard = app(RevenueGuardService::class);
             $recipientCount = $campaign->total_recipients ?? 0;
@@ -504,40 +508,42 @@ class WaBlastController extends Controller
                 ], 400);
             }
 
-            $guardResult = $revenueGuard->executeDeduction(
+            $guardResult = $revenueGuard->chargeAndExecute(
                 userId: Auth::id(),
                 messageCount: $recipientCount,
                 category: 'marketing',
                 referenceType: 'wa_blast_batch',
                 referenceId: $campaign->id,
+                dispatchCallable: function ($transaction) use ($campaign) {
+                    $result = $this->waBlast->startCampaign($campaign);
+
+                    if (!$result['success']) {
+                        throw new \RuntimeException($result['message'] ?? 'Gagal memulai campaign blast');
+                    }
+
+                    ProcessWaBlastBatch::dispatch($campaign->id, 0);
+
+                    return $result;
+                },
                 costPreview: request()->attributes->get('revenue_guard', []),
             );
 
-            if (!$guardResult['success'] && !($guardResult['duplicate'] ?? false)) {
+            if ($guardResult['duplicate'] ?? false) {
                 return response()->json([
-                    'success' => false,
-                    'error' => 'revenue_guard_failed',
-                    'message' => $guardResult['message'] ?? 'Gagal memproses pembayaran',
-                ], 402);
+                    'success' => true,
+                    'message' => $guardResult['message'],
+                ]);
             }
         } catch (\RuntimeException $e) {
             return response()->json([
                 'success' => false,
                 'error' => 'insufficient_balance',
                 'message' => $e->getMessage(),
+                'topup_url' => route('billing'),
             ], 402);
         }
 
-        $result = $this->waBlast->startCampaign($campaign);
-
-        if (!$result['success']) {
-            return response()->json($result, 400);
-        }
-
-        // Dispatch first batch job (saldo sudah dipotong oleh RGS)
-        ProcessWaBlastBatch::dispatch($campaign->id, 0);
-
-        Log::channel('wa-blast')->info('Campaign send initiated via RevenueGuard L4', [
+        Log::channel('wa-blast')->info('Campaign send initiated via chargeAndExecute', [
             'campaign_id' => $campaign->id,
             'klien_id' => $klienId,
             'revenue_guard_tx' => $guardResult['transaction']?->id ?? null,
@@ -546,7 +552,7 @@ class WaBlastController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Campaign mulai dikirim',
-            'campaign' => $result['campaign'],
+            'campaign' => $guardResult['dispatch_result']['campaign'] ?? $campaign->fresh(),
         ]);
     }
 
@@ -597,28 +603,46 @@ class WaBlastController extends Controller
             ], 404);
         }
 
-        // ============ REVENUE GUARD LAYER 4: Atomic Deduction for remaining ============
+        // ============ REVENUE GUARD LAYER 4: chargeAndExecute for remaining ============
         try {
             $remainingRecipients = max(0, ($campaign->total_recipients ?? 0) - ($campaign->sent_count ?? 0) - ($campaign->failed_count ?? 0));
 
             if ($remainingRecipients > 0) {
                 $revenueGuard = app(RevenueGuardService::class);
 
-                $guardResult = $revenueGuard->executeDeduction(
+                $guardResult = $revenueGuard->chargeAndExecute(
                     userId: Auth::id(),
                     messageCount: $remainingRecipients,
                     category: 'marketing',
                     referenceType: 'wa_blast_resume',
                     referenceId: $campaign->id,
+                    dispatchCallable: function ($transaction) use ($campaign) {
+                        $result = $this->waBlast->resumeCampaign($campaign);
+
+                        if ($result['success']) {
+                            $nextBatch = $campaign->current_batch + 1;
+                            ProcessWaBlastBatch::dispatch($campaign->id, $nextBatch);
+                        }
+
+                        return $result;
+                    },
                     costPreview: request()->attributes->get('revenue_guard', []),
                 );
 
-                if (!$guardResult['success'] && !($guardResult['duplicate'] ?? false)) {
+                if ($guardResult['duplicate'] ?? false) {
                     return response()->json([
-                        'success' => false,
-                        'error' => 'revenue_guard_failed',
-                        'message' => $guardResult['message'] ?? 'Gagal memproses pembayaran untuk resume',
-                    ], 402);
+                        'success' => true,
+                        'message' => $guardResult['message'],
+                    ]);
+                }
+
+                $result = $guardResult['dispatch_result'];
+            } else {
+                // No remaining — just resume
+                $result = $this->waBlast->resumeCampaign($campaign);
+                if ($result['success']) {
+                    $nextBatch = $campaign->current_batch + 1;
+                    ProcessWaBlastBatch::dispatch($campaign->id, $nextBatch);
                 }
             }
         } catch (\RuntimeException $e) {
@@ -626,18 +650,11 @@ class WaBlastController extends Controller
                 'success' => false,
                 'error' => 'insufficient_balance',
                 'message' => $e->getMessage(),
+                'topup_url' => route('billing'),
             ], 402);
         }
 
-        $result = $this->waBlast->resumeCampaign($campaign);
-
-        if ($result['success']) {
-            // Dispatch next batch
-            $nextBatch = $campaign->current_batch + 1;
-            ProcessWaBlastBatch::dispatch($campaign->id, $nextBatch);
-        }
-
-        return response()->json($result, $result['success'] ? 200 : 400);
+        return response()->json($result, ($result['success'] ?? false) ? 200 : 400);
     }
 
     /**

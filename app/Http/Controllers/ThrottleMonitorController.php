@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Services\RateLimiterService;
 use App\Services\CampaignThrottleService;
+use App\Services\RevenueGuardService;
 use App\Models\RateLimitBucket;
 use App\Models\SenderStatus;
 use App\Models\Kampanye;
+use App\Models\TargetKampanye;
 use App\Models\Plan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -208,10 +210,53 @@ class ThrottleMonitorController extends Controller
             ], 404);
         }
 
-        $result = $this->campaignThrottle->resumeCampaign(
-            $kampanye, 
-            $request->user()->id
-        );
+        // ============ REVENUE GUARD LAYER 4: chargeAndExecute (atomic) ============
+        try {
+            $remainingTargets = TargetKampanye::where('kampanye_id', $kampanye->id)
+                ->whereIn('status', ['pending', 'antrian'])
+                ->count();
+
+            if ($remainingTargets > 0) {
+                $revenueGuard = app(RevenueGuardService::class);
+
+                $guardResult = $revenueGuard->chargeAndExecute(
+                    userId: $request->user()->id,
+                    messageCount: $remainingTargets,
+                    category: 'marketing',
+                    referenceType: 'campaign_throttle_resume',
+                    referenceId: $kampanye->id,
+                    dispatchCallable: function ($transaction) use ($kampanye, $request) {
+                        return $this->campaignThrottle->resumeCampaign(
+                            $kampanye,
+                            $request->user()->id
+                        );
+                    },
+                    costPreview: $request->attributes->get('revenue_guard', []),
+                );
+
+                if ($guardResult['duplicate'] ?? false) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => $guardResult['message'],
+                    ]);
+                }
+
+                $result = $guardResult['dispatch_result'];
+            } else {
+                // No remaining targets — just resume status
+                $result = $this->campaignThrottle->resumeCampaign(
+                    $kampanye,
+                    $request->user()->id
+                );
+            }
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'insufficient_balance',
+                'message' => $e->getMessage(),
+                'topup_url' => route('billing'),
+            ], 402);
+        }
 
         return response()->json($result);
     }

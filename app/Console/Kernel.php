@@ -64,6 +64,16 @@ class Kernel extends ConsoleKernel
         // ==================== SUBSCRIPTION CHANGE SCHEDULER ====================
 
         /**
+         * Revenue Lock Phase 1 — Auto-expire subscriptions
+         * Runs every 5 minutes. If expires_at < now() → set status=expired.
+         * Fail-safe: middleware juga cek real-time.
+         */
+        $schedule->command('subscription:expire')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->name('subscription-auto-expire');
+
+        /**
          * Process pending subscription changes (downgrades)
          * Runs daily at 00:10 to apply scheduled downgrades
          */
@@ -84,6 +94,21 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->name('check-subscription-expiry-reminders');
 
+        // ==================== TRIAL ACTIVATION REMINDERS ====================
+
+        /**
+         * Send activation reminders to trial_selected users
+         * Runs hourly to send:
+         *   ≥1h  → email_1h  (first nudge)
+         *   ≥24h → email_24h + wa_24h (urgency push)
+         * Anti-duplicate: one-time per user per type
+         * Stop: skips users with successful payment or active subscription
+         */
+        $schedule->command('trial:send-reminders')
+            ->hourly()
+            ->withoutOverlapping()
+            ->name('trial-activation-reminders');
+
         // ==================== INVOICE & GRACE PERIOD SCHEDULER ====================
 
         /**
@@ -96,6 +121,18 @@ class Kernel extends ConsoleKernel
             ->hourly()
             ->withoutOverlapping()
             ->name('process-invoice-grace-period');
+
+        /**
+         * Subscription cleanup — Phase 3 (Duplicate Payment Lock)
+         * Runs every 6 hours to:
+         * 1. Expire pending invoices > 24h
+         * 2. Expire duplicate pending invoices
+         * 3. Expire stale pending transactions > 24h
+         */
+        $schedule->command('subscription:cleanup --hours=24')
+            ->everySixHours()
+            ->withoutOverlapping()
+            ->name('subscription-cleanup-duplicates');
 
         // ==================== REPORTING & KPI SCHEDULER ====================
 
@@ -786,6 +823,8 @@ class Kernel extends ConsoleKernel
           ->name('archive-status-metrics');
 
         // ==================== CHAOS TESTING SCHEDULER ====================
+        // SOFT FREEZE: Only runs when CHAOS_ENABLED=true
+        if (config('app.chaos_enabled')) {
 
         /**
          * Monitor running chaos experiments setiap 10 detik
@@ -908,6 +947,8 @@ class Kernel extends ConsoleKernel
         })->monthly()
           ->name('archive-chaos-experiments')
           ->environments(['local', 'staging', 'canary']);
+
+        } // end if (config('app.chaos_enabled'))
 
         // ==================== ERROR BUDGET SCHEDULER ====================
 

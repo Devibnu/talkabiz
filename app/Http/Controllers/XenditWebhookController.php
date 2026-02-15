@@ -110,27 +110,5 @@ class XenditWebhookController extends Controller
         }
     }
 
-    /**
-     * Check invoice status manually
-     * 
-     * @param Request $request
-     * @param string $invoiceId
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function checkStatus(Request $request, string $invoiceId)
-    {
-        $result = $this->xenditService->getInvoiceStatus($invoiceId);
-
-        if ($result['success']) {
-            return response()->json([
-                'success' => true,
-                'data' => $result['data'],
-            ]);
-        }
-
-        return response()->json([
-            'success' => false,
-            'message' => $result['message'],
-        ], 400);
-    }
+    // checkStatus() REMOVED → Webhook-only architecture
 }

@@ -10,7 +10,6 @@ use App\Models\PhaseTransitionLog;
 use App\Models\PilotUser;
 use App\Models\PilotTier;
 use App\Models\PilotUserMetric;
-use App\Models\CorporateProspect;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -508,90 +507,8 @@ class SoftLaunchService
     }
 
     // ==========================================
-    // CORPORATE PIPELINE
+    // CORPORATE PIPELINE (FROZEN - fokus UMKM SaaS)
     // ==========================================
-
-    /**
-     * Get corporate pipeline summary
-     */
-    public function getCorporatePipeline(): array
-    {
-        $stats = CorporateProspect::getPipelineStats();
-        
-        return [
-            'summary' => $stats,
-            'pipeline' => [
-                'leads' => CorporateProspect::leads()->count(),
-                'qualified' => CorporateProspect::qualified()->count(),
-                'in_negotiation' => CorporateProspect::inNegotiation()->count(),
-                'won' => CorporateProspect::won()->count(),
-                'lost' => CorporateProspect::lost()->count(),
-            ],
-            'overdue_followups' => CorporateProspect::needFollowup()
-                ->get()
-                ->map(fn($p) => [
-                    'company' => $p->company_name,
-                    'status' => $p->status_label,
-                    'days_overdue' => now()->diffInDays($p->next_followup_at),
-                    'assigned_to' => $p->assigned_to,
-                ]),
-            'recent_wins' => CorporateProspect::won()
-                ->orderBy('updated_at', 'desc')
-                ->limit(5)
-                ->get()
-                ->map(fn($p) => [
-                    'company' => $p->company_name,
-                    'value' => $p->deal_value_formatted,
-                    'converted' => $p->converted_at?->format('d M Y'),
-                ]),
-        ];
-    }
-
-    /**
-     * Check if ready for corporate phase
-     */
-    public function isReadyForCorporate(): array
-    {
-        $umkmScale = LaunchPhase::getPhaseByCode('umkm_scale');
-        $corporate = LaunchPhase::getPhaseByCode('corporate_onboard');
-        
-        if (!$umkmScale || !$corporate) {
-            return ['ready' => false, 'reason' => 'Phases not configured'];
-        }
-        
-        $checks = [];
-        
-        // Check UMKM Scale status
-        $checks['umkm_scale_completed'] = $umkmScale->status === 'completed';
-        
-        // Check case studies
-        $caseStudies = PilotUser::where('willing_to_case_study', true)
-            ->whereIn('status', ['active', 'graduated'])
-            ->count();
-        $checks['case_studies_ready'] = $caseStudies >= 3;
-        
-        // Check NPS
-        $avgNps = PilotUser::whereNotNull('nps_score')->avg('nps_score');
-        $checks['nps_acceptable'] = ($avgNps ?? 0) >= 30;
-        
-        // Check corporate checklists
-        $corporateChecklists = LaunchChecklist::getBlockingItems($corporate, 'before_start');
-        $checks['checklists_complete'] = $corporateChecklists->isEmpty();
-        
-        // Check pipeline
-        $qualifiedProspects = CorporateProspect::qualified()->count();
-        $checks['pipeline_ready'] = $qualifiedProspects >= 5;
-        
-        $allReady = collect($checks)->every(fn($v) => $v === true);
-        
-        return [
-            'ready' => $allReady,
-            'checks' => $checks,
-            'recommendation' => $allReady 
-                ? "✅ Siap mulai Corporate Onboarding"
-                : "⏳ Belum siap - selesaikan checklist terlebih dahulu",
-        ];
-    }
 
     // ==========================================
     // METRICS & SNAPSHOTS
@@ -710,12 +627,10 @@ class SoftLaunchService
             'ready_for_next' => $currentPhase 
                 ? $this->getTransitionReadiness($currentPhase) 
                 : null,
-            'corporate_readiness' => $this->isReadyForCorporate(),
             'key_numbers' => [
                 'total_pilots' => PilotUser::active()->count(),
                 'total_revenue' => PilotUser::sum('total_revenue'),
                 'avg_delivery_rate' => round(PilotUser::active()->avg('avg_delivery_rate'), 2),
-                'corporate_pipeline' => CorporateProspect::active()->count(),
             ],
         ];
     }

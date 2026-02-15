@@ -596,6 +596,24 @@ class PaymentGatewayService
     protected function processPaymentStatus(Payment $payment, string $status, array $webhookData): array
     {
         return DB::transaction(function () use ($payment, $status, $webhookData) {
+            // HARDENING: Re-fetch with pessimistic lock inside transaction
+            // Prevents race condition when duplicate webhooks arrive simultaneously
+            $payment = Payment::where('id', $payment->id)
+                ->lockForUpdate()
+                ->first();
+
+            // Post-lock idempotency check (status may have changed between outer check and lock acquisition)
+            if ($payment->is_processed && $payment->status === Payment::STATUS_SUCCESS) {
+                Log::info('[PaymentGateway] Payment already processed (post-lock idempotent)', [
+                    'payment_id' => $payment->id,
+                ]);
+                return [
+                    'success' => true,
+                    'idempotent' => true,
+                    'message' => 'Already processed',
+                ];
+            }
+
             // Update payment gateway response
             $payment->gateway_response = $webhookData;
             $payment->gateway_transaction_id = $webhookData['transaction_id'] ?? null;
@@ -735,39 +753,7 @@ class PaymentGatewayService
 
     // ==================== UTILITY ====================
 
-    /**
-     * Get payment status from gateway (for checking)
-     */
-    public function checkPaymentStatus(Payment $payment): array
-    {
-        if (!$this->isMidtransActive()) {
-            return [
-                'success' => false,
-                'message' => 'Midtrans not active',
-            ];
-        }
-
-        try {
-            $this->initializeMidtrans();
-
-            $status = \Midtrans\Transaction::status($payment->gateway_order_id);
-
-            return [
-                'success' => true,
-                'status' => $status,
-            ];
-        } catch (\Exception $e) {
-            Log::error('[PaymentGateway] Error checking status', [
-                'payment_id' => $payment->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
-        }
-    }
+    // checkPaymentStatus() REMOVED → Webhook-only architecture
 
     /**
      * Cancel a pending payment at gateway

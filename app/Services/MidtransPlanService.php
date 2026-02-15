@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Plan;
 use App\Models\PlanTransaction;
+use App\Models\SubscriptionInvoice;
 use App\Models\User;
 use App\Models\PaymentGateway;
 use App\Models\WebhookLog;
@@ -500,12 +501,32 @@ class MidtransPlanService
 
     /**
      * Handle successful payment
+     * 
+     * PHASE 3 HARDENED:
+     * - Cek invoice status sebelum activate (duplicate webhook protection)
+     * - Idempotent: jika invoice sudah paid → skip tanpa error
      */
     protected function handlePaymentSuccess(
         PlanTransaction $transaction,
         ?string $paymentType,
         array $payload
     ): array {
+        // ================================================================
+        // GUARD 0: Cek invoice status — jika sudah paid, skip (duplicate webhook)
+        // ================================================================
+        $invoice = SubscriptionInvoice::where('plan_transaction_id', $transaction->id)->first();
+        if ($invoice && $invoice->isPaid()) {
+            Log::info('Midtrans Plan: Invoice already paid — duplicate webhook ignored', [
+                'order_id' => $transaction->pg_order_id,
+                'invoice_number' => $invoice->invoice_number,
+            ]);
+            return [
+                'success' => true,
+                'message' => 'Already paid (duplicate webhook)',
+                'idempotent' => true,
+            ];
+        }
+
         // 1. Mark transaction as success
         $transaction->markAsSuccess(
             pgTransactionId: $payload['transaction_id'] ?? null,
@@ -514,7 +535,7 @@ class MidtransPlanService
             responsePayload: $payload
         );
 
-        // 2. Activate plan via service
+        // 2. Activate plan via service (already wrapped in DB::transaction)
         try {
             $userPlan = $this->activationService->activateFromPayment(
                 $transaction->idempotency_key
@@ -669,181 +690,6 @@ class MidtransPlanService
         return true;
     }
 
-    /**
-     * Check transaction status dari Midtrans
-     */
-    public function checkStatus(string $orderId): ?array
-    {
-        try {
-            $status = \Midtrans\Transaction::status($orderId);
-            return (array) $status;
-        } catch (Exception $e) {
-            Log::error('Failed to check Midtrans status', [
-                'order_id' => $orderId,
-                'error' => $e->getMessage(),
-            ]);
-            return null;
-        }
-    }
-
-    /**
-     * Sync Midtrans payment status ke PlanTransaction.
-     *
-     * Panggil Midtrans Transaction Status API, lalu update
-     * status transaksi sesuai response:
-     *   settlement | capture  → status = success, paid_at = now()
-     *   expire               → status = expired
-     *   cancel | deny        → status = failed
-     *   pending              → no change
-     *
-     * @return array{success: bool, status: string, message: string, activated?: bool}
-     */
-    public function syncMidtransStatus(PlanTransaction $transaction): array
-    {
-        // Sudah success? Idempotent return.
-        if ($transaction->status === PlanTransaction::STATUS_SUCCESS) {
-            return [
-                'success' => true,
-                'status' => 'success',
-                'message' => 'Transaksi sudah berhasil sebelumnya.',
-                'activated' => true,
-            ];
-        }
-
-        // Hanya proses transaksi yang masih bisa diproses
-        if (!$transaction->canBeProcessed()) {
-            return [
-                'success' => false,
-                'status' => $transaction->status,
-                'message' => 'Transaksi tidak dalam status yang bisa diproses.',
-            ];
-        }
-
-        // Harus punya pg_order_id
-        if (!$transaction->pg_order_id) {
-            return [
-                'success' => false,
-                'status' => $transaction->status,
-                'message' => 'Transaksi belum memiliki order ID dari payment gateway.',
-            ];
-        }
-
-        // Refresh Midtrans config dari DB
-        $this->refreshConfig();
-
-        try {
-            $midtransResponse = \Midtrans\Transaction::status($transaction->pg_order_id);
-        } catch (\Throwable $e) {
-            Log::error('syncMidtransStatus: API call failed', [
-                'transaction_code' => $transaction->transaction_code,
-                'pg_order_id' => $transaction->pg_order_id,
-                'error' => $e->getMessage(),
-            ]);
-            return [
-                'success' => false,
-                'status' => $transaction->status,
-                'message' => 'Gagal menghubungi Midtrans API: ' . $e->getMessage(),
-            ];
-        }
-
-        $transactionStatus = $midtransResponse->transaction_status ?? null;
-        $fraudStatus = $midtransResponse->fraud_status ?? 'accept';
-        $paymentType = $midtransResponse->payment_type ?? null;
-        $payload = (array) $midtransResponse;
-
-        Log::info('syncMidtransStatus: Response received', [
-            'transaction_code' => $transaction->transaction_code,
-            'pg_order_id' => $transaction->pg_order_id,
-            'transaction_status' => $transactionStatus,
-            'fraud_status' => $fraudStatus,
-            'payment_type' => $paymentType,
-        ]);
-
-        // --- settlement / capture → SUCCESS ---
-        if (in_array($transactionStatus, ['settlement', 'capture'])) {
-            // Capture with fraud check
-            if ($transactionStatus === 'capture' && $fraudStatus !== 'accept') {
-                $transaction->markAsFailed('Fraud detected: ' . $fraudStatus, $payload);
-                return [
-                    'success' => false,
-                    'status' => 'failed',
-                    'message' => 'Pembayaran ditolak (fraud detection).',
-                ];
-            }
-
-            $transaction->markAsSuccess(
-                pgTransactionId: $midtransResponse->transaction_id ?? null,
-                paymentMethod: $paymentType,
-                paymentChannel: $this->extractPaymentChannel($payload),
-                responsePayload: $payload,
-            );
-
-            // Activate plan
-            $activated = false;
-            try {
-                $userPlan = $this->activationService->activateFromPayment(
-                    $transaction->idempotency_key
-                );
-                $activated = $userPlan !== null;
-
-                Log::info('syncMidtransStatus: Plan activated', [
-                    'transaction_code' => $transaction->transaction_code,
-                    'user_plan_id' => $userPlan?->id,
-                ]);
-            } catch (\Throwable $e) {
-                Log::error('syncMidtransStatus: Activation failed', [
-                    'transaction_code' => $transaction->transaction_code,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            return [
-                'success' => true,
-                'status' => 'success',
-                'message' => 'Pembayaran berhasil diverifikasi.' . ($activated ? ' Paket sudah aktif.' : ' Aktivasi paket pending.'),
-                'activated' => $activated,
-            ];
-        }
-
-        // --- pending → no change ---
-        if ($transactionStatus === 'pending') {
-            return [
-                'success' => true,
-                'status' => 'pending',
-                'message' => 'Pembayaran masih menunggu konfirmasi.',
-            ];
-        }
-
-        // --- expire → expired ---
-        if ($transactionStatus === 'expire') {
-            $transaction->markAsExpired();
-            return [
-                'success' => false,
-                'status' => 'expired',
-                'message' => 'Pembayaran telah kedaluwarsa.',
-            ];
-        }
-
-        // --- cancel / deny → failed ---
-        if (in_array($transactionStatus, ['cancel', 'deny'])) {
-            $transaction->markAsFailed('Midtrans status: ' . $transactionStatus, $payload);
-            return [
-                'success' => false,
-                'status' => 'failed',
-                'message' => 'Pembayaran gagal (' . $transactionStatus . ').',
-            ];
-        }
-
-        // --- unknown ---
-        Log::warning('syncMidtransStatus: Unknown Midtrans status', [
-            'transaction_code' => $transaction->transaction_code,
-            'transaction_status' => $transactionStatus,
-        ]);
-
-        return [
-            'success' => false,
-            'status' => $transaction->status,
-            'message' => 'Status pembayaran tidak dikenali: ' . ($transactionStatus ?? 'null'),
-        ];
-    }
+    // checkStatus() and syncMidtransStatus() REMOVED
+    // → Webhook-only architecture: status updates via Midtrans webhook callback only
 }

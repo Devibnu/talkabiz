@@ -6,13 +6,6 @@
 .plan-checkout-card:hover { transform: translateY(-4px); box-shadow: 0 8px 26px rgba(0,0,0,.1) !important; }
 .plan-checkout-card.current-plan { border: 2px solid #cb0c9f; }
 .checkout-price { font-size: 1.5rem; font-weight: 800; color: #344767; }
-.checkout-modal .modal-content { border-radius: 16px; overflow: hidden; }
-.checkout-modal .modal-header { background: linear-gradient(310deg, #7928ca 0%, #ff0080 100%); color: #fff; border: 0; }
-.checkout-modal .modal-header .btn-close { filter: brightness(0) invert(1); }
-.checkout-summary { background: #f8f9fa; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-.checkout-summary .plan-name { font-size: 1.2rem; font-weight: 700; color: #344767; }
-.checkout-price-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-.checkout-price-row.total { border-bottom: 0; border-top: 2px solid #344767; font-weight: 700; font-size: 1.1rem; margin-top: 8px; padding-top: 12px; }
 .active-warning-banner { background: linear-gradient(310deg, #fbb140 0%, #f5365c 100%); border-radius: 12px; }
 </style>
 
@@ -150,9 +143,9 @@
                                 <i class="fas fa-info-circle me-2"></i>
                                 <span class="text-sm">Anda sudah memilih paket <strong>{{ $currentPlan->name }}</strong>, tetapi belum melakukan pembayaran.</span>
                             </div>
-                            <button class="btn btn-sm bg-gradient-primary mb-0"
-                                    onclick="openCheckoutModal('{{ $currentPlan->code }}', '{{ $currentPlan->name }}', {{ (int) $currentPlan->price_monthly }}, {{ $currentPlan->duration_days }})">
-                                <i class="fas fa-credit-card me-1"></i> Bayar Paket Ini
+                            <button class="btn btn-sm bg-gradient-primary mb-0" id="payNowBtn"
+                                    onclick="fastCheckout('{{ $currentPlan->code }}')">
+                                <i class="fas fa-credit-card me-1"></i> Bayar Paket Ini Sekarang
                             </button>
                             <button class="btn btn-sm btn-outline-secondary mb-0" onclick="scrollToPlans()">
                                 <i class="fas fa-exchange-alt me-1"></i> Ganti Paket
@@ -161,7 +154,7 @@
                         {{-- ACTIVE: sudah bayar, masih aktif --}}
                         @elseif($planStatus === 'active')
                             <button class="btn btn-sm bg-gradient-success mb-0"
-                                    onclick="openCheckoutModal('{{ $currentPlan->code }}', '{{ $currentPlan->name }}', {{ (int) $currentPlan->price_monthly }}, {{ $currentPlan->duration_days }})">
+                                    onclick="fastCheckout('{{ $currentPlan->code }}')">
                                 <i class="fas fa-sync-alt me-1"></i> Perpanjang Paket
                             </button>
                             <button class="btn btn-sm btn-outline-primary mb-0" onclick="confirmUpgrade()">
@@ -175,7 +168,7 @@
                                 <span class="text-sm">Masa aktif paket Anda telah berakhir. Aktifkan kembali untuk melanjutkan.</span>
                             </div>
                             <button class="btn btn-sm bg-gradient-danger mb-0"
-                                    onclick="openCheckoutModal('{{ $currentPlan->code }}', '{{ $currentPlan->name }}', {{ (int) $currentPlan->price_monthly }}, {{ $currentPlan->duration_days }})">
+                                    onclick="fastCheckout('{{ $currentPlan->code }}')">
                                 <i class="fas fa-bolt me-1"></i> Aktifkan Kembali
                             </button>
                             <button class="btn btn-sm btn-outline-primary mb-0" onclick="scrollToPlans()">
@@ -353,7 +346,7 @@
                         <span class="text-sm font-weight-bold">Rp {{ number_format($tx->final_price, 0, ',', '.') }}</span>
                         <span class="badge bg-gradient-warning text-xs">{{ ucfirst(str_replace('_', ' ', $tx->status)) }}</span>
                         <button class="btn btn-xs bg-gradient-primary mb-0 ms-2"
-                                onclick="openCheckoutModal('{{ $tx->plan?->code ?? '' }}', '{{ $tx->plan?->name ?? 'Paket' }}', {{ (int) ($tx->plan?->price_monthly ?? 0) }}, {{ $tx->plan?->duration_days ?? 30 }})">
+                                onclick="fastCheckout('{{ $tx->plan?->code ?? '' }}')">
                             <i class="fas fa-arrow-right me-1"></i>Lanjutkan Pembayaran
                         </button>
                     </div>
@@ -432,7 +425,7 @@
                                             <i class="fas fa-clock me-1"></i> Menunggu Pembayaran
                                         </span>
                                         <button class="btn btn-sm bg-gradient-warning w-100 mb-0"
-                                                onclick="openCheckoutModal('{{ $plan->code }}', '{{ $plan->name }}', {{ (int) $plan->price_monthly }}, {{ $plan->duration_days }})">
+                                                onclick="fastCheckout('{{ $plan->code }}')">
                                             <i class="fas fa-arrow-right me-1"></i> Lanjutkan Pembayaran
                                         </button>
                                         <p class="text-xs text-warning text-center mt-1 mb-0">
@@ -442,28 +435,28 @@
                                     @elseif($planStatus === 'trial_selected' && $currentPlan && $currentPlan->id === $plan->id)
                                         {{-- Paket ini dipilih tapi belum bayar --}}
                                         <button class="btn btn-sm bg-gradient-primary w-100 mb-0"
-                                                onclick="openCheckoutModal('{{ $plan->code }}', '{{ $plan->name }}', {{ (int) $plan->price_monthly }}, {{ $plan->duration_days }})">
+                                                onclick="fastCheckout('{{ $plan->code }}')">
                                             <i class="fas fa-credit-card me-1"></i> Bayar Paket Ini
                                         </button>
 
                                     @elseif($planStatus === 'expired' && $currentPlan && $currentPlan->id === $plan->id)
                                         {{-- Paket ini expired, aktifkan kembali --}}
                                         <button class="btn btn-sm bg-gradient-danger w-100 mb-0"
-                                                onclick="openCheckoutModal('{{ $plan->code }}', '{{ $plan->name }}', {{ (int) $plan->price_monthly }}, {{ $plan->duration_days }})">
+                                                onclick="fastCheckout('{{ $plan->code }}')">
                                             <i class="fas fa-bolt me-1"></i> Aktifkan Kembali
                                         </button>
 
                                     @elseif($planStatus === 'active')
                                         {{-- Paket lain saat user punya paket aktif → konfirmasi dulu --}}
                                         <button class="btn btn-sm bg-gradient-primary w-100 mb-0"
-                                                onclick="confirmUpgradeToPlan('{{ $plan->code }}', '{{ $plan->name }}', {{ (int) $plan->price_monthly }}, {{ $plan->duration_days }})">
+                                                onclick="confirmUpgradeToPlan('{{ $plan->code }}')">
                                             <i class="fas fa-arrow-circle-up me-1"></i> Upgrade ke Paket Ini
                                         </button>
 
                                     @else
                                         {{-- Default: trial_selected (paket lain), expired (paket lain), atau no plan --}}
                                         <button class="btn btn-sm bg-gradient-primary w-100 mb-0"
-                                                onclick="openCheckoutModal('{{ $plan->code }}', '{{ $plan->name }}', {{ (int) $plan->price_monthly }}, {{ $plan->duration_days }})">
+                                                onclick="fastCheckout('{{ $plan->code }}')">
                                             <i class="fas fa-shopping-cart me-1"></i> Pilih Paket
                                         </button>
                                     @endif
@@ -472,54 +465,6 @@
                         </div>
                     @endforeach
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{{-- ============================================================ --}}
-{{-- CHECKOUT CONFIRMATION MODAL                                   --}}
-{{-- ============================================================ --}}
-<div class="modal fade checkout-modal" id="subscriptionCheckoutModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-file-invoice-dollar me-2"></i>Konfirmasi Langganan</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="checkout-summary">
-                    <div class="plan-name" id="checkout-plan-name">-</div>
-                    <div class="text-xs text-secondary mt-1">
-                        <i class="fas fa-calendar me-1"></i>Durasi: <span id="checkout-duration">0</span> hari
-                    </div>
-                </div>
-
-                <div class="checkout-price-row">
-                    <span>Harga Paket</span>
-                    <span id="checkout-price">Rp 0</span>
-                </div>
-                <div class="checkout-price-row total">
-                    <span>Total Bayar</span>
-                    <span id="checkout-total">Rp 0</span>
-                </div>
-
-                <div class="alert alert-info mt-3 mb-0 py-2">
-                    <i class="fas fa-info-circle me-1"></i>
-                    <span class="text-xs">Harga sesuai paket dari database. Tidak ada biaya tambahan.</span>
-                </div>
-
-                <input type="hidden" id="checkout-plan-code" value="">
-
-                <div class="d-grid gap-2 mt-4">
-                    <button class="btn btn-lg bg-gradient-primary" onclick="processSubscriptionCheckout()" id="btn-sub-checkout">
-                        <i class="fas fa-credit-card me-2"></i>Bayar Sekarang
-                    </button>
-                </div>
-
-                <p class="text-center text-muted small mt-3 mb-0">
-                    <i class="fas fa-shield-alt me-1"></i>Pembayaran aman melalui payment gateway
-                </p>
             </div>
         </div>
     </div>
@@ -565,78 +510,38 @@
 <script src="{{ config('midtrans.snap_url') }}" data-client-key="{{ config('midtrans.client_key') }}"></script>
 <script>
 /**
- * Subscription Checkout — Fixed Price from DB
- * No custom amount, no nominal input.
- * All prices come from plan table.
+ * FAST PAYMENT PATH — Phase 4.1
+ * 
+ * Flow: 1 klik → fetch checkout → snap popup → selesai
+ * Tidak redirect. Tidak reload. Tidak buat invoice double.
  */
 
 // Store pending upgrade data
 let pendingUpgrade = null;
+let isCheckoutProcessing = false;
 
 function scrollToPlans() {
     document.getElementById('available-plans').scrollIntoView({ behavior: 'smooth' });
 }
 
-/**
- * Open checkout modal directly (for trial_selected, expired, renew)
- */
-function openCheckoutModal(code, name, price, duration) {
-    document.getElementById('checkout-plan-code').value = code;
-    document.getElementById('checkout-plan-name').textContent = name;
-    document.getElementById('checkout-duration').textContent = duration;
-    document.getElementById('checkout-price').textContent = 'Rp ' + price.toLocaleString('id-ID');
-    document.getElementById('checkout-total').textContent = 'Rp ' + price.toLocaleString('id-ID');
-
-    new bootstrap.Modal(document.getElementById('subscriptionCheckoutModal')).show();
-}
+// ==================== FAST CHECKOUT (1-CLICK) ====================
 
 /**
- * Scroll to plans section (when user clicks "Upgrade / Ganti Paket" from status card)
+ * Fast Checkout — langsung POST → Snap popup
+ * Tidak buka modal konfirmasi lagi.
+ * Button yang diklik otomatis jadi loading.
  */
-function confirmUpgrade() {
-    scrollToPlans();
-}
+async function fastCheckout(planCode) {
+    if (isCheckoutProcessing) return;
+    isCheckoutProcessing = true;
 
-/**
- * Show upgrade confirmation for a specific plan (from plan card)
- * Requires confirmation because plan is still active.
- */
-function confirmUpgradeToPlan(code, name, price, duration) {
-    pendingUpgrade = { code, name, price, duration };
-    new bootstrap.Modal(document.getElementById('upgradeConfirmModal')).show();
-}
-
-/**
- * After user confirms upgrade, open checkout modal
- */
-function proceedToUpgrade() {
-    // Close confirmation modal
-    bootstrap.Modal.getInstance(document.getElementById('upgradeConfirmModal'))?.hide();
-
-    if (pendingUpgrade) {
-        setTimeout(() => {
-            openCheckoutModal(
-                pendingUpgrade.code,
-                pendingUpgrade.name,
-                pendingUpgrade.price,
-                pendingUpgrade.duration
-            );
-            pendingUpgrade = null;
-        }, 300);
+    // Find and disable the clicked button
+    const btn = event?.target?.closest('button') || document.getElementById('payNowBtn');
+    const originalHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Memproses...';
     }
-}
-
-/**
- * Process checkout via Midtrans Snap
- */
-async function processSubscriptionCheckout() {
-    const btn = document.getElementById('btn-sub-checkout');
-    const planCode = document.getElementById('checkout-plan-code').value;
-
-    if (!planCode) return;
-
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Memproses...';
 
     try {
         const response = await fetch('{{ route("subscription.checkout") }}', {
@@ -651,146 +556,157 @@ async function processSubscriptionCheckout() {
 
         const data = await response.json();
 
-        if (data.success && data.data && data.data.snap_token) {
-            // Show dev warning if present (APP_ENV=local)
-            if (data.data.dev_warning) {
-                showPaymentAlert('info', data.data.dev_warning);
+        // 409: Already active
+        if (response.status === 409) {
+            showToast('info', data.message || 'Paket sudah aktif.');
+            setTimeout(() => location.reload(), 2000);
+            return;
+        }
+
+        // Success: got snap_token
+        const snapToken = data.snap_token || data.data?.snap_token;
+        const transactionCode = data.transaction_code || data.data?.transaction_code;
+
+        if (data.success && snapToken) {
+            // Dev warning
+            if (data.dev_warning || data.data?.dev_warning) {
+                console.info('[DEV]', data.dev_warning || data.data.dev_warning);
             }
 
-            // Store transaction_code for server-side verification
-            const transactionCode = data.data.transaction_code;
-
-            // Open Midtrans Snap popup
-            snap.pay(data.data.snap_token, {
+            // Open Midtrans Snap popup langsung
+            snap.pay(snapToken, {
                 onSuccess: function(result) {
-                    // Server-side verification: call Midtrans API directly
-                    // Works in local (MAMP) without webhook/ngrok
-                    verifyPaymentStatus(transactionCode, btn);
+                    showToast('success', '<strong>Pembayaran berhasil!</strong> Paket Anda akan segera aktif.');
+                    setTimeout(() => location.reload(), 2000);
                 },
                 onPending: function(result) {
-                    showPaymentAlert('info', 'Pembayaran menunggu konfirmasi. Silakan selesaikan pembayaran Anda.');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-credit-card me-2"></i>Bayar Sekarang';
+                    showToast('info', 'Pembayaran menunggu konfirmasi. Status akan diupdate otomatis.');
+                    setTimeout(() => location.reload(), 3000);
                 },
                 onError: function(result) {
-                    showPaymentAlert('danger', 'Pembayaran gagal. Silakan coba lagi.');
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-credit-card me-2"></i>Bayar Sekarang';
+                    showToast('danger', 'Pembayaran gagal. Silakan coba lagi.');
+                    resetButton(btn, originalHtml);
                 },
                 onClose: function() {
-                    // User closed popup — check if payment was completed
-                    verifyPaymentStatus(transactionCode, btn);
+                    // User closed popup — webhook will handle if payment was completed
+                    showToast('info', 'Popup ditutup. Jika sudah bayar, status akan diupdate otomatis.');
+                    resetButton(btn, originalHtml);
                 }
             });
         } else {
-            // Show specific error from backend instead of generic message
-            const errorMsg = data.message || 'Gagal memproses pembayaran.';
-            const reason = data.reason || '';
-
-            if (reason === 'payment_gateway_inactive') {
-                showPaymentAlert('warning', errorMsg);
-            } else if (reason === 'plan_already_active') {
-                showPaymentAlert('info', '<i class="fas fa-check-circle me-1"></i>' + errorMsg);
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-lock me-2"></i>Paket Sudah Aktif';
-                setTimeout(() => { location.reload(); }, 2500);
-            } else if (reason === 'dev_error') {
-                // Development mode: show debug info
-                let debugInfo = errorMsg;
-                if (data.debug) {
-                    debugInfo += '<br><small class="text-muted">' +
-                        '<strong>Error:</strong> ' + (data.debug.error || '') + '<br>' +
-                        '<strong>Hint:</strong> ' + (data.debug.hint || '') + '<br>' +
-                        '<strong>APP_URL:</strong> ' + (data.debug.app_url || '') +
-                        '</small>';
-                }
-                showPaymentAlert('warning', debugInfo);
-            } else {
-                showPaymentAlert('danger', errorMsg);
-            }
-
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-credit-card me-2"></i>Bayar Sekarang';
+            // Error handling
+            handleCheckoutError(data, response.status, btn, originalHtml);
         }
+
     } catch (error) {
-        console.error('Subscription checkout error:', error);
-        showPaymentAlert('danger', 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-credit-card me-2"></i>Bayar Sekarang';
+        console.error('Fast checkout error:', error);
+        showToast('danger', 'Tidak dapat terhubung ke server. Periksa koneksi internet.');
+        resetButton(btn, originalHtml);
+    } finally {
+        isCheckoutProcessing = false;
     }
 }
 
 /**
- * Server-side payment status verification.
- * Calls Midtrans API directly (no webhook needed).
- * Works in local MAMP environment.
- * 
- * | Mode       | Verification Method        |
- * |------------|----------------------------|
- * | Local      | This function (API check)  |
- * | Production | Webhook + this as fallback |
+ * Handle checkout error responses
  */
-async function verifyPaymentStatus(transactionCode, btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Memverifikasi pembayaran...';
+function handleCheckoutError(data, status, btn, originalHtml) {
+    const reason = data.reason || '';
+    const message = data.message || 'Gagal memproses pembayaran.';
 
-    try {
-        const response = await fetch('/subscription/check-status/' + transactionCode, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.status === 'success') {
-            showPaymentAlert('success', '<strong>Pembayaran berhasil!</strong> Paket Anda sudah aktif. Halaman akan dimuat ulang...');
-            setTimeout(() => { location.reload(); }, 2000);
-            return;
+    if (reason === 'payment_gateway_inactive') {
+        showToast('warning', message);
+    } else if (reason === 'plan_already_active') {
+        showToast('info', message);
+        setTimeout(() => location.reload(), 2500);
+        return; // Don't reset button
+    } else if (reason === 'dev_error') {
+        let debugInfo = message;
+        if (data.debug) {
+            debugInfo += ' | ' + (data.debug.error || '') + ' | Hint: ' + (data.debug.hint || '');
         }
+        showToast('warning', debugInfo);
+    } else {
+        showToast('danger', message);
+    }
 
-        if (data.status === 'pending') {
-            showPaymentAlert('info', 'Pembayaran masih menunggu konfirmasi. Halaman akan dimuat ulang...');
-            setTimeout(() => { location.reload(); }, 3000);
-            return;
-        }
+    resetButton(btn, originalHtml);
+}
 
-        // Payment not yet completed or failed
-        showPaymentAlert('warning', data.message || 'Status pembayaran: ' + (data.status || 'tidak diketahui'));
+// ==================== UPGRADE FLOW (keeps confirmation) ====================
+
+/**
+ * Scroll to plans section (from status card "Upgrade / Ganti Paket")
+ */
+function confirmUpgrade() {
+    scrollToPlans();
+}
+
+/**
+ * Show upgrade confirmation for a specific plan (from plan card)
+ * Requires confirmation because plan is still active.
+ */
+function confirmUpgradeToPlan(code) {
+    pendingUpgrade = { code };
+    new bootstrap.Modal(document.getElementById('upgradeConfirmModal')).show();
+}
+
+/**
+ * After user confirms upgrade, directly fast checkout
+ */
+function proceedToUpgrade() {
+    bootstrap.Modal.getInstance(document.getElementById('upgradeConfirmModal'))?.hide();
+
+    if (pendingUpgrade) {
+        setTimeout(() => {
+            fastCheckout(pendingUpgrade.code);
+            pendingUpgrade = null;
+        }, 300);
+    }
+}
+
+// verifyPaymentStatus() REMOVED → Webhook-only architecture
+// Status updates now come exclusively from Midtrans webhook callback
+
+// ==================== UI HELPERS ====================
+
+function resetButton(btn, originalHtml) {
+    if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-credit-card me-2"></i>Bayar Sekarang';
-
-    } catch (error) {
-        console.error('Payment verification error:', error);
-        // Don't show scary error — just reload to let user see current state
-        showPaymentAlert('info', 'Memuat ulang halaman...');
-        setTimeout(() => { location.reload(); }, 2000);
+        btn.innerHTML = originalHtml;
     }
 }
 
 /**
- * Show payment alert inside checkout modal instead of ugly alert()
+ * Show toast notification (top-right, auto-dismiss)
  */
-function showPaymentAlert(type, message) {
-    // Remove existing alerts
-    document.querySelectorAll('#subscriptionCheckoutModal .payment-alert').forEach(el => el.remove());
+function showToast(type, message) {
+    // Remove existing toasts
+    document.querySelectorAll('.fast-pay-toast').forEach(el => el.remove());
 
     const iconMap = {
-        warning: 'exclamation-triangle',
+        success: 'check-circle',
         danger: 'times-circle',
-        info: 'info-circle',
-        success: 'check-circle'
+        warning: 'exclamation-triangle',
+        info: 'info-circle'
     };
 
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} payment-alert mt-3 mb-0 py-2`;
-    alertDiv.innerHTML = '<i class="fas fa-' + (iconMap[type] || 'info-circle') + ' me-2"></i>' + message;
+    const toast = document.createElement('div');
+    toast.className = `fast-pay-toast alert alert-${type} shadow-lg`;
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;max-width:400px;animation:slideIn 0.3s ease';
+    toast.innerHTML = '<i class="fas fa-' + (iconMap[type] || 'info-circle') + ' me-2"></i>' + message;
 
-    const modalBody = document.querySelector('#subscriptionCheckoutModal .modal-body');
-    modalBody.appendChild(alertDiv);
+    document.body.appendChild(toast);
+
+    // Auto dismiss after 5s (except success which reloads)
+    if (type !== 'success') {
+        setTimeout(() => toast.remove(), 5000);
+    }
 }
+
+// Toast animation
+const style = document.createElement('style');
+style.textContent = '@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }';
+document.head.appendChild(style);
 </script>
 @endpush

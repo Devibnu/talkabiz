@@ -265,15 +265,23 @@
             <p class="page-subtitle">Kelola campaign WhatsApp Anda</p>
         </div>
         
-        {{-- SaldoGuard Protection untuk Buat Campaign --}}
-        @include('components.saldo-guard', [
-            'requiredMessages' => 10,
-            'actionText' => 'membuat campaign',
-            'ctaText' => 'Buat Campaign',
-            'ctaIcon' => 'ni ni-fat-add',
-            'ctaClass' => 'btn-soft-primary',
-            'ctaAttributes' => 'id="btnCreateCampaign" data-bs-toggle="modal" data-bs-target="#createCampaignModal"'
-        ])
+        {{-- Subscription Gate → SaldoGuard Protection untuk Buat Campaign --}}
+        @if($subscriptionIsActive ?? false)
+            @include('components.saldo-guard', [
+                'requiredMessages' => 10,
+                'actionText' => 'membuat campaign',
+                'ctaText' => 'Buat Campaign',
+                'ctaIcon' => 'ni ni-fat-add',
+                'ctaClass' => 'btn-soft-primary',
+                'ctaAttributes' => 'id="btnCreateCampaign" data-bs-toggle="modal" data-bs-target="#createCampaignModal"'
+            ])
+        @else
+            {{-- HIDDEN: Campaign button removed, show activate CTA --}}
+            <a href="{{ route('subscription.index') }}" class="btn bg-gradient-primary btn-sm"
+               onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('clicked_pay', {source: 'campaign_header'});">
+                <i class="fas fa-bolt me-1"></i> Aktifkan Paket
+            </a>
+        @endif
     </div>
 
     <div class="row">
@@ -292,15 +300,26 @@
                         <h5 class="empty-state-title">Belum ada campaign</h5>
                         <p class="empty-state-subtitle">Buat campaign WhatsApp pertama Anda untuk menjangkau pelanggan</p>
                         
-                        {{-- SaldoGuard Protection untuk Empty State Button --}}
-                        @include('components.saldo-guard', [
-                            'requiredMessages' => 10,
-                            'actionText' => 'membuat campaign',
-                            'ctaText' => 'Buat Campaign',
-                            'ctaIcon' => 'ni ni-fat-add',
-                            'ctaClass' => 'empty-state-btn',
-                            'ctaAttributes' => 'data-bs-toggle="modal" data-bs-target="#createCampaignModal"'
-                        ])
+                        {{-- Subscription Gate → SaldoGuard Protection untuk Empty State Button --}}
+                        @if($subscriptionIsActive ?? false)
+                            @include('components.saldo-guard', [
+                                'requiredMessages' => 10,
+                                'actionText' => 'membuat campaign',
+                                'ctaText' => 'Buat Campaign',
+                                'ctaIcon' => 'ni ni-fat-add',
+                                'ctaClass' => 'empty-state-btn',
+                                'ctaAttributes' => 'data-bs-toggle="modal" data-bs-target="#createCampaignModal"'
+                            ])
+                        @else
+                            {{-- HIDDEN: Show activation prompt instead of dead button --}}
+                            <div class="text-center">
+                                <p class="text-sm text-secondary mb-2">Aktifkan paket untuk mulai membuat campaign</p>
+                                <a href="{{ route('subscription.index') }}" class="empty-state-btn"
+                                   onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('clicked_pay', {source: 'campaign_empty'});">
+                                    <i class="fas fa-bolt me-1"></i> Aktifkan Paket
+                                </a>
+                            </div>
+                        @endif
                     </div>
 
                     {{-- Table Placeholder (hidden by default) --}}

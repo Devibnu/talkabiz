@@ -272,6 +272,228 @@ class RevenueGuardService
         ];
     }
 
+    /**
+     * ============================================================
+     * chargeAndExecute() — Revenue Lock Phase 2: THE entry point
+     * ============================================================
+     * 
+     * Atomic operation: deduct saldo → execute callable → commit/rollback.
+     * Jika callable (dispatch) gagal → ROLLBACK saldo otomatis.
+     * Jika saldo kurang → 402 style exception sebelum dispatch.
+     * 
+     * FLOW:
+     * 1. Generate idempotency_key → cek duplikat
+     * 2. DB::transaction
+     *    a. lockForUpdate() wallet
+     *    b. Double-check saldo di dalam transaction
+     *    c. Deduct saldo
+     *    d. Create WalletTransaction ledger entry
+     *    e. Execute $dispatchCallable (kirim pesan)
+     *    f. Jika dispatch gagal → exception → ROLLBACK semua
+     * 3. Log ke revenue_guard_logs
+     * 
+     * IDEMPOTENCY KEY FORMAT:
+     *   usage_{referenceType}_{referenceId}_{timestamp}
+     * 
+     * @param int      $userId
+     * @param int      $messageCount
+     * @param string   $category        marketing|utility|authentication|service|campaign
+     * @param string   $referenceType   campaign|wa_blast|inbox_reply|inbox_template|wa_campaign
+     * @param int      $referenceId     Reference ID
+     * @param callable $dispatchCallable Function that sends messages. Must return mixed result. Throw to rollback.
+     * @param array    $costPreview     Optional cost preview from Layer 3
+     * @return array   ['success' => bool, 'transaction' => WalletTransaction|null, 'dispatch_result' => mixed, ...]
+     * 
+     * @throws \RuntimeException Saldo insufficient → catch this for 402
+     * @throws \InvalidArgumentException Invalid input
+     */
+    public function chargeAndExecute(
+        int $userId,
+        int $messageCount,
+        string $category,
+        string $referenceType,
+        int $referenceId,
+        callable $dispatchCallable,
+        array $costPreview = []
+    ): array {
+        // Validate input
+        if ($messageCount <= 0) {
+            throw new \InvalidArgumentException('Message count harus lebih dari 0.');
+        }
+
+        // Generate idempotency key: usage_{type}_{id}_{timestamp}
+        $timestamp = now()->timestamp;
+        $idempotencyKey = "usage_{$referenceType}_{$referenceId}_{$timestamp}";
+
+        // ============ PRE-TRANSACTION: Check for duplicate ============
+        $existing = WalletTransaction::where('idempotency_key', $idempotencyKey)->first();
+        if ($existing) {
+            $this->logDuplicate($userId, $idempotencyKey, $referenceType, $referenceId);
+
+            return [
+                'success'         => true,
+                'duplicate'       => true,
+                'transaction'     => $existing,
+                'idempotency_key' => $idempotencyKey,
+                'dispatch_result' => null,
+                'message'         => 'Transaksi sudah pernah diproses (anti-double-charge).',
+            ];
+        }
+
+        // ============ CALCULATE COST ============
+        if (!empty($costPreview) && isset($costPreview['estimated_cost'])) {
+            $finalCost = (int) $costPreview['estimated_cost'];
+        } else {
+            $ratePerMessage = $this->messageRateService->getRate($category);
+            $baseCost = (int) ceil($messageCount * $ratePerMessage);
+            $user = User::findOrFail($userId);
+            $finalCost = $this->pricingService->calculateFinalCost($baseCost, $user);
+        }
+
+        if ($finalCost <= 0) {
+            throw new \InvalidArgumentException('Final cost harus lebih dari 0.');
+        }
+
+        // ============ ATOMIC: DEDUCT + EXECUTE IN ONE TRANSACTION ============
+        try {
+            $result = DB::transaction(function () use (
+                $userId, $finalCost, $referenceType, $referenceId, $idempotencyKey,
+                $messageCount, $category, $costPreview, $dispatchCallable
+            ) {
+                // Double-check idempotency inside transaction
+                $existing = WalletTransaction::lockForUpdate()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+
+                if ($existing) {
+                    return [
+                        'success'         => true,
+                        'duplicate'       => true,
+                        'transaction'     => $existing,
+                        'dispatch_result' => null,
+                    ];
+                }
+
+                // 1. Lock wallet — prevent concurrent deductions
+                $wallet = Wallet::lockForUpdate()
+                    ->where('user_id', $userId)
+                    ->where('is_active', true)
+                    ->first();
+
+                if (!$wallet) {
+                    throw new \RuntimeException(
+                        "Wallet tidak ditemukan atau tidak aktif untuk user ID {$userId}."
+                    );
+                }
+
+                // 2. Double-check saldo inside transaction (race condition safe)
+                if ($wallet->balance < $finalCost) {
+                    throw new \RuntimeException(
+                        "Saldo tidak cukup. Saldo: Rp " . number_format($wallet->balance, 0, ',', '.') .
+                        ", Dibutuhkan: Rp " . number_format($finalCost, 0, ',', '.')
+                    );
+                }
+
+                $balanceBefore = (float) $wallet->balance;
+
+                // 3. Deduct saldo
+                $wallet->balance -= $finalCost;
+                $wallet->total_spent += $finalCost;
+                $wallet->last_transaction_at = now();
+                $wallet->save();
+
+                // 4. Safety: pastikan balance tidak negatif
+                if ($wallet->balance < 0) {
+                    throw new \RuntimeException(
+                        'CRITICAL: Saldo negatif setelah potongan. Transaksi dibatalkan.'
+                    );
+                }
+
+                // 5. Create immutable ledger entry
+                $transaction = WalletTransaction::create([
+                    'wallet_id'       => $wallet->id,
+                    'user_id'         => $userId,
+                    'type'            => WalletTransaction::TYPE_USAGE,
+                    'amount'          => -$finalCost,
+                    'balance_before'  => $balanceBefore,
+                    'balance_after'   => (float) $wallet->balance,
+                    'currency'        => 'IDR',
+                    'description'     => ucfirst(str_replace('_', ' ', $referenceType)) . " — {$messageCount} pesan ({$category})",
+                    'reference_type'  => $referenceType,
+                    'reference_id'    => (string) $referenceId,
+                    'status'          => WalletTransaction::STATUS_COMPLETED,
+                    'processed_at'    => now(),
+                    'metadata'        => [
+                        'guard_layer'        => 'revenue_guard_l4_v2',
+                        'reference_type'     => $referenceType,
+                        'reference_id'       => $referenceId,
+                        'message_count'      => $messageCount,
+                        'category'           => $category,
+                        'final_cost'         => $finalCost,
+                        'base_cost'          => $costPreview['base_cost'] ?? null,
+                        'pricing_multiplier' => $costPreview['pricing_multiplier'] ?? null,
+                        'rate_per_message'   => $costPreview['rate_per_message'] ?? null,
+                    ],
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+
+                // 6. EXECUTE DISPATCH INSIDE TRANSACTION
+                // Jika dispatch throw exception → seluruh transaction ROLLBACK
+                // Saldo dikembalikan otomatis
+                $dispatchResult = $dispatchCallable($transaction);
+
+                // Invalidate wallet cache
+                try {
+                    app(WalletCacheService::class)->clear($userId);
+                } catch (\Exception $e) {
+                    Log::warning('WalletCacheService clear failed in chargeAndExecute', [
+                        'user_id' => $userId,
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
+
+                return [
+                    'success'         => true,
+                    'duplicate'       => false,
+                    'transaction'     => $transaction,
+                    'dispatch_result' => $dispatchResult,
+                    'balance_before'  => $balanceBefore,
+                    'balance_after'   => (float) $wallet->balance,
+                ];
+            });
+
+            // Post-transaction logging
+            if (!($result['duplicate'] ?? false)) {
+                $this->logSuccess(
+                    $userId,
+                    $referenceType,
+                    $referenceId,
+                    $costPreview['estimated_cost'] ?? $finalCost,
+                    $finalCost,
+                    $result['balance_before'],
+                    $result['balance_after'],
+                    $idempotencyKey,
+                    $messageCount,
+                    $category
+                );
+            } else {
+                $this->logDuplicate($userId, $idempotencyKey, $referenceType, $referenceId);
+            }
+
+            $result['idempotency_key'] = $idempotencyKey;
+            $result['message'] = $result['duplicate']
+                ? 'Transaksi sudah pernah diproses (anti-double-charge).'
+                : 'Saldo dipotong & pesan berhasil dikirim.';
+
+            return $result;
+
+        } catch (\RuntimeException $e) {
+            // Saldo insufficient or dispatch failed → saldo NOT deducted (rolled back)
+            $this->logDeductionFailed($userId, $referenceType, $referenceId, $finalCost, $e->getMessage(), $idempotencyKey);
+            throw $e;
+        }
+    }
+
     // ============== LOGGING ==============
 
     protected function logSuccess(

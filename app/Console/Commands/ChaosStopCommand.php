@@ -43,6 +43,11 @@ class ChaosStopCommand extends Command
 
     public function handle(ChaosExperimentRunnerService $runner): int
     {
+        if (!config('app.chaos_enabled')) {
+            $this->error('❌ Chaos module is disabled. Set CHAOS_ENABLED=true in .env to enable.');
+            return 1;
+        }
+
         $reason = $this->option('reason') ?? 'Manual stop via CLI';
 
         // Emergency stop - disable all flags

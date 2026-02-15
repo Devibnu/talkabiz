@@ -521,7 +521,7 @@ class CfoDashboardService
 
         try {
             $churnedSubs = Subscription::query()
-                ->whereIn('status', [Subscription::STATUS_EXPIRED, Subscription::STATUS_CANCELLED])
+                ->where('status', Subscription::STATUS_EXPIRED)
                 ->where(function ($q) use ($start, $end) {
                     $q->whereBetween('cancelled_at', [$start, $end])
                       ->orWhere(function ($q2) use ($start, $end) {

@@ -8,6 +8,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Chaos Module Toggle
+    |--------------------------------------------------------------------------
+    |
+    | Global kill-switch for the Chaos Testing module.
+    | When false, ALL chaos flags, injections, schedulers, and CLI commands
+    | are completely disabled at runtime. Files & tables are preserved.
+    |
+    */
+
+    'chaos_enabled' => env('CHAOS_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Name
     |--------------------------------------------------------------------------
     |

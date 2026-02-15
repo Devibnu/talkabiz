@@ -71,7 +71,7 @@ class InvoiceService
             $subscription->plan_snapshot = $plan->toSnapshot();
             $subscription->price = $plan->price_monthly;
             $subscription->currency = 'IDR';
-            $subscription->status = Subscription::STATUS_PENDING;
+            $subscription->status = Subscription::STATUS_TRIAL_SELECTED;
             $subscription->change_type = Subscription::CHANGE_TYPE_NEW;
             $subscription->save();
 
@@ -127,7 +127,7 @@ class InvoiceService
             $subscription->plan_snapshot = $newPlan->toSnapshot();
             $subscription->price = $newPlan->price_monthly;
             $subscription->currency = 'IDR';
-            $subscription->status = Subscription::STATUS_PENDING;
+            $subscription->status = Subscription::STATUS_TRIAL_SELECTED;
             $subscription->change_type = Subscription::CHANGE_TYPE_UPGRADE;
             $subscription->previous_subscription_id = $currentSubscription->id;
             $subscription->save();
@@ -194,7 +194,7 @@ class InvoiceService
             $subscription->plan_snapshot = $plan->toSnapshot(); // Fresh snapshot
             $subscription->price = $plan->price_monthly;
             $subscription->currency = 'IDR';
-            $subscription->status = Subscription::STATUS_PENDING;
+            $subscription->status = Subscription::STATUS_TRIAL_SELECTED;
             $subscription->change_type = Subscription::CHANGE_TYPE_RENEWAL;
             $subscription->previous_subscription_id = $currentSubscription->id;
             $subscription->save();
@@ -231,9 +231,21 @@ class InvoiceService
     public function processPaymentSuccess(Payment $payment, array $webhookData = []): array
     {
         return DB::transaction(function () use ($payment, $webhookData) {
-            $invoice = $payment->invoice;
+            // Re-fetch invoice with pessimistic lock to prevent concurrent webhook race
+            $invoice = Invoice::lockForUpdate()->find($payment->invoice_id);
 
-            // Idempotency check
+            if (!$invoice) {
+                Log::warning('[InvoiceService] Invoice not found for payment', [
+                    'payment_id' => $payment->id,
+                    'invoice_id' => $payment->invoice_id,
+                ]);
+                return [
+                    'success' => false,
+                    'message' => 'Invoice not found',
+                ];
+            }
+
+            // Idempotency check (post-lock — authoritative)
             if ($invoice->status === Invoice::STATUS_PAID) {
                 Log::info('[InvoiceService] Invoice already paid (idempotent)', [
                     'invoice_id' => $invoice->id,
@@ -359,7 +371,8 @@ class InvoiceService
             return;
         }
 
-        $subscription = Subscription::find($invoice->invoiceable_id);
+        // Re-fetch with pessimistic lock to prevent concurrent activation
+        $subscription = Subscription::lockForUpdate()->find($invoice->invoiceable_id);
 
         if (!$subscription) {
             Log::warning('[InvoiceService] Subscription not found for invoice', [
@@ -401,6 +414,13 @@ class InvoiceService
      */
     protected function activateNewSubscription(Subscription $subscription): void
     {
+        // Lock existing active subscriptions to prevent concurrent activation race
+        Subscription::lockForUpdate()
+            ->where('klien_id', $subscription->klien_id)
+            ->where('id', '!=', $subscription->id)
+            ->where('status', Subscription::STATUS_ACTIVE)
+            ->get();
+
         // Mark any other active subscription as expired
         Subscription::where('klien_id', $subscription->klien_id)
             ->where('id', '!=', $subscription->id)
@@ -419,8 +439,12 @@ class InvoiceService
      */
     protected function activateUpgrade(Subscription $subscription): void
     {
-        // Get previous subscription
-        $previousSubscription = $subscription->previousSubscription;
+        // Lock previous subscription to prevent concurrent modification
+        if ($subscription->previous_subscription_id) {
+            $previousSubscription = Subscription::lockForUpdate()->find($subscription->previous_subscription_id);
+        } else {
+            $previousSubscription = null;
+        }
 
         if ($previousSubscription) {
             // Mark as replaced
@@ -439,8 +463,12 @@ class InvoiceService
      */
     protected function activateRenewal(Subscription $subscription): void
     {
-        // Get previous subscription
-        $previousSubscription = $subscription->previousSubscription;
+        // Lock previous subscription to prevent concurrent modification
+        if ($subscription->previous_subscription_id) {
+            $previousSubscription = Subscription::lockForUpdate()->find($subscription->previous_subscription_id);
+        } else {
+            $previousSubscription = null;
+        }
 
         if ($previousSubscription) {
             // Mark as replaced
@@ -506,8 +534,8 @@ class InvoiceService
                 if ($invoice->invoiceable_type === Subscription::class) {
                     $subscription = Subscription::find($invoice->invoiceable_id);
                     
-                    if ($subscription && $subscription->status === Subscription::STATUS_PENDING) {
-                        // Cancel pending subscription
+                    if ($subscription && $subscription->status === Subscription::STATUS_TRIAL_SELECTED) {
+                        // Cancel trial_selected subscription (set to expired)
                         $subscription->cancel();
                     }
                 }

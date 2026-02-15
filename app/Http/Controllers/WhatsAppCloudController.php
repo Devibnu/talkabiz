@@ -6,6 +6,7 @@ use App\Models\WhatsappConnection;
 use App\Models\WhatsappTemplate;
 use App\Models\WhatsappContact;
 use App\Services\GupshupService;
+use App\Services\RevenueGuardService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -468,7 +469,8 @@ class WhatsAppCloudController extends Controller
     }
 
     /**
-     * Send test message
+     * Send test message — Revenue Locked (chargeAndExecute)
+     * Sends 1 real WA message: deduct saldo atomically.
      */
     public function sendTestMessage(Request $request)
     {
@@ -497,19 +499,51 @@ class WhatsAppCloudController extends Controller
         }
 
         try {
-            $service = GupshupService::forConnection($connection);
-            $result = $service->sendTemplateMessage(
-                destination: $request->phone_number,
-                templateId: $template->template_id,
-                params: $request->params ?? [],
-                klienId: $klien->id
+            // ============ REVENUE GUARD LAYER 4: chargeAndExecute (atomic) ============
+            $revenueGuard = app(RevenueGuardService::class);
+            $sendRef = abs(crc32("test_msg_{$klien->id}_" . floor(time() / 5)));
+
+            $guardResult = $revenueGuard->chargeAndExecute(
+                userId: auth()->id(),
+                messageCount: 1,
+                category: 'utility',
+                referenceType: 'test_message',
+                referenceId: $sendRef,
+                dispatchCallable: function ($transaction) use ($connection, $request, $template, $klien) {
+                    $service = GupshupService::forConnection($connection);
+                    return $service->sendTemplateMessage(
+                        destination: $request->phone_number,
+                        templateId: $template->template_id,
+                        params: $request->params ?? [],
+                        klienId: $klien->id
+                    );
+                },
+                costPreview: $request->attributes->get('revenue_guard', []),
             );
+
+            if ($guardResult['duplicate'] ?? false) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $guardResult['message'],
+                ]);
+            }
+
+            $result = $guardResult['dispatch_result'];
 
             return response()->json([
                 'success' => true,
                 'message_id' => $result['messageId'] ?? null,
                 'message' => 'Pesan test berhasil dikirim.',
             ]);
+
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'insufficient_balance',
+                'message' => $e->getMessage(),
+                'topup_url' => route('billing'),
+            ], 402);
+
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,

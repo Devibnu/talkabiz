@@ -87,78 +87,80 @@ class InboxSendController extends Controller
                 'conversation_id' => $percakapan->id
             ]];
 
-            // ============ REVENUE GUARD LAYER 4: Atomic Deduction ============
+            // ============ REVENUE GUARD LAYER 4: chargeAndExecute (atomic) ============
             $revenueGuard = app(RevenueGuardService::class);
             $sendRef = abs(crc32("inbox_template_{$conversationId}_{$user->id}_" . floor(time() / 5)));
             $recipientCount = count($recipients);
 
-            $guardResult = $revenueGuard->executeDeduction(
+            $guardResult = $revenueGuard->chargeAndExecute(
                 userId: $user->id,
                 messageCount: $recipientCount,
                 category: 'utility',
                 referenceType: 'inbox_template',
                 referenceId: $sendRef,
+                dispatchCallable: function ($transaction) use ($user, $recipients, $request, $percakapan, $template, $conversationId) {
+                    $revenueGuardTxId = $transaction->id;
+
+                    // Create dispatch request — preAuthorized
+                    $dispatchRequest = MessageDispatchRequest::fromApi(
+                        userId: $user->id,
+                        recipients: $recipients,
+                        messageContent: $request->rendered_message,
+                        metadata: [
+                            'conversation_id' => $conversationId,
+                            'template_id' => $template->id,
+                            'template_name' => $template->nama,
+                            'source' => 'inbox_chat'
+                        ],
+                        preAuthorized: true,
+                        revenueGuardTransactionId: $revenueGuardTxId,
+                    );
+
+                    // Execute via MessageDispatchService
+                    $result = $this->messageDispatch->dispatch($dispatchRequest);
+
+                    // Create message record + update conversation
+                    $pesan = PesanInbox::create([
+                        'percakapan_id' => $percakapan->id,
+                        'klien_id' => $percakapan->klien_id,
+                        'pengguna_id' => $user->id,
+                        'arah' => 'keluar',
+                        'no_pengirim' => $user->no_telepon ?? config('services.whatsapp.sender_number', '628000000000'),
+                        'tipe' => 'teks',
+                        'isi_pesan' => $request->rendered_message,
+                        'status' => $result->success ? 'terkirim' : 'gagal',
+                        'waktu_pesan' => now(),
+                        'transaction_code' => $result->transactionCode,
+                    ]);
+
+                    $percakapan->update([
+                        'pesan_terakhir' => $request->rendered_message,
+                        'pengirim_terakhir' => 'sales',
+                        'waktu_pesan_terakhir' => now(),
+                        'total_pesan' => $percakapan->total_pesan + 1,
+                    ]);
+
+                    return [
+                        'pesan' => $pesan,
+                        'result' => $result,
+                    ];
+                },
                 costPreview: $request->attributes->get('revenue_guard', []),
             );
 
-            if (!$guardResult['success'] && !($guardResult['duplicate'] ?? false)) {
+            if ($guardResult['duplicate'] ?? false) {
                 return response()->json([
-                    'sukses' => false,
-                    'pesan' => $guardResult['message'] ?? 'Gagal memproses pembayaran',
-                    'error_code' => 'REVENUE_GUARD_FAILED',
-                ], 402);
+                    'sukses' => true,
+                    'pesan' => $guardResult['message'],
+                ]);
             }
 
-            $revenueGuardTxId = $guardResult['transaction']?->id;
-
-            // Create dispatch request — preAuthorized karena RGS sudah deduct
-            $dispatchRequest = MessageDispatchRequest::fromApi(
-                userId: $user->id,
-                recipients: $recipients,
-                messageContent: $request->rendered_message,
-                metadata: [
-                    'conversation_id' => $conversationId,
-                    'template_id' => $template->id,
-                    'template_name' => $template->nama,
-                    'source' => 'inbox_chat'
-                ],
-                preAuthorized: true,
-                revenueGuardTransactionId: $revenueGuardTxId,
-            );
-
-            // Execute via MessageDispatchService (saldo sudah dipotong oleh RGS)
-            $result = $this->messageDispatch->dispatch($dispatchRequest);
-
-            // Use DB transaction to update conversation
-            $pesan = DB::transaction(function () use ($percakapan, $request, $template, $user, $result) {
-                // Create message record
-                $pesan = PesanInbox::create([
-                    'percakapan_id' => $percakapan->id,
-                    'klien_id' => $percakapan->klien_id,
-                    'pengguna_id' => $user->id,
-                    'arah' => 'keluar',
-                    'no_pengirim' => $user->no_telepon ?? config('services.whatsapp.sender_number', '628000000000'),
-                    'tipe' => 'teks',
-                    'isi_pesan' => $request->rendered_message,
-                    'status' => $result->success ? 'terkirim' : 'gagal',
-                    'waktu_pesan' => now(),
-                    'transaction_code' => $result->transactionCode, // Link to saldo transaction
-                ]);
-
-                // Update conversation
-                $percakapan->update([
-                    'pesan_terakhir' => $request->rendered_message,
-                    'pengirim_terakhir' => 'sales',
-                    'waktu_pesan_terakhir' => now(),
-                    'total_pesan' => $percakapan->total_pesan + 1,
-                ]);
-
-                return $pesan;
-            });
+            $pesan = $guardResult['dispatch_result']['pesan'];
+            $result = $guardResult['dispatch_result']['result'];
 
             return response()->json([
                 'sukses' => true,
-                'pesan' => 'Pesan berhasil dikirim via MessageDispatch',
+                'pesan' => 'Pesan berhasil dikirim via chargeAndExecute',
                 'data' => [
                     'pesan' => [
                         'id' => $pesan->id,
@@ -184,20 +186,20 @@ class InboxSendController extends Controller
             ]);
 
         } catch (InsufficientBalanceException $e) {
-            // HARD STOP: Saldo tidak cukup
             return response()->json([
                 'sukses' => false,
                 'pesan' => $e->getMessage(),
                 'error_code' => 'INSUFFICIENT_BALANCE',
+                'topup_url' => route('billing'),
                 'data' => $e->toApiResponse()
-            ], 402); // Payment Required
+            ], 402);
 
         } catch (\RuntimeException $e) {
-            // RevenueGuardService fail-closed: saldo insufficient or wallet inactive
             return response()->json([
                 'sukses' => false,
                 'pesan' => $e->getMessage(),
-                'error_code' => 'REVENUE_GUARD_FAILED',
+                'error_code' => 'INSUFFICIENT_BALANCE',
+                'topup_url' => route('billing'),
             ], 402);
 
         } catch (\Exception $e) {

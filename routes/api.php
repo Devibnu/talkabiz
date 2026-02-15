@@ -45,9 +45,7 @@ Route::prefix('midtrans')->group(function () {
     Route::post('/webhook', [MidtransWebhookController::class, 'handle'])
         ->name('midtrans.webhook');
     
-    // Check transaction status (internal, requires auth)
-    Route::middleware('auth:sanctum')->get('/status/{orderId}', [MidtransWebhookController::class, 'checkStatus'])
-        ->name('midtrans.status');
+    // midtrans/status REMOVED → Webhook-only architecture
 });
 
 /*
@@ -65,9 +63,7 @@ Route::prefix('xendit')->group(function () {
     Route::post('/webhook', [XenditWebhookController::class, 'handle'])
         ->name('xendit.webhook');
     
-    // Check invoice status (internal, requires auth)
-    Route::middleware('auth:sanctum')->get('/status/{invoiceId}', [XenditWebhookController::class, 'checkStatus'])
-        ->name('xendit.status');
+    // xendit/status REMOVED → Webhook-only architecture
 });
 
 /*
@@ -1214,8 +1210,10 @@ Route::middleware(['auth:sanctum', 'subscription.active', 'feature:broadcast'])-
         ->name('throttle.campaign.progress');
     Route::post('/campaign/{id}/pause', [App\Http\Controllers\ThrottleMonitorController::class, 'pauseCampaign'])
         ->name('throttle.campaign.pause');
+    // Resume dispatches messages — needs full Revenue Guard stack
     Route::post('/campaign/{id}/resume', [App\Http\Controllers\ThrottleMonitorController::class, 'resumeCampaign'])
-        ->name('throttle.campaign.resume');
+        ->name('throttle.campaign.resume')
+        ->middleware(['plan.limit:campaign', 'wallet.cost.guard:campaign']);
     Route::post('/campaign/{id}/stop', [App\Http\Controllers\ThrottleMonitorController::class, 'stopCampaign'])
         ->name('throttle.campaign.stop');
 });

@@ -55,6 +55,11 @@ class ChaosRunCommand extends Command
         ChaosMetricsCollectorService $metricsCollector,
         ChaosObservabilityService $observability
     ): int {
+        if (!config('app.chaos_enabled')) {
+            $this->error('❌ Chaos module is disabled. Set CHAOS_ENABLED=true in .env to enable.');
+            return 1;
+        }
+
         // PRODUCTION GUARD
         if (app()->environment('production')) {
             $this->error('❌ BLOCKED: Chaos testing is NOT allowed in production!');

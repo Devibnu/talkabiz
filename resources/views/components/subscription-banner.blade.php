@@ -1,28 +1,51 @@
 {{--
-    Subscription Renewal Banner
+    Subscription Banner (Force Activation Gate + Renewal)
     Auto-injected via ShareSubscriptionStatus middleware.
     
-    Shows:
-    - Yellow warning when plan expires within 7 days
-    - Red expired banner when plan has expired
+    Shows (priority order):
+    1. Red BLOCKED banner when subscription NOT active (trial_selected, no plan, or no subscription)
+    2. Red expired banner when plan has expired
+    3. Yellow warning when plan expires within 7 days
+    
+    Uses $subscriptionIsActive (SSOT from Subscription model via middleware)
+    Does NOT hardcode status strings — uses boolean from isActive()
 --}}
 
-@if(isset($subscriptionPlanStatus) && $subscriptionPlanStatus === 'expired')
-    {{-- EXPIRED BANNER --}}
-    <div class="alert alert-danger d-flex align-items-center mb-3 mx-0 border-radius-lg shadow-sm" role="alert" id="subscription-expired-banner">
-        <div class="d-flex align-items-center">
-            <div class="icon icon-shape icon-sm bg-gradient-danger shadow text-center border-radius-md me-3 d-flex align-items-center justify-content-center">
-                <i class="fas fa-exclamation-circle text-white text-sm"></i>
+@if(!($subscriptionIsActive ?? false) && !in_array(auth()->user()->role ?? '', ['super_admin', 'superadmin', 'owner']))
+    {{-- FORCE ACTIVATION GATE BANNER --}}
+    @if(isset($subscriptionPlanStatus) && $subscriptionPlanStatus === 'expired')
+        {{-- EXPIRED BANNER --}}
+        <div class="alert alert-danger d-flex align-items-center mb-3 mx-0 border-radius-lg shadow-sm" role="alert" id="subscription-expired-banner">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-shape icon-sm bg-gradient-danger shadow text-center border-radius-md me-3 d-flex align-items-center justify-content-center">
+                    <i class="fas fa-exclamation-circle text-white text-sm"></i>
+                </div>
+                <div>
+                    <span class="text-sm font-weight-bold">Paket {{ $subscriptionPlanName ?? '' }} Anda telah berakhir.</span>
+                    <span class="text-sm d-block d-md-inline ms-md-1">Fitur pengiriman pesan tidak tersedia. Perpanjang sekarang untuk melanjutkan.</span>
+                </div>
             </div>
-            <div>
-                <span class="text-sm font-weight-bold">Paket {{ $subscriptionPlanName ?? '' }} Anda telah berakhir.</span>
-                <span class="text-sm d-block d-md-inline ms-md-1">Fitur pengiriman pesan tidak tersedia. Perpanjang sekarang untuk melanjutkan.</span>
-            </div>
+            <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0">
+                <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
+            </a>
         </div>
-        <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0">
-            <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
-        </a>
-    </div>
+    @else
+        {{-- NOT ACTIVE BANNER (trial_selected / no plan) --}}
+        <div class="alert alert-danger d-flex align-items-center mb-3 mx-0 border-radius-lg shadow-sm" role="alert" id="subscription-inactive-banner">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-shape icon-sm bg-gradient-danger shadow text-center border-radius-md me-3 d-flex align-items-center justify-content-center">
+                    <i class="fas fa-lock text-white text-sm"></i>
+                </div>
+                <div>
+                    <span class="text-sm font-weight-bold">⚠️ Paket belum aktif.</span>
+                    <span class="text-sm d-block d-md-inline ms-md-1">Silakan lakukan pembayaran untuk mulai menggunakan {{ $__brandName ?? 'Talkabiz' }}.</span>
+                </div>
+            </div>
+            <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0">
+                <i class="fas fa-credit-card me-1"></i> Bayar Sekarang
+            </a>
+        </div>
+    @endif
 
 @elseif(isset($subscriptionExpiresInDays) && $subscriptionExpiresInDays !== null && $subscriptionExpiresInDays <= 7 && $subscriptionExpiresInDays > 0)
     {{-- EXPIRING SOON WARNING --}}

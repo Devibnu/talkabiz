@@ -13,11 +13,13 @@ use Symfony\Component\HttpFoundation\Response;
  * Combines ALL pre-send checks into ONE named middleware for route clarity:
  *   1. CampaignGuardMiddleware → subscription active + broadcast feature + onboarding
  *   2. EnsureActiveSubscription → SSOT subscription validation (SubscriptionPolicy)
- *   3. WalletCostGuard:campaign → wallet balance >= estimated cost
+ *   3. CheckPlanLimit:campaign → plan message quota check
+ *   4. WalletCostGuard:campaign → wallet balance >= estimated cost
  * 
  * This is a COMPOSITE delegator — it does NOT duplicate logic.
  * It pipelines existing guards in correct order to guarantee:
  *   - No campaign starts without active subscription
+ *   - No campaign sends over plan limit
  *   - No campaign sends without sufficient wallet balance
  * 
  * Usage in routes:
@@ -33,7 +35,7 @@ class EnsureCanSendCampaign
     protected array $guards = [
         CampaignGuardMiddleware::class,
         EnsureActiveSubscription::class,
-        // WalletCostGuard handled separately (needs parameter)
+        // CheckPlanLimit + WalletCostGuard handled separately (needs parameter)
     ];
 
     /**
@@ -47,7 +49,7 @@ class EnsureCanSendCampaign
             return $this->deny($request, 'Silakan login terlebih dahulu.', 'unauthenticated');
         }
 
-        // Pipeline through CampaignGuard → EnsureActiveSubscription → WalletCostGuard → $next
+        // Pipeline through CampaignGuard → EnsureActiveSubscription → CheckPlanLimit → WalletCostGuard → $next
         return app(Pipeline::class)
             ->send($request)
             ->through([
@@ -57,7 +59,10 @@ class EnsureCanSendCampaign
                 // Layer 2: Subscription SSOT (SubscriptionPolicy double-check)
                 EnsureActiveSubscription::class,
                 
-                // Layer 3: Wallet balance check (with 'campaign' category)
+                // Layer 3: Plan limit check (campaign message quota)
+                CheckPlanLimit::class . ':campaign',
+
+                // Layer 4: Wallet balance check (with 'campaign' category)
                 WalletCostGuard::class . ':campaign',
             ])
             ->then($next);

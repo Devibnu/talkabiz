@@ -56,6 +56,11 @@ class ChaosFlagCommand extends Command
 
     public function handle(): int
     {
+        if (!config('app.chaos_enabled')) {
+            $this->error('❌ Chaos module is disabled. Set CHAOS_ENABLED=true in .env to enable.');
+            return 1;
+        }
+
         // Block production
         if (app()->environment('production')) {
             $this->error('❌ Chaos flags cannot be managed in production environment!');

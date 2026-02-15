@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware(['auth', 'force.password.change'])->prefix('wa-blast')->name('wa-blast.')->group(function () {
+Route::middleware(['auth', 'force.password.change', 'subscription.active'])->prefix('wa-blast')->name('wa-blast.')->group(function () {
     
     // ==================== MAIN PAGE ====================
     // Stepper UI (view-only — guarded by campaign.guard)

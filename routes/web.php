@@ -111,13 +111,15 @@ Route::middleware(['client.access'])->group(function () {
 			return redirect()->route('subscription.index');
 		})->name('pricing');
 
-		// Talkabiz Routes
-		Route::get('inbox', function () {
-			return view('inbox.index');
-		})->name('inbox');
+		// Talkabiz Routes — Revenue Lock: subscription.active required
+		Route::middleware(['subscription.active'])->group(function () {
+			Route::get('inbox', function () {
+				return view('inbox.index');
+			})->name('inbox');
+		});
 
-		// Campaign Routes - GUARDED by onboarding middleware
-		Route::middleware(['campaign.guard'])->group(function () {
+		// Campaign Routes - GUARDED by onboarding + subscription
+		Route::middleware(['campaign.guard', 'subscription.active'])->group(function () {
 			Route::get('campaign', function () {
 				return view('campaign');
 			})->name('campaign');
@@ -157,7 +159,12 @@ Route::middleware(['client.access'])->group(function () {
 		// Subscription Routes (Paket & Langganan — separated from Billing/Wallet)
 		Route::get('subscription', [\App\Http\Controllers\SubscriptionController::class, 'index'])->name('subscription.index');
 		Route::post('subscription/checkout', [\App\Http\Controllers\SubscriptionController::class, 'checkout'])->name('subscription.checkout');
-		Route::post('subscription/check-status/{transaction_code}', [\App\Http\Controllers\SubscriptionController::class, 'checkStatus'])->name('subscription.check-status');
+		// subscription/check-status REMOVED → Webhook-only architecture
+
+		// Activation Funnel KPI Routes (Growth Engine)
+		Route::post('api/activation/track', [\App\Http\Controllers\Api\ActivationController::class, 'track'])->name('activation.track');
+		Route::post('api/activation/modal-shown', [\App\Http\Controllers\Api\ActivationController::class, 'modalShown'])->name('activation.modal-shown');
+
 		Route::post('billing/topup', [BillingController::class, 'topUp'])->name('billing.topup');
 		Route::get('api/billing/history', [BillingController::class, 'history'])->name('billing.history');
 		Route::get('api/billing/wallet', [BillingController::class, 'getWalletInfo'])->name('billing.wallet');
@@ -211,6 +218,7 @@ Route::middleware(['client.access'])->group(function () {
 		Route::get('api/owner/clients', [OwnerDashboardController::class, 'apiClientProfitability'])->name('owner.api.clients');
 		Route::get('api/owner/usage', [OwnerDashboardController::class, 'apiUsageMonitor'])->name('owner.api.usage');
 		Route::get('api/owner/flagged', [OwnerDashboardController::class, 'apiFlaggedClients'])->name('owner.api.flagged');
+		Route::get('api/owner/trial-stats', [OwnerDashboardController::class, 'apiTrialStats'])->name('owner.api.trial-stats');
 		Route::post('owner/client/{id}/limit', [OwnerDashboardController::class, 'limitClient'])->name('owner.client.limit');
 		Route::post('owner/client/{id}/pause', [OwnerDashboardController::class, 'pauseClientCampaigns'])->name('owner.client.pause');
 		Route::post('owner/refresh-cache', [OwnerDashboardController::class, 'refreshCache'])->name('owner.refresh-cache');
@@ -298,10 +306,7 @@ Route::middleware(['auth', 'force.password.change'])->prefix('admin')->name('adm
 Route::post('webhook/midtrans/plan', [PlanWebhookController::class, 'handle'])
     ->name('webhook.midtrans.plan');
 
-// Midtrans Plan - Admin Check Status (requires auth)
-Route::get('webhook/midtrans/plan/check/{orderId}', [PlanWebhookController::class, 'checkStatus'])
-    ->middleware('auth')
-    ->name('webhook.midtrans.plan.check');
+// webhook/midtrans/plan/check REMOVED → Webhook-only architecture
 
 // ==================== GUPSHUP WEBHOOK (HARDENED) ====================
 // POST /webhook/gupshup/status - Status updates from Gupshup (HARDENED)

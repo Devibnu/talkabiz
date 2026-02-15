@@ -69,7 +69,6 @@ class LaunchExecutiveCommand extends Command
         $this->line("│  Total Active Pilots: {$numbers['total_pilots']}");
         $this->line("│  Total Revenue: Rp " . number_format($numbers['total_revenue'], 0, ',', '.'));
         $this->line("│  Avg Delivery Rate: {$numbers['avg_delivery_rate']}%");
-        $this->line("│  Corporate Pipeline: {$numbers['corporate_pipeline']} prospects");
         $this->info('└─────────────────────────────────────────────────────────────────────┘');
 
         // Metrics Health
@@ -95,21 +94,6 @@ class LaunchExecutiveCommand extends Command
             $this->newLine();
             $readiness = $summary['ready_for_next'];
             $this->info("🎯 Transition: {$readiness['recommendation']}");
-        }
-
-        // Corporate Readiness
-        $this->newLine();
-        $corporate = $summary['corporate_readiness'];
-        $corpStatus = $corporate['ready'] ? '✅ READY' : '⏳ NOT YET';
-        $this->info("🏢 Corporate Phase: {$corpStatus}");
-        
-        if (!$corporate['ready']) {
-            $this->line("   Checklist:");
-            foreach ($corporate['checks'] as $check => $passed) {
-                $icon = $passed ? '✅' : '❌';
-                $label = str_replace('_', ' ', $check);
-                $this->line("     {$icon} {$label}");
-            }
         }
 
         // Quick Questions (like executive dashboard)

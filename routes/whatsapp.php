@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware(['auth'])->prefix('whatsapp')->group(function () {
+Route::middleware(['auth', 'subscription.active'])->prefix('whatsapp')->group(function () {
     
     // ==================== CONNECTION ====================
     // Main WhatsApp page - show connection status
@@ -52,8 +52,11 @@ Route::middleware(['auth'])->prefix('whatsapp')->group(function () {
     // Import contacts
     Route::post('/contacts/import', [WhatsAppCloudController::class, 'importContacts'])->name('whatsapp.contacts.import');
     
-    // ==================== TEST MESSAGE ====================
-    Route::post('/test-message', [WhatsAppCloudController::class, 'sendTestMessage'])->name('whatsapp.test-message');
+    // ==================== TEST MESSAGE (REVENUE LOCKED) ====================
+    // Sends real WA message — requires plan quota + wallet balance
+    Route::post('/test-message', [WhatsAppCloudController::class, 'sendTestMessage'])
+        ->name('whatsapp.test-message')
+        ->middleware(['plan.limit:message', 'wallet.cost.guard:utility']);
     
     // ==================== CAMPAIGNS (WA BLAST) ====================
     Route::prefix('campaigns')->group(function () {

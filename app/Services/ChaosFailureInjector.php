@@ -43,6 +43,10 @@ class ChaosFailureInjector
      */
     public static function maybeInjectFailure(string $component): void
     {
+        if (!config('app.chaos_enabled')) {
+            return;
+        }
+
         if (app()->environment('production')) {
             return;
         }
@@ -86,6 +90,10 @@ class ChaosFailureInjector
      */
     public static function maybeInjectTimeout(string $component): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         if (app()->environment('production')) {
             return false;
         }
@@ -114,6 +122,10 @@ class ChaosFailureInjector
      */
     public static function maybeInjectDelay(string $component): int
     {
+        if (!config('app.chaos_enabled')) {
+            return 0;
+        }
+
         if (app()->environment('production')) {
             return 0;
         }
@@ -141,6 +153,10 @@ class ChaosFailureInjector
      */
     public static function maybeCacheUnavailable(): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         if (app()->environment('production')) {
             return false;
         }
@@ -159,6 +175,10 @@ class ChaosFailureInjector
      */
     public static function cacheGet(string $key, callable $callback, int $ttl = 60)
     {
+        if (!config('app.chaos_enabled')) {
+            return cache()->remember($key, $ttl, $callback);
+        }
+
         // If chaos is simulating cache failure, always execute callback
         if (self::maybeCacheUnavailable()) {
             return $callback();
@@ -174,6 +194,10 @@ class ChaosFailureInjector
      */
     public static function maybeDbLockContention(): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         if (app()->environment('production')) {
             return false;
         }
@@ -208,6 +232,10 @@ class ChaosFailureInjector
      */
     public static function maybeDropWebhook(string $source = 'whatsapp'): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         if (app()->environment('production')) {
             return false;
         }
@@ -228,6 +256,10 @@ class ChaosFailureInjector
      */
     public static function maybeDelayWebhook(string $source = 'whatsapp'): int
     {
+        if (!config('app.chaos_enabled')) {
+            return 0;
+        }
+
         return self::maybeInjectDelay("webhook.{$source}");
     }
 
@@ -240,6 +272,10 @@ class ChaosFailureInjector
      */
     public static function maybeKillWorker(): bool
     {
+        if (!config('app.chaos_enabled')) {
+            return false;
+        }
+
         if (app()->environment('production')) {
             return false;
         }
@@ -291,6 +327,10 @@ class ChaosFailureInjector
      */
     public static function httpWithChaos(string $component, callable $httpCall)
     {
+        if (!config('app.chaos_enabled')) {
+            return $httpCall();
+        }
+
         // Check for complete failure
         self::maybeInjectFailure($component);
 
@@ -320,6 +360,10 @@ class ChaosFailureInjector
      */
     public static function wrap(string $component, callable $operation)
     {
+        if (!config('app.chaos_enabled')) {
+            return $operation;
+        }
+
         return function (...$args) use ($component, $operation) {
             // Pre-operation chaos
             self::maybeInjectFailure($component);

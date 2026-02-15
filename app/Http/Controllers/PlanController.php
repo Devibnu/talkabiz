@@ -6,6 +6,7 @@ use App\Models\Plan;
 use App\Models\Klien;
 use App\Models\UserPlan;
 use App\Models\PlanTransaction;
+use App\Models\Subscription;
 use App\Services\PlanActivationService;
 use App\Services\MidtransPlanService;
 use Illuminate\Http\Request;
@@ -130,7 +131,73 @@ class PlanController extends Controller
         }
 
         try {
-            // Create purchase transaction
+            // ============================================================
+            // GUARD 1: Block duplicate active subscription (same plan_id)
+            // ============================================================
+            $activeSubscription = Subscription::where('klien_id', $klien->id)
+                ->where('plan_id', $plan->id)
+                ->where('status', Subscription::STATUS_ACTIVE)
+                ->where('expires_at', '>', now())
+                ->first();
+
+            if ($activeSubscription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Paket ini sudah aktif sampai '
+                        . $activeSubscription->expires_at->format('d M Y') . '. Gunakan fitur Perpanjang.',
+                    'reason' => 'plan_already_active',
+                ], 422);
+            }
+
+            // ============================================================
+            // GUARD 2: Reuse existing pending transaction with snap token
+            // ============================================================
+            $existingPending = PlanTransaction::where('klien_id', $klien->id)
+                ->where('plan_id', $plan->id)
+                ->whereIn('status', [
+                    PlanTransaction::STATUS_PENDING,
+                    PlanTransaction::STATUS_WAITING_PAYMENT,
+                ])
+                ->latest()
+                ->first();
+
+            if ($existingPending && $existingPending->pg_redirect_url) {
+                $snapToken = null;
+                if ($existingPending->pg_response_payload) {
+                    $pgResponse = is_string($existingPending->pg_response_payload) 
+                        ? json_decode($existingPending->pg_response_payload, true) 
+                        : $existingPending->pg_response_payload;
+                    $snapToken = $pgResponse['token'] ?? $pgResponse['snap_token'] ?? null;
+                }
+
+                if ($snapToken) {
+                    Log::info('PlanController: returning existing pending transaction', [
+                        'klien_id' => $klien->id,
+                        'plan_code' => $planCode,
+                        'transaction_code' => $existingPending->transaction_code,
+                    ]);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Transaksi pending ditemukan. Silakan lanjutkan pembayaran.',
+                        'data' => [
+                            'transaction_code' => $existingPending->transaction_code,
+                            'snap_token' => $snapToken,
+                            'order_id' => $existingPending->pg_order_id,
+                            'redirect_url' => $existingPending->pg_redirect_url,
+                            'expires_at' => $existingPending->payment_expires_at?->toISOString(),
+                            'reused' => true,
+                            'plan' => [
+                                'code' => $plan->code,
+                                'name' => $plan->name,
+                                'price' => $existingPending->final_price,
+                            ],
+                        ],
+                    ]);
+                }
+            }
+
+            // Create purchase transaction (idempotent via PlanActivationService)
             $transaction = $this->activationService->createPurchase(
                 klienId: $klien->id,
                 planCode: $planCode,

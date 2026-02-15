@@ -285,40 +285,43 @@ class InboxController extends Controller
             ], 403);
         }
 
-        // ============ REVENUE GUARD LAYER 4: Atomic Deduction ============
-        // Potong saldo SEBELUM kirim pesan. Fail-closed: jika gagal, pesan TIDAK dikirim.
+        // ============ REVENUE GUARD LAYER 4: chargeAndExecute (atomic) ============
+        // Potong saldo + kirim pesan dalam 1 transaksi. Gagal kirim → rollback saldo.
         try {
             $revenueGuard = app(RevenueGuardService::class);
             $sendRef = abs(crc32("inbox_reply_{$percakapanId}_{$pengguna->id}_" . floor(time() / 5)));
 
-            $guardResult = $revenueGuard->executeDeduction(
+            $guardResult = $revenueGuard->chargeAndExecute(
                 userId: $pengguna->id,
                 messageCount: 1,
                 category: 'utility',
                 referenceType: 'inbox_reply',
                 referenceId: $sendRef,
+                dispatchCallable: function ($transaction) use ($percakapanId, $pengguna, $request) {
+                    return Inbox::kirimBalasan($percakapanId, $pengguna->id, $request->all());
+                },
                 costPreview: $request->attributes->get('revenue_guard', []),
             );
 
-            if (!$guardResult['success'] && !($guardResult['duplicate'] ?? false)) {
+            if ($guardResult['duplicate'] ?? false) {
                 return response()->json([
-                    'sukses' => false,
-                    'pesan' => $guardResult['message'] ?? 'Gagal memproses pembayaran',
-                    'error_code' => 'REVENUE_GUARD_FAILED',
-                ], 402);
+                    'sukses' => true,
+                    'pesan' => $guardResult['message'],
+                ]);
             }
+
+            $hasil = $guardResult['dispatch_result'];
+
+            return response()->json($hasil, ($hasil['sukses'] ?? false) ? 200 : 422);
+
         } catch (\RuntimeException $e) {
             return response()->json([
                 'sukses' => false,
                 'pesan' => $e->getMessage(),
                 'error_code' => 'INSUFFICIENT_BALANCE',
+                'topup_url' => route('billing'),
             ], 402);
         }
-
-        // Delegasi ke service (saldo sudah dipotong oleh RGS)
-        $hasil = Inbox::kirimBalasan($percakapanId, $pengguna->id, $request->all());
-
-        return response()->json($hasil, $hasil['sukses'] ? 200 : 422);
     }
 
     /**

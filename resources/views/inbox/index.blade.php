@@ -1487,7 +1487,8 @@ const TalkabizInbox = {
         search: '',
         loading: false,
         sending: false,
-        userId: {{ auth()->id() ?? 'null' }}
+        userId: {{ auth()->id() ?? 'null' }},
+        subscriptionIsActive: {{ ($subscriptionIsActive ?? false) ? 'true' : 'false' }}
     },
     
     // Elements
@@ -1749,32 +1750,47 @@ const TalkabizInbox = {
         
         // Composer
         if (canReply) {
-            document.getElementById('chatComposerArea').innerHTML = `
-                <div class="composer-wrapper">
-                    <button class="composer-btn btn-template" onclick="TalkabizInbox.openTemplates()" title="Pilih Template">
-                        <i class="far fa-file-alt"></i>
-                    </button>
-                    <div class="composer-input">
-                        <textarea id="messageInput" placeholder="Ketik pesan..." rows="1"></textarea>
+            if (!this.state.subscriptionIsActive) {
+                // Subscription not active — HIDE composer, show activation CTA
+                document.getElementById('chatComposerArea').innerHTML = `
+                    <div class="composer-wrapper" style="background: #f8f9fe; justify-content: center; padding: 12px;">
+                        <div class="text-center">
+                            <p class="text-sm text-secondary mb-2" style="margin: 0;">Aktifkan paket untuk mulai mengirim pesan</p>
+                            <a href="/subscription" class="btn bg-gradient-primary btn-sm mb-0"
+                               onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('clicked_pay', {source: 'inbox_composer'});">
+                                <i class="fas fa-bolt me-1"></i>Aktifkan Sekarang
+                            </a>
+                        </div>
                     </div>
-                    <button class="composer-btn btn-send" onclick="TalkabizInbox.sendMessage()" id="btnSend">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
-            `;
-            // Re-bind textarea events
-            const textarea = document.getElementById('messageInput');
-            if (textarea) {
-                textarea.addEventListener('input', () => {
-                    textarea.style.height = 'auto';
-                    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-                });
-                textarea.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        this.sendMessage();
-                    }
-                });
+                `;
+            } else {
+                document.getElementById('chatComposerArea').innerHTML = `
+                    <div class="composer-wrapper">
+                        <button class="composer-btn btn-template" onclick="TalkabizInbox.openTemplates()" title="Pilih Template">
+                            <i class="far fa-file-alt"></i>
+                        </button>
+                        <div class="composer-input">
+                            <textarea id="messageInput" placeholder="Ketik pesan..." rows="1"></textarea>
+                        </div>
+                        <button class="composer-btn btn-send" onclick="TalkabizInbox.sendMessage()" id="btnSend">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                `;
+                // Re-bind textarea events
+                const textarea = document.getElementById('messageInput');
+                if (textarea) {
+                    textarea.addEventListener('input', () => {
+                        textarea.style.height = 'auto';
+                        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+                    });
+                    textarea.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            this.sendMessage();
+                        }
+                    });
+                }
             }
         } else if (isUnassigned) {
             document.getElementById('chatComposerArea').innerHTML = `
@@ -2008,6 +2024,12 @@ const TalkabizInbox = {
     
     // Send message
     async sendMessage() {
+        // === SUBSCRIPTION GATE ===
+        if (!this.state.subscriptionIsActive) {
+            this.showToast('Paket belum aktif. Silakan aktifkan paket terlebih dahulu.', 'error');
+            return;
+        }
+
         const textarea = document.getElementById('messageInput');
         const message = textarea?.value?.trim();
         
@@ -2083,6 +2105,11 @@ const TalkabizInbox = {
     
     // Open templates (placeholder)
     openTemplates() {
+        // === SUBSCRIPTION GATE ===
+        if (!this.state.subscriptionIsActive) {
+            this.showToast('Paket belum aktif. Silakan aktifkan paket terlebih dahulu.', 'error');
+            return;
+        }
         this.showTemplateModal();
     },
 
@@ -2270,6 +2297,12 @@ const TalkabizInbox = {
     },
 
     async sendTemplateMessage() {
+        // === SUBSCRIPTION GATE ===
+        if (!this.state.subscriptionIsActive) {
+            this.showToast('Paket belum aktif. Silakan aktifkan paket terlebih dahulu.', 'error');
+            return;
+        }
+
         if (!this.selectedTemplate || !this.state.activeConversation) {
             this.showToast('Pilih template dan percakapan terlebih dahulu', 'error');
             return;

@@ -1,6 +1,12 @@
 @extends('layouts.user_type.auth')
 
 @section('content')
+{{-- Growth Engine: Activation Progress Banner (trial_selected only) --}}
+@include('components.activation-progress-banner')
+
+{{-- Growth Engine: Soft Scarcity Timer (trial_selected, within 24h of registration) --}}
+@include('components.scarcity-timer')
+
 {{-- Stat Cards --}}
 <div class="row">
   <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
@@ -267,13 +273,21 @@
         </div>
         <hr class="horizontal dark my-4">
         <div class="d-flex flex-wrap gap-2">
-          {{-- Campaign Button - Always enabled (user is onboarded if they can access dashboard) --}}
-          <a href="{{ url('campaign') }}" class="btn bg-gradient-primary btn-sm mb-0">
-            <i class="fas fa-rocket me-2"></i>Buat Campaign
-          </a>
-          <a href="{{ url('inbox') }}" class="btn btn-outline-dark btn-sm mb-0">
-            <i class="fas fa-inbox me-2"></i>Buka Inbox
-          </a>
+          @if($subscriptionIsActive ?? false)
+            {{-- Campaign & Inbox buttons — only when subscription is active --}}
+            <a href="{{ url('campaign') }}" class="btn bg-gradient-primary btn-sm mb-0">
+              <i class="fas fa-rocket me-2"></i>Buat Campaign
+            </a>
+            <a href="{{ url('inbox') }}" class="btn btn-outline-dark btn-sm mb-0">
+              <i class="fas fa-inbox me-2"></i>Buka Inbox
+            </a>
+          @else
+            {{-- HIDDEN — user focus goes to Activation Banner CTA --}}
+            <a href="{{ route('subscription.index') }}" class="btn bg-gradient-primary btn-sm mb-0"
+               onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('clicked_pay', {source: 'quick_actions'});">
+              <i class="fas fa-bolt me-2"></i>Aktifkan Paket
+            </a>
+          @endif
           <a href="{{ url('kontak') }}" class="btn btn-outline-dark btn-sm mb-0">
             <i class="fas fa-address-book me-2"></i>Kelola Kontak
           </a>

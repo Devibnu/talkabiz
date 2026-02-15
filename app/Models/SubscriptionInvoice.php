@@ -36,6 +36,7 @@ use Carbon\Carbon;
  * @property string|null $description
  * @property string|null $notes
  * @property string|null $idempotency_key
+ * @property string|null $snap_token
  * 
  * @property-read Klien $klien
  * @property-read User $user
@@ -61,6 +62,7 @@ class SubscriptionInvoice extends Model
 
     protected $fillable = [
         'invoice_number',
+        'transaction_code',
         'klien_id',
         'user_id',
         'plan_id',
@@ -79,6 +81,7 @@ class SubscriptionInvoice extends Model
         'description',
         'notes',
         'idempotency_key',
+        'snap_token',
     ];
 
     // ==================== CASTS ====================
@@ -161,12 +164,12 @@ class SubscriptionInvoice extends Model
         ?float $discountAmount = null
     ): self {
         // ================================================================
-        // RULE A+B: Idempotent — gunakan idempotency_key dari transaction
+        // RULE A: Stable idempotency_key dari transaction (sub_X_Y format)
         // BUKAN UUID baru setiap klik. Key stabil per transaksi.
         // ================================================================
         $idempotencyKey = $transaction?->idempotency_key;
 
-        // Cek invoice existing berdasarkan idempotency_key
+        // RULE B: Cek invoice existing berdasarkan idempotency_key
         if ($idempotencyKey) {
             $existing = self::where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
@@ -179,6 +182,30 @@ class SubscriptionInvoice extends Model
             }
         }
 
+        // RULE C: Cek pending invoice existing untuk user + plan (fallback)
+        $pendingExisting = self::where('user_id', $userId)
+            ->where('plan_id', $plan->id)
+            ->where('status', self::STATUS_PENDING)
+            ->latest()
+            ->first();
+
+        if ($pendingExisting) {
+            // Update link ke transaction terbaru jika belum terhubung
+            if ($transaction && !$pendingExisting->plan_transaction_id) {
+                $pendingExisting->update([
+                    'plan_transaction_id' => $transaction->id,
+                    'transaction_code' => $transaction->transaction_code,
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+            }
+            \Illuminate\Support\Facades\Log::info('Returning existing pending invoice (user+plan match)', [
+                'invoice_number' => $pendingExisting->invoice_number,
+                'user_id' => $userId,
+                'plan_id' => $plan->id,
+            ]);
+            return $pendingExisting;
+        }
+
         $amount = (float) $plan->price_monthly;
         $discount = $discountAmount ?? 0;
         $finalAmount = max(0, $amount - $discount);
@@ -187,6 +214,7 @@ class SubscriptionInvoice extends Model
         try {
             return self::create([
                 'invoice_number'      => self::generateInvoiceNumber(),
+                'transaction_code'    => $transaction?->transaction_code,
                 'klien_id'            => $klienId,
                 'user_id'             => $userId,
                 'plan_id'             => $plan->id,

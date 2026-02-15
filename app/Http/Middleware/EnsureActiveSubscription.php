@@ -109,8 +109,10 @@ class EnsureActiveSubscription
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => false,
+                'code' => 'SUBSCRIPTION_REQUIRED',
                 'reason' => $policyResult['reason'],
-                'message' => $policyResult['message'],
+                'message' => $policyResult['message'] ?? 'Paket belum aktif. Silakan lakukan pembayaran terlebih dahulu.',
+                'redirect' => route('subscription.index'),
                 'upgrade_url' => $policyResult['upgrade_url'] ?? route('subscription.index'),
             ], 403);
         }
@@ -118,6 +120,6 @@ class EnsureActiveSubscription
         // For web requests, redirect to subscription page
         return redirect()
             ->route('subscription.index')
-            ->with('error', $policyResult['message']);
+            ->with('error', $policyResult['message'] ?? 'Paket belum aktif. Silakan lakukan pembayaran terlebih dahulu.');
     }
 }

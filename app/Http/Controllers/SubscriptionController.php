@@ -12,6 +12,7 @@ use App\Services\PlanActivationService;
 use App\Services\MidtransPlanService;
 use App\Services\SubscriptionService;
 use App\Services\PaymentGatewayService;
+use App\Services\ActivationTracker;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -127,6 +128,12 @@ class SubscriptionController extends Controller
             ->limit(5)
             ->get();
 
+        // KPI: Log subscription page view
+        ActivationTracker::log($user->id, 'viewed_subscription', [
+            'plan_status' => $planStatus,
+            'current_plan' => $currentPlan?->code,
+        ]);
+
         return view('subscription.index', compact(
             'user',
             'currentPlan',
@@ -146,17 +153,24 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * Checkout subscription — fixed price from Plan, no custom amount.
+     * Checkout subscription — FAST PAYMENT PATH.
      * 
      * POST /subscription/checkout
      * Body: { plan_code: string }
      * 
-     * FLOW:
-     *   1. Ambil Plan dari DB
-     *   2. Harga = Plan::price_monthly (FIXED)
-     *   3. Buat PlanTransaction (status: pending)
-     *   4. Generate Midtrans Snap token
-     *   5. Return JSON { snap_token, order_id }
+     * FLOW (1 klik → snap popup → selesai):
+     *   1. Guard: block if plan already active → 409
+     *   2. Short-circuit: reuse existing pending invoice + snap_token
+     *   3. Create/reuse PlanTransaction (idempotent)
+     *   4. Create/reuse SubscriptionInvoice (idempotent)
+     *   5. Generate/reuse Midtrans Snap token
+     *   6. Store snap_token on invoice for instant reuse
+     *   7. Return JSON { snap_token, invoice_id }
+     * 
+     * IDEMPOTENCY:
+     *   - PlanTransaction: sub_{user_id}_{plan_id}
+     *   - SubscriptionInvoice: same idempotency_key
+     *   - Snap token: reuse if not expired
      */
     public function checkout(Request $request): JsonResponse
     {
@@ -185,10 +199,15 @@ class SubscriptionController extends Controller
             ], 403);
         }
 
+        // KPI: Log payment attempt
+        ActivationTracker::log($user->id, 'payment_attempt', [
+            'plan_code' => $plan->code,
+            'plan_price' => $plan->price_monthly,
+        ]);
+
         try {
             // ================================================================
-            // GUARD 1: Block duplicate active subscription (same plan_id)
-            // Cek di Subscription table — SSOT untuk status langganan aktif
+            // GUARD 1: Block duplicate active subscription → 409
             // ================================================================
             $activeSubscription = Subscription::where('klien_id', $klien->id)
                 ->where('plan_id', $plan->id)
@@ -199,15 +218,57 @@ class SubscriptionController extends Controller
             if ($activeSubscription) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Paket ini sudah aktif dan masih berlaku sampai '
+                    'message' => 'Paket sudah aktif sampai '
                         . $activeSubscription->expires_at->format('d M Y') . '.',
                     'reason' => 'plan_already_active',
-                ], 422);
+                ], 409);
             }
 
             // ================================================================
-            // GUARD 2: Block if pending transaction already exists
-            // Return existing transaction info instead of creating new one
+            // STEP 1: SHORT-CIRCUIT — Reuse existing pending invoice + snap_token
+            // Cek apakah ada invoice pending < 30 menit dengan snap_token
+            // Jika ADA → langsung return, jangan buat invoice/transaction baru
+            // ================================================================
+            $existingInvoice = SubscriptionInvoice::where('user_id', $user->id)
+                ->where('plan_id', $plan->id)
+                ->where('status', SubscriptionInvoice::STATUS_PENDING)
+                ->where('created_at', '>=', now()->subMinutes(30))
+                ->latest()
+                ->first();
+
+            if ($existingInvoice && $existingInvoice->snap_token) {
+                Log::info('Fast path: reusing existing invoice + snap_token', [
+                    'invoice_id' => $existingInvoice->id,
+                    'invoice_number' => $existingInvoice->invoice_number,
+                    'snap_token' => substr($existingInvoice->snap_token, 0, 12) . '...',
+                    'user_id' => $user->id,
+                    'plan_code' => $plan->code,
+                ]);
+
+                // KPI: Log invoice reuse
+                ActivationTracker::log($user->id, 'invoice_reused', [
+                    'invoice_number' => $existingInvoice->invoice_number,
+                    'plan_code' => $plan->code,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'snap_token' => $existingInvoice->snap_token,
+                    'invoice_id' => $existingInvoice->id,
+                    'invoice_number' => $existingInvoice->invoice_number,
+                    'reused' => true,
+                    'plan' => [
+                        'code' => $plan->code,
+                        'name' => $plan->name,
+                        'price' => (int) $plan->price_monthly,
+                        'duration_days' => $plan->duration_days,
+                    ],
+                ]);
+            }
+
+            // ================================================================
+            // STEP 1b: Short-circuit existing pending PlanTransaction with snap
+            // (fallback if invoice doesn't have snap_token cached yet)
             // ================================================================
             $existingPending = PlanTransaction::where('klien_id', $klien->id)
                 ->where('plan_id', $plan->id)
@@ -219,18 +280,54 @@ class SubscriptionController extends Controller
                 ->first();
 
             if ($existingPending && $existingPending->pg_redirect_url) {
-                // Already has snap token — reuse it directly
-                Log::info('Checkout guard: returning existing pending transaction', [
-                    'klien_id' => $klien->id,
-                    'plan_code' => $plan->code,
-                    'transaction_code' => $existingPending->transaction_code,
-                    'status' => $existingPending->status,
-                ]);
+                $snapToken = null;
+                if ($existingPending->pg_response_payload) {
+                    $pgResponse = is_string($existingPending->pg_response_payload)
+                        ? json_decode($existingPending->pg_response_payload, true)
+                        : $existingPending->pg_response_payload;
+                    $snapToken = $pgResponse['token'] ?? $pgResponse['snap_token'] ?? null;
+                }
+
+                if ($snapToken) {
+                    // Backfill snap_token to invoice for next time
+                    $linkedInvoice = SubscriptionInvoice::where('plan_transaction_id', $existingPending->id)
+                        ->where('status', SubscriptionInvoice::STATUS_PENDING)
+                        ->first();
+
+                    if ($linkedInvoice && !$linkedInvoice->snap_token) {
+                        $linkedInvoice->update(['snap_token' => $snapToken]);
+                    }
+
+                    Log::info('Fast path: reusing existing transaction snap_token', [
+                        'transaction_code' => $existingPending->transaction_code,
+                        'user_id' => $user->id,
+                        'plan_code' => $plan->code,
+                    ]);
+
+                    ActivationTracker::log($user->id, 'invoice_reused', [
+                        'transaction_code' => $existingPending->transaction_code,
+                        'plan_code' => $plan->code,
+                    ]);
+
+                    return response()->json([
+                        'success' => true,
+                        'snap_token' => $snapToken,
+                        'invoice_id' => $linkedInvoice?->id,
+                        'invoice_number' => $linkedInvoice?->invoice_number,
+                        'transaction_code' => $existingPending->transaction_code,
+                        'reused' => true,
+                        'plan' => [
+                            'code' => $plan->code,
+                            'name' => $plan->name,
+                            'price' => (int) $plan->price_monthly,
+                            'duration_days' => $plan->duration_days,
+                        ],
+                    ]);
+                }
+                // No snap token → fall through to regenerate
             }
 
-            // Validate payment gateway from DB (owner configures via /owner/payment-gateway)
-            // GLOBAL query — PaymentGateway::where('is_active', true)->first()
-            // Tidak filter berdasarkan auth()->user() atau owner guard
+            // Validate payment gateway
             $gatewayStatus = $this->gatewayService->getValidationStatus();
 
             Log::debug('Gateway validation check', [
@@ -238,9 +335,7 @@ class SubscriptionController extends Controller
                 'plan_code' => $plan->code,
                 'gateway_status' => $gatewayStatus,
                 'has_active_gateway' => $this->gatewayService->hasActiveGateway(),
-                'active_gateway_name' => $this->gatewayService->getActiveGatewayName(),
                 'is_ready' => $this->gatewayService->isReady(),
-                'app_env' => config('app.env'),
             ]);
 
             if (!$gatewayStatus['valid']) {
@@ -248,19 +343,17 @@ class SubscriptionController extends Controller
                     'user_id' => $user->id,
                     'plan_code' => $plan->code,
                     'gateway_status' => $gatewayStatus,
-                    'has_active_gateway' => $this->gatewayService->hasActiveGateway(),
                 ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => $gatewayStatus['message'] ?? 'Payment gateway belum dikonfigurasi. Hubungi admin untuk mengaktifkan pembayaran.',
+                    'message' => $gatewayStatus['message'] ?? 'Payment gateway belum dikonfigurasi. Hubungi admin.',
                     'reason' => 'payment_gateway_inactive',
                 ], 503);
             }
 
             // ================================================================
-            // STEP 1: Create/reuse PlanTransaction (idempotent via service)
-            // If pending transaction exists for same klien+plan → returns it
+            // STEP 2: Create/reuse PlanTransaction (idempotent via service)
             // ================================================================
             $transaction = $this->activationService->createPurchase(
                 klienId: $klien->id,
@@ -276,8 +369,7 @@ class SubscriptionController extends Controller
             }
 
             // ================================================================
-            // STEP 2: Create/reuse SubscriptionInvoice (idempotent)
-            // Uses transaction->idempotency_key — same key = same invoice
+            // STEP 3: Create/reuse SubscriptionInvoice (idempotent)
             // ================================================================
             $invoice = SubscriptionInvoice::createFromCheckout(
                 klienId: $klien->id,
@@ -286,44 +378,56 @@ class SubscriptionController extends Controller
                 transaction: $transaction,
             );
 
+            $isNewInvoice = $invoice->wasRecentlyCreated;
+
             Log::info('Subscription invoice ready', [
                 'invoice_number' => $invoice->invoice_number,
+                'invoice_id' => $invoice->id,
                 'klien_id' => $klien->id,
                 'plan_code' => $plan->code,
                 'amount' => $invoice->final_amount,
-                'is_existing' => !$invoice->wasRecentlyCreated,
+                'is_new' => $isNewInvoice,
+            ]);
+
+            // KPI: Log invoice created or reused
+            ActivationTracker::log($user->id, $isNewInvoice ? 'invoice_created' : 'invoice_reused', [
+                'invoice_number' => $invoice->invoice_number,
+                'plan_code' => $plan->code,
+                'amount' => $invoice->final_amount,
             ]);
 
             // ================================================================
-            // STEP 3: Generate/reuse Midtrans Snap token (idempotent)
-            // If transaction already has snap token → reuse, no new Midtrans call
+            // STEP 4: Generate/reuse Midtrans Snap token (idempotent)
             // ================================================================
             $snapResult = $this->midtransService->createSnapTransaction(
                 $transaction,
                 $user
             );
 
+            // ================================================================
+            // STEP 5: Store snap_token on invoice for fast path next time
+            // ================================================================
+            if (!empty($snapResult['snap_token']) && $invoice->snap_token !== $snapResult['snap_token']) {
+                $invoice->update(['snap_token' => $snapResult['snap_token']]);
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Silakan lanjutkan pembayaran.',
-                'data' => [
-                    'transaction_code' => $transaction->transaction_code,
-                    'invoice_number' => $invoice->invoice_number,
-                    'snap_token' => $snapResult['snap_token'],
-                    'order_id' => $snapResult['order_id'],
-                    'redirect_url' => $snapResult['redirect_url'] ?? null,
-                    'reused' => $snapResult['reused'] ?? false,
-                    'plan' => [
-                        'code' => $plan->code,
-                        'name' => $plan->name,
-                        'price' => (int) $plan->price_monthly,
-                        'duration_days' => $plan->duration_days,
-                    ],
-                    // Local env: server-side verification aktif (tanpa webhook)
-                    'dev_warning' => app()->environment('local')
-                        ? 'Mode development — verifikasi pembayaran via server-side API check (tanpa webhook).'
-                        : null,
+                'snap_token' => $snapResult['snap_token'],
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'transaction_code' => $transaction->transaction_code,
+                'order_id' => $snapResult['order_id'],
+                'reused' => $snapResult['reused'] ?? false,
+                'plan' => [
+                    'code' => $plan->code,
+                    'name' => $plan->name,
+                    'price' => (int) $plan->price_monthly,
+                    'duration_days' => $plan->duration_days,
                 ],
+                'dev_warning' => app()->environment('local')
+                    ? 'Mode development — verifikasi via server-side API check.'
+                    : null,
             ]);
 
         } catch (DomainException $e) {
@@ -346,40 +450,31 @@ class SubscriptionController extends Controller
                 'plan_code' => $plan->code,
                 'error' => $e->getMessage(),
                 'error_class' => get_class($e),
-                'error_code' => $e->getCode(),
                 'trace' => $e->getTraceAsString(),
-                'app_env' => config('app.env'),
-                'app_url' => config('app.url'),
-                'gateway_name' => $this->gatewayService->getActiveGatewayName(),
             ]);
 
-            // LOCAL environment: log detail, jangan tampilkan error koneksi yang menakutkan
             if (app()->environment('local')) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Mode development — error saat generate Snap token. Cek laravel.log untuk detail.',
+                    'message' => 'Mode development — error Snap token. Cek laravel.log.',
                     'reason' => 'dev_error',
                     'debug' => [
                         'error' => $e->getMessage(),
                         'class' => get_class($e),
-                        'hint' => 'Verifikasi via server-side API check. Pastikan Midtrans sandbox key benar.',
-                        'app_url' => config('app.url'),
+                        'hint' => 'Pastikan Midtrans sandbox key benar.',
                     ],
                 ], 500);
             }
 
-            // PRODUCTION: error message yang ramah user
             $message = match (true) {
                 $e instanceof \TypeError
                     => 'Terjadi kesalahan internal. Silakan hubungi admin.',
-                str_contains($e->getMessage(), 'cURL') || str_contains($e->getMessage(), 'Connection') 
-                    => 'Tidak dapat terhubung ke payment gateway. Periksa koneksi internet dan coba lagi.',
-                str_contains($e->getMessage(), '401') || str_contains($e->getMessage(), 'Unauthorized') 
-                    => 'Payment gateway menolak kredensial. Hubungi admin untuk memperbaiki konfigurasi.',
-                str_contains($e->getMessage(), 'snap') || str_contains($e->getMessage(), 'Midtrans') 
-                    => 'Payment gateway sedang bermasalah. Silakan coba beberapa saat lagi.',
-                default 
-                    => 'Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi atau hubungi admin.',
+                str_contains($e->getMessage(), 'cURL') || str_contains($e->getMessage(), 'Connection')
+                    => 'Tidak dapat terhubung ke payment gateway. Periksa koneksi internet.',
+                str_contains($e->getMessage(), '401') || str_contains($e->getMessage(), 'Unauthorized')
+                    => 'Payment gateway menolak kredensial. Hubungi admin.',
+                default
+                    => 'Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi.',
             };
 
             return response()->json([
@@ -402,75 +497,6 @@ class SubscriptionController extends Controller
      * FLOW:
      *   1. Frontend Snap onSuccess/onClose → POST /subscription/check-status/{code}
      *   2. Controller cari PlanTransaction by transaction_code
-     *   3. Call Midtrans API: \Midtrans\Transaction::status(pg_order_id)
-     *   4. Jika settlement/capture → markAsSuccess() → activateFromPayment()
-     *   5. Return JSON status
-     * 
-     * KEAMANAN:
-     *   - Tetap verify ke Midtrans API (bukan fake success)
-     *   - auth middleware (user harus login)
-     *   - Ownership check (transaction harus milik user)
-     * 
-     * MODE:
-     *   | Environment | Cara Verify Payment    |
-     *   |-------------|------------------------|
-     *   | Local       | checkStatus (endpoint) |
-     *   | Production  | Webhook Midtrans       |
-     */
-    public function checkStatus(string $transactionCode): JsonResponse
-    {
-        $user = Auth::user();
-        $klien = $this->getKlienForUser($user);
-
-        // Find transaction
-        $transaction = PlanTransaction::where('transaction_code', $transactionCode)
-            ->firstOrFail();
-
-        // Ownership check: transaction harus milik klien user
-        if ($klien && $transaction->klien_id !== $klien->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized',
-            ], 403);
-        }
-
-        // Delegate to syncMidtransStatus (clean, single responsibility)
-        $result = $this->midtransService->syncMidtransStatus($transaction);
-
-        Log::info('checkStatus result', [
-            'transaction_code' => $transactionCode,
-            'user_id' => $user->id,
-            'result_status' => $result['status'] ?? 'unknown',
-            'result_success' => $result['success'] ?? false,
-        ]);
-
-        $httpCode = match (true) {
-            ($result['success'] ?? false) => 200,
-            ($result['status'] ?? '') === 'failed' => 400,
-            ($result['status'] ?? '') === 'expired' => 400,
-            default => 400,
-        };
-
-        return response()->json($result, $httpCode);
-    }
-
-    /**
-     * Extract payment channel from Midtrans status response
-     */
-    protected function extractPaymentChannel(object $status): ?string
-    {
-        if (isset($status->va_numbers[0]->bank)) {
-            return $status->va_numbers[0]->bank;
-        }
-        if (isset($status->permata_va_number)) {
-            return 'permata';
-        }
-        if (isset($status->acquirer)) {
-            return $status->acquirer;
-        }
-        return $status->payment_type ?? null;
-    }
-
     // ==================== HELPER ====================
 
     /**

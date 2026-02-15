@@ -281,7 +281,7 @@ class WhatsAppCampaignController extends Controller
         }
 
         try {
-            // ============ REVENUE GUARD LAYER 4: Atomic Deduction ============
+            // ============ REVENUE GUARD LAYER 4: chargeAndExecute (atomic) ============
             $revenueGuard = app(RevenueGuardService::class);
             $recipientCount = $campaign->total_recipients ?? $campaign->recipients()->pending()->count();
 
@@ -289,31 +289,36 @@ class WhatsAppCampaignController extends Controller
                 return back()->with('error', 'Kampanye tidak memiliki penerima.');
             }
 
-            $guardResult = $revenueGuard->executeDeduction(
+            $guardResult = $revenueGuard->chargeAndExecute(
                 userId: auth()->id(),
                 messageCount: $recipientCount,
                 category: 'marketing',
                 referenceType: 'wa_campaign',
                 referenceId: $campaign->id,
+                dispatchCallable: function ($transaction) use ($campaign, $klien) {
+                    // Execute inside transaction — rollback jika gagal
+                    $result = $this->executeDirectCampaign($campaign, $transaction->id);
+
+                    Log::info('WA Campaign completed via chargeAndExecute', [
+                        'campaign_id' => $campaign->id,
+                        'klien_id' => $klien->id,
+                        'sent' => $result->totalSent,
+                        'failed' => $result->totalFailed,
+                        'cost' => $result->totalCost,
+                        'transaction_code' => $result->transactionCode,
+                        'revenue_guard_tx' => $transaction->id,
+                    ]);
+
+                    return $result;
+                },
                 costPreview: request()->attributes->get('revenue_guard', []),
             );
 
-            if (!$guardResult['success'] && !($guardResult['duplicate'] ?? false)) {
-                return back()->with('error', $guardResult['message'] ?? 'Gagal memproses pembayaran.');
+            if ($guardResult['duplicate'] ?? false) {
+                return back()->with('info', $guardResult['message']);
             }
 
-            // Execute via MessageDispatchService — preAuthorized dari RGS L4
-            $result = $this->executeDirectCampaign($campaign, $guardResult['transaction']?->id);
-            
-            Log::info('WA Campaign completed via MessageDispatch + RevenueGuard L4', [
-                'campaign_id' => $campaign->id,
-                'klien_id' => $klien->id,
-                'sent' => $result->totalSent,
-                'failed' => $result->totalFailed,
-                'cost' => $result->totalCost,
-                'transaction_code' => $result->transactionCode,
-                'revenue_guard_tx' => $guardResult['transaction']?->id,
-            ]);
+            $result = $guardResult['dispatch_result'];
 
             $message = $result->isPartialSuccess() 
                 ? "Kampanye selesai. Berhasil: {$result->totalSent}, Gagal: {$result->totalFailed}"
@@ -522,36 +527,40 @@ class WhatsAppCampaignController extends Controller
             return back()->with('error', 'Kampanye tidak dalam status jeda.');
         }
 
-        // ============ REVENUE GUARD LAYER 4: Atomic Deduction for remaining ============
+        // ============ REVENUE GUARD LAYER 4: chargeAndExecute for remaining ============
         try {
             $remainingRecipients = $campaign->recipients()->pending()->count();
 
             if ($remainingRecipients > 0) {
                 $revenueGuard = app(RevenueGuardService::class);
 
-                $guardResult = $revenueGuard->executeDeduction(
+                $guardResult = $revenueGuard->chargeAndExecute(
                     userId: auth()->id(),
                     messageCount: $remainingRecipients,
                     category: 'marketing',
                     referenceType: 'wa_campaign_resume',
                     referenceId: $campaign->id,
+                    dispatchCallable: function ($transaction) use ($campaign) {
+                        $campaign->resume();
+                        ProcessWhatsappCampaign::dispatch($campaign);
+                        return ['dispatched' => true, 'remaining' => $campaign->recipients()->pending()->count()];
+                    },
                     costPreview: request()->attributes->get('revenue_guard', []),
                 );
 
-                if (!$guardResult['success'] && !($guardResult['duplicate'] ?? false)) {
-                    return back()->with('error', $guardResult['message'] ?? 'Gagal memproses pembayaran untuk resume.');
+                if ($guardResult['duplicate'] ?? false) {
+                    return back()->with('info', $guardResult['message']);
                 }
+            } else {
+                // No remaining recipients, just resume
+                $campaign->resume();
+                ProcessWhatsappCampaign::dispatch($campaign);
             }
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        $campaign->resume();
-
-        // Dispatch job to continue processing
-        ProcessWhatsappCampaign::dispatch($campaign);
-
-        Log::info('WA Campaign resumed via RevenueGuard L4', [
+        Log::info('WA Campaign resumed via chargeAndExecute', [
             'campaign_id' => $campaign->id,
             'remaining_recipients' => $remainingRecipients ?? 0,
         ]);
@@ -675,47 +684,51 @@ class WhatsAppCampaignController extends Controller
             return back()->with('info', 'Tidak ada penerima yang gagal untuk dicoba ulang.');
         }
 
-        // ============ REVENUE GUARD LAYER 4: Atomic Deduction for retry ============
+        // ============ REVENUE GUARD LAYER 4: chargeAndExecute for retry ============
         try {
             $revenueGuard = app(RevenueGuardService::class);
 
-            $guardResult = $revenueGuard->executeDeduction(
+            $guardResult = $revenueGuard->chargeAndExecute(
                 userId: auth()->id(),
                 messageCount: $failedCount,
                 category: 'marketing',
                 referenceType: 'wa_campaign_retry',
                 referenceId: $campaign->id,
+                dispatchCallable: function ($transaction) use ($campaign) {
+                    // Reset failed recipients to pending
+                    $resetCount = $campaign->recipients()
+                        ->failed()
+                        ->update([
+                            'status' => WhatsappCampaignRecipient::STATUS_PENDING,
+                            'error_code' => null,
+                            'error_message' => null,
+                            'failed_at' => null,
+                        ]);
+
+                    if ($resetCount > 0) {
+                        $campaign->decrement('failed_count', $resetCount);
+                        $campaign->status = WhatsappCampaign::STATUS_RUNNING;
+                        $campaign->save();
+
+                        ProcessWhatsappCampaign::dispatch($campaign);
+                    }
+
+                    return ['reset_count' => $resetCount];
+                },
                 costPreview: request()->attributes->get('revenue_guard', []),
             );
 
-            if (!$guardResult['success'] && !($guardResult['duplicate'] ?? false)) {
-                return back()->with('error', $guardResult['message'] ?? 'Gagal memproses pembayaran untuk retry.');
+            if ($guardResult['duplicate'] ?? false) {
+                return back()->with('info', $guardResult['message']);
             }
+
+            $resetCount = $guardResult['dispatch_result']['reset_count'] ?? 0;
+
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        // Reset failed recipients to pending
-        $resetCount = $campaign->recipients()
-            ->failed()
-            ->update([
-                'status' => WhatsappCampaignRecipient::STATUS_PENDING,
-                'error_code' => null,
-                'error_message' => null,
-                'failed_at' => null,
-            ]);
-
-        if ($resetCount > 0) {
-            // Update campaign counts
-            $campaign->decrement('failed_count', $resetCount);
-            $campaign->status = WhatsappCampaign::STATUS_RUNNING;
-            $campaign->save();
-
-            // Dispatch job
-            ProcessWhatsappCampaign::dispatch($campaign);
-        }
-
-        Log::info('WA Campaign retry via RevenueGuard L4', [
+        Log::info('WA Campaign retry via chargeAndExecute', [
             'campaign_id' => $campaign->id,
             'retry_count' => $resetCount,
             'revenue_guard_tx' => $guardResult['transaction']?->id ?? null,

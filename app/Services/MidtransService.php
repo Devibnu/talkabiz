@@ -392,24 +392,7 @@ class MidtransService
         });
     }
 
-    /**
-     * Check transaction status dari Midtrans API
-     */
-    public function checkStatus(string $orderId): array
-    {
-        try {
-            $status = \Midtrans\Transaction::status($orderId);
-            return [
-                'success' => true,
-                'data' => $status,
-            ];
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-            ];
-        }
-    }
+    // checkStatus() REMOVED → Webhook-only architecture
 
     /**
      * Get client key untuk frontend

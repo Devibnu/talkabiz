@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
  * @property int $id
  * @property int $user_id
  * @property int|null $subscription_id
- * @property string $type         t7|t3|t1|expired
+ * @property string $type         t7|t3|t1|expired|email_1h|email_24h|wa_24h
  * @property string $channel      email|whatsapp
  * @property string $sent_date    Y-m-d (for unique constraint)
  * @property \Carbon\Carbon|null $sent_at
@@ -26,11 +26,16 @@ class SubscriptionNotification extends Model
 {
     protected $table = 'subscription_notifications';
 
-    // Type constants
+    // Type constants — Renewal Reminders
     const TYPE_T7 = 't7';
     const TYPE_T3 = 't3';
     const TYPE_T1 = 't1';
     const TYPE_EXPIRED = 'expired';
+
+    // Type constants — Trial Activation Reminders
+    const TYPE_EMAIL_1H = 'email_1h';
+    const TYPE_EMAIL_24H = 'email_24h';
+    const TYPE_WA_24H = 'wa_24h';
 
     // Channel constants
     const CHANNEL_EMAIL = 'email';
@@ -131,6 +136,9 @@ class SubscriptionNotification extends Model
             self::TYPE_T3 => 'H-3 Reminder',
             self::TYPE_T1 => 'H-1 Reminder (Urgent)',
             self::TYPE_EXPIRED => 'Expired Notification',
+            self::TYPE_EMAIL_1H => 'Trial Reminder 1 Jam',
+            self::TYPE_EMAIL_24H => 'Trial Reminder 24 Jam',
+            self::TYPE_WA_24H => 'Trial WA Reminder 24 Jam',
             default => $this->type,
         };
     }

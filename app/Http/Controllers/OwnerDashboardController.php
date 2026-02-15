@@ -3,8 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Services\ProfitCostService;
+use App\Models\User;
+use App\Models\Subscription;
+use App\Models\PlanTransaction;
+use App\Models\SubscriptionNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * OwnerDashboardController
@@ -63,6 +68,9 @@ class OwnerDashboardController extends Controller
         // Get usage monitor (last 7 days)
         $usageMonitor = $this->profitCostService->getUsageMonitor(7);
 
+        // Get trial activation stats
+        $trialStats = $this->getTrialStatsData();
+
         return view('owner.dashboard', compact(
             'period',
             'summary',
@@ -70,7 +78,8 @@ class OwnerDashboardController extends Controller
             'costAnalysis',
             'clientProfitability',
             'flaggedClients',
-            'usageMonitor'
+            'usageMonitor',
+            'trialStats'
         ));
     }
 
@@ -184,5 +193,84 @@ class OwnerDashboardController extends Controller
             'success' => true,
             'message' => 'Cache berhasil di-refresh',
         ]);
+    }
+
+    // ==================== TRIAL ACTIVATION STATS ====================
+
+    /**
+     * API: Get trial activation stats
+     */
+    public function apiTrialStats()
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['super_admin', 'superadmin', 'owner'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        return response()->json($this->getTrialStatsData());
+    }
+
+    /**
+     * Build trial activation stats data.
+     */
+    protected function getTrialStatsData(): array
+    {
+        // All trial_selected users (not admin/owner)
+        $trialUsers = User::where('plan_status', Subscription::STATUS_TRIAL_SELECTED)
+            ->whereNotIn('role', ['super_admin', 'superadmin', 'owner'])
+            ->select('id', 'name', 'email', 'phone', 'plan_status', 'created_at')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $total = $trialUsers->count();
+        $overdue24h = $trialUsers->filter(fn($u) => $u->created_at->diffInHours(now()) >= 24)->count();
+        $overdue1h = $trialUsers->filter(fn($u) => $u->created_at->diffInHours(now()) >= 1)->count();
+
+        // Conversion rate: users who were trial_selected and became active (last 30 days)
+        $convertedCount = PlanTransaction::where('status', PlanTransaction::STATUS_SUCCESS)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->distinct('klien_id')
+            ->count('klien_id');
+
+        $totalTrialEver30d = User::whereNotIn('role', ['super_admin', 'superadmin', 'owner'])
+            ->where('created_at', '>=', now()->subDays(30))
+            ->count();
+
+        $conversionRate = $totalTrialEver30d > 0
+            ? round(($convertedCount / $totalTrialEver30d) * 100, 1)
+            : 0;
+
+        // Reminder stats
+        $remindersSent = SubscriptionNotification::whereIn('type', [
+            SubscriptionNotification::TYPE_EMAIL_1H,
+            SubscriptionNotification::TYPE_EMAIL_24H,
+            SubscriptionNotification::TYPE_WA_24H,
+        ])
+            ->where('status', SubscriptionNotification::STATUS_SENT)
+            ->where('created_at', '>=', now()->subDays(7))
+            ->count();
+
+        // Recent trial users list (top 10 overdue)
+        $overdueList = $trialUsers->filter(fn($u) => $u->created_at->diffInHours(now()) >= 24)
+            ->take(10)
+            ->map(fn($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'phone' => $u->phone,
+                'hours_since' => $u->created_at->diffInHours(now()),
+                'registered_at' => $u->created_at->format('d M Y H:i'),
+            ])
+            ->values()
+            ->toArray();
+
+        return [
+            'total_trial' => $total,
+            'overdue_1h' => $overdue1h,
+            'overdue_24h' => $overdue24h,
+            'conversion_rate' => $conversionRate,
+            'reminders_sent_7d' => $remindersSent,
+            'overdue_list' => $overdueList,
+        ];
     }
 }

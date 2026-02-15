@@ -129,15 +129,7 @@ class MidtransWebhookController extends Controller
         }
     }
 
-    /**
-     * Endpoint untuk check status transaksi (internal use)
-     */
-    public function checkStatus(Request $request, $orderId)
-    {
-        $result = $this->midtransService->checkStatus($orderId);
-
-        return response()->json($result);
-    }
+    // checkStatus() REMOVED → Webhook-only architecture
 
     /**
      * Route notification to appropriate handler based on order_id prefix
