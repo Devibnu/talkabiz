@@ -945,9 +945,9 @@ Route::prefix('webhook')->group(function () {
     
     // Legacy route for backward compatibility
     Route::post('/gupshup', [WebhookController::class, 'handle'])
-        ->name('webhook.gupshup');
+        ->name('webhook.gupshup.legacy');
     Route::get('/gupshup', [WebhookController::class, 'healthCheck'])
-        ->name('webhook.gupshup.verify');
+        ->name('webhook.gupshup.legacy.verify');
 
     // ==================== Recipient Complaint Webhooks ====================
     // Endpoints untuk menerima laporan spam/abuse dari recipients
@@ -1662,7 +1662,7 @@ Route::middleware('auth:sanctum')->prefix('alerts')->group(function () {
     
     // Acknowledge specific alert
     Route::post('/{alertId}/acknowledge', [AlertController::class, 'acknowledgeAlert'])
-        ->name('alerts.acknowledge');
+        ->name('alerts.user.acknowledge');
     
     // Mark all notifications as read
     Route::post('/mark-all-read', [AlertController::class, 'markAllAsRead'])
