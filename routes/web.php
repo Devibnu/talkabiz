@@ -21,6 +21,7 @@ use App\Http\Controllers\AccountUnlockController;
 use App\Http\Controllers\ForcePasswordChangeController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\TopupInvoiceController;
+use App\Http\Controllers\BusinessMetricsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\DB;
@@ -364,6 +365,12 @@ Route::group(['middleware' => 'guest'], function () {
 if (app()->environment(['local', 'development', 'testing'])) {
     require __DIR__.'/test-wallet.php';
 }
+
+// ==================== INTERNAL METRICS (Prometheus) ====================
+// Accessible ONLY from 127.0.0.1 — no auth middleware needed
+Route::get('/internal/metrics/business', BusinessMetricsController::class)
+    ->name('internal.metrics.business')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
 // Debug: temporary route to verify plans data (HAPUS setelah selesai debug)
 Route::get('/debug-plans', function () {
