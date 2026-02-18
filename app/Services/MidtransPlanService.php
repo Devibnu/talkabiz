@@ -196,7 +196,11 @@ class MidtransPlanService
         // Build callback URLs using config('app.url') for consistency
         $appUrl = rtrim(config('app.url'), '/');
 
-        // Build Midtrans payload — Snap token only, no server-to-server callback
+        // CRITICAL: Override Midtrans notification URL for plan webhooks
+        // This ensures settlement notifications go to the correct endpoint
+        \Midtrans\Config::$overrideNotifUrl = $appUrl . '/webhook/midtrans/plan';
+
+        // Build Midtrans payload with server notification URL
         $params = [
             'transaction_details' => [
                 'order_id' => $orderId,
@@ -325,6 +329,11 @@ class MidtransPlanService
      * Handle webhook notification dari Midtrans
      * CRITICAL: Idempotent & Secure
      * 
+     * FIXES APPLIED:
+     * - Smart idempotency: allows retry if status=success but activation missing
+     * - Atomic transaction: markAsSuccess + activation rollback together on failure
+     * - Recovery path: catches stuck transactions from previous code bugs
+     * 
      * @param array $payload Raw webhook payload
      * @return array
      */
@@ -332,17 +341,21 @@ class MidtransPlanService
     {
         $orderId = $payload['order_id'] ?? null;
         $transactionStatus = $payload['transaction_status'] ?? null;
-        $fraudStatus = $payload['fraud_status'] ?? 'accept';
+        $fraudStatus = $payload['fraud_status'] ?? null;
         $signatureKey = $payload['signature_key'] ?? '';
         $grossAmount = $payload['gross_amount'] ?? 0;
         $paymentType = $payload['payment_type'] ?? null;
+
+        // Normalize fraud_status: null, empty, or missing → treat as 'accept'
+        if (empty($fraudStatus)) {
+            $fraudStatus = 'accept';
+        }
 
         // Log webhook untuk audit
         $webhookLog = $this->logWebhook($orderId, $payload);
 
         // 1. Validate order_id prefix (harus PLAN-)
         if (!$orderId || !str_starts_with($orderId, 'PLAN-')) {
-            // Bukan untuk plan purchase, skip
             return [
                 'success' => true,
                 'message' => 'Not a plan transaction',
@@ -352,7 +365,10 @@ class MidtransPlanService
 
         // 2. Validate signature
         if (!$this->verifySignature($payload)) {
-            Log::warning('Midtrans Plan: Invalid signature', ['order_id' => $orderId]);
+            Log::warning('PLAN WEBHOOK REJECTED: Invalid signature', [
+                'order_id' => $orderId,
+                'server_key_source' => !empty($this->serverKey) ? 'loaded' : 'EMPTY',
+            ]);
             
             $webhookLog?->update([
                 'status' => 'failed',
@@ -368,7 +384,7 @@ class MidtransPlanService
         // 3. Find transaction
         $transaction = PlanTransaction::findByPgOrderId($orderId);
         if (!$transaction) {
-            Log::warning('Midtrans Plan: Transaction not found', ['order_id' => $orderId]);
+            Log::warning('PLAN WEBHOOK: Transaction not found', ['order_id' => $orderId]);
             
             $webhookLog?->update([
                 'status' => 'failed',
@@ -381,25 +397,89 @@ class MidtransPlanService
             ];
         }
 
-        // 4. Idempotency check: Already processed?
+        Log::info('PLAN WEBHOOK: Processing', [
+            'order_id' => $orderId,
+            'transaction_id' => $transaction->id,
+            'current_status' => $transaction->status,
+            'webhook_status' => $transactionStatus,
+            'user_plan_id' => $transaction->user_plan_id,
+            'idempotency_key' => $transaction->idempotency_key,
+        ]);
+
+        // ================================================================
+        // 4. SMART IDEMPOTENCY GUARD
+        // ================================================================
+
+        // 4a. SUCCESS + activated → fully processed, skip
+        if ($transaction->status === PlanTransaction::STATUS_SUCCESS && $transaction->user_plan_id) {
+            Log::info('PLAN WEBHOOK: Already fully activated (idempotent)', [
+                'order_id' => $orderId,
+                'user_plan_id' => $transaction->user_plan_id,
+            ]);
+            $webhookLog?->update(['status' => 'duplicate']);
+            return ['success' => true, 'message' => 'Already activated', 'idempotent' => true];
+        }
+
+        // 4b. SUCCESS but NOT activated → recovery path
+        //     This catches stuck transactions from previous code bugs
+        //     where markAsSuccess committed but activation rolled back
+        if ($transaction->status === PlanTransaction::STATUS_SUCCESS && !$transaction->user_plan_id) {
+            Log::warning('PLAN RECOVERY: Transaction SUCCESS but NOT activated — retrying', [
+                'order_id' => $orderId,
+                'transaction_id' => $transaction->id,
+                'idempotency_key' => $transaction->idempotency_key,
+            ]);
+
+            $webhookLog?->update(['status' => 'retry_activation']);
+
+            try {
+                $userPlan = $this->activationService->activateFromPayment(
+                    $transaction->idempotency_key
+                );
+
+                if ($userPlan) {
+                    Log::info('PLAN ACTIVATED (recovery)', [
+                        'order_id' => $orderId,
+                        'transaction_id' => $transaction->id,
+                        'user_plan_id' => $userPlan->id,
+                        'klien_id' => $transaction->klien_id,
+                    ]);
+                    $webhookLog?->update(['status' => 'success']);
+                    return ['success' => true, 'message' => 'Plan activated (recovery)', 'user_plan_id' => $userPlan->id];
+                }
+
+                Log::error('PLAN RECOVERY FAILED: activateFromPayment returned null', [
+                    'order_id' => $orderId,
+                    'transaction_id' => $transaction->id,
+                ]);
+                $webhookLog?->markFailed('Recovery returned null');
+                return ['success' => true, 'message' => 'Recovery failed — manual intervention needed'];
+
+            } catch (Exception $e) {
+                Log::critical('PLAN RECOVERY EXCEPTION', [
+                    'order_id' => $orderId,
+                    'transaction_id' => $transaction->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                $webhookLog?->update(['status' => 'failed', 'error_message' => 'Recovery error: ' . $e->getMessage()]);
+                return ['success' => true, 'message' => 'Recovery error — manual intervention needed'];
+            }
+        }
+
+        // 4c. Not processable (failed/expired/cancelled) → skip
         if (!$transaction->canBeProcessed()) {
-            Log::info('Midtrans Plan: Already processed (idempotent)', [
+            Log::info('PLAN WEBHOOK: Not processable', [
                 'order_id' => $orderId,
                 'status' => $transaction->status,
             ]);
-
-            $webhookLog?->update(['status' => 'duplicate']);
-
-            return [
-                'success' => true,
-                'message' => 'Already processed',
-                'idempotent' => true,
-            ];
+            $webhookLog?->update(['status' => 'skipped']);
+            return ['success' => true, 'message' => 'Transaction not processable: ' . $transaction->status];
         }
 
         // 5. Validate amount
         if (!$this->activationService->validatePaymentAmount($transaction, (float) $grossAmount)) {
-            Log::warning('Midtrans Plan: Amount mismatch', [
+            Log::warning('PLAN WEBHOOK: Amount mismatch', [
                 'order_id' => $orderId,
                 'expected' => $transaction->final_price,
                 'received' => $grossAmount,
@@ -416,14 +496,39 @@ class MidtransPlanService
             ];
         }
 
-        // 6. Process status
-        $result = $this->processStatus(
-            transaction: $transaction,
-            status: $transactionStatus,
-            fraudStatus: $fraudStatus,
-            paymentType: $paymentType,
-            payload: $payload
-        );
+        // 6. Process status — wrapped in try-catch for atomic safety
+        //    If processStatus() throws, DB::transaction is fully rolled back
+        //    Status stays waiting_payment → can be retried on next webhook
+        try {
+            $result = $this->processStatus(
+                transaction: $transaction,
+                status: $transactionStatus,
+                fraudStatus: $fraudStatus,
+                paymentType: $paymentType,
+                payload: $payload
+            );
+        } catch (Exception $e) {
+            Log::critical('PLAN WEBHOOK: processStatus FAILED — full rollback', [
+                'order_id' => $orderId,
+                'transaction_id' => $transaction->id,
+                'webhook_status' => $transactionStatus,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            $webhookLog?->update([
+                'status' => 'failed',
+                'error_message' => 'Processing error: ' . $e->getMessage(),
+            ]);
+
+            // Return success=false but controller still returns 200
+            // Transaction stays waiting_payment → retryable
+            return [
+                'success' => false,
+                'message' => 'Processing error — transaction rolled back, retryable',
+                'error' => $e->getMessage(),
+            ];
+        }
 
         // 7. Update webhook log
         $webhookLog?->update([
@@ -462,10 +567,15 @@ class MidtransPlanService
             switch ($status) {
                 case 'capture':
                     // Credit card: Check fraud status
-                    if ($fraudStatus === 'accept') {
+                    // Accept if fraud_status is 'accept', null, or empty
+                    if ($fraudStatus === 'accept' || empty($fraudStatus)) {
                         return $this->handlePaymentSuccess($transaction, $paymentType, $payload);
                     }
                     // Challenge or deny
+                    Log::warning('PLAN WEBHOOK: Fraud detected', [
+                        'order_id' => $transaction->pg_order_id,
+                        'fraud_status' => $fraudStatus,
+                    ]);
                     $transaction->markAsFailed('Fraud detected: ' . $fraudStatus, $payload);
                     return ['success' => true, 'message' => 'Fraud detected'];
 
@@ -502,9 +612,14 @@ class MidtransPlanService
     /**
      * Handle successful payment
      * 
-     * PHASE 3 HARDENED:
-     * - Cek invoice status sebelum activate (duplicate webhook protection)
-     * - Idempotent: jika invoice sudah paid → skip tanpa error
+     * PRODUCTION-SAFE ATOMIC PATTERN:
+     * - markAsSuccess() + activateFromPayment() in SAME DB::transaction
+     * - If activation fails → exception propagates → FULL rollback
+     * - markAsSuccess is also rolled back → status stays waiting_payment
+     * - Next webhook can safely retry the entire operation
+     * 
+     * NO TRY-CATCH around activation — intentional for atomicity.
+     * Exceptions are caught in handleWebhook() after DB::transaction rollback.
      */
     protected function handlePaymentSuccess(
         PlanTransaction $transaction,
@@ -516,7 +631,7 @@ class MidtransPlanService
         // ================================================================
         $invoice = SubscriptionInvoice::where('plan_transaction_id', $transaction->id)->first();
         if ($invoice && $invoice->isPaid()) {
-            Log::info('Midtrans Plan: Invoice already paid — duplicate webhook ignored', [
+            Log::info('PLAN WEBHOOK: Invoice already paid — duplicate webhook ignored', [
                 'order_id' => $transaction->pg_order_id,
                 'invoice_number' => $invoice->invoice_number,
             ]);
@@ -527,7 +642,11 @@ class MidtransPlanService
             ];
         }
 
-        // 1. Mark transaction as success
+        // ================================================================
+        // STEP 1: Mark transaction as success
+        // This runs inside processStatus() DB::transaction.
+        // If activation below fails, this save will ALSO be rolled back.
+        // ================================================================
         $transaction->markAsSuccess(
             pgTransactionId: $payload['transaction_id'] ?? null,
             paymentMethod: $paymentType,
@@ -535,41 +654,55 @@ class MidtransPlanService
             responsePayload: $payload
         );
 
-        // 2. Activate plan via service (already wrapped in DB::transaction)
-        try {
-            $userPlan = $this->activationService->activateFromPayment(
-                $transaction->idempotency_key
+        Log::info('PLAN WEBHOOK: Transaction marked SUCCESS, activating plan...', [
+            'order_id' => $transaction->pg_order_id,
+            'transaction_id' => $transaction->id,
+            'idempotency_key' => $transaction->idempotency_key,
+        ]);
+
+        // ================================================================
+        // STEP 2: Activate plan — NO TRY-CATCH (atomic with step 1)
+        // If this fails:
+        //   → Exception propagates to processStatus() DB::transaction
+        //   → FULL rollback including markAsSuccess
+        //   → Status stays waiting_payment → retryable
+        // If this succeeds:
+        //   → Everything commits atomically
+        // ================================================================
+        $userPlan = $this->activationService->activateFromPayment(
+            $transaction->idempotency_key
+        );
+
+        if (!$userPlan) {
+            // Activation returned null — treat as failure
+            // Throw to trigger full rollback so markAsSuccess is undone
+            throw new Exception(
+                "Plan activation returned null for order {$transaction->pg_order_id}, "
+                . "idempotency_key={$transaction->idempotency_key}"
             );
-
-            if (!$userPlan) {
-                throw new Exception('Failed to activate plan');
-            }
-
-            Log::info('Midtrans Plan: Payment success & plan activated', [
-                'order_id' => $transaction->pg_order_id,
-                'user_plan_id' => $userPlan->id,
-            ]);
-
-            return [
-                'success' => true,
-                'message' => 'Payment success, plan activated',
-                'user_plan_id' => $userPlan->id,
-            ];
-
-        } catch (Exception $e) {
-            Log::error('Midtrans Plan: Failed to activate plan', [
-                'order_id' => $transaction->pg_order_id,
-                'error' => $e->getMessage(),
-            ]);
-
-            // Transaction is paid, but activation failed
-            // This should be handled by support/manual process
-            return [
-                'success' => true, // Return true to Midtrans to avoid retry
-                'message' => 'Payment success, activation pending',
-                'error' => $e->getMessage(),
-            ];
         }
+
+        // ================================================================
+        // SUCCESS: Both payment confirmation and activation committed
+        // ================================================================
+        Log::info('PLAN ACTIVATED', [
+            'order_id' => $transaction->pg_order_id,
+            'transaction_id' => $transaction->id,
+            'user_plan_id' => $userPlan->id,
+            'klien_id' => $transaction->klien_id,
+            'plan_id' => $transaction->plan_id,
+            'plan_code' => $transaction->plan?->code,
+            'idempotency_key' => $transaction->idempotency_key,
+            'amount_paid' => $transaction->final_price,
+            'payment_type' => $paymentType,
+            'expires_at' => $userPlan->expires_at?->toISOString(),
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'Payment success, plan activated',
+            'user_plan_id' => $userPlan->id,
+        ];
     }
 
     // ==================== SECURITY METHODS ====================
@@ -630,20 +763,22 @@ class MidtransPlanService
 
     /**
      * Log webhook untuk audit
+     * Uses WebhookLog::logMidtrans() for correct field mapping.
      */
     protected function logWebhook(string $orderId, array $payload): ?WebhookLog
     {
         try {
-            return WebhookLog::create([
-                'source' => 'midtrans_plan',
-                'event_type' => $payload['transaction_status'] ?? 'unknown',
-                'reference_id' => $orderId,
-                'payload' => $payload,
-                'status' => 'pending',
-                'ip_address' => request()->ip(),
-            ]);
+            return WebhookLog::logMidtrans(
+                payload: $payload,
+                headers: [],
+                ipAddress: request()->ip(),
+                signatureValid: false // Will be updated later if valid
+            );
         } catch (Exception $e) {
-            Log::error('Failed to log webhook', ['error' => $e->getMessage()]);
+            Log::error('Failed to log webhook', [
+                'order_id' => $orderId,
+                'error' => $e->getMessage(),
+            ]);
             return null;
         }
     }

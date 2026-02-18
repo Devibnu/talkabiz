@@ -80,4 +80,16 @@ return [
         'partner_url' => env('GUPSHUP_PARTNER_URL', 'https://partner.gupshup.io/partner/app'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Midtrans Payment Gateway
+    |--------------------------------------------------------------------------
+    */
+
+    'midtrans' => [
+        'server_key' => env('MIDTRANS_SERVER_KEY', ''),
+        'client_key' => env('MIDTRANS_CLIENT_KEY', ''),
+        'is_production' => env('MIDTRANS_ENV', 'sandbox') === 'production',
+    ],
+
 ];

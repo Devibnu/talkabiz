@@ -1,0 +1,18 @@
+============================================
+  TALKABIZ — Performance Baseline Snapshot
+============================================
+
+--- CPU ---
+
+--- RAM ---
+
+--- DISK ---
+Filesystem        Size    Used   Avail Capacity iused ifree %iused  Mounted on
+/dev/disk3s1s1   228Gi    11Gi    27Gi    31%    453k  279M    0%   /
+
+--- LOAD AVERAGE ---
+21:42  up 12 days, 13:24, 1 user, load averages: 3.52 3.24 3.18
+
+--- MySQL Connections ---
+
+--- Nginx Active Connections ---

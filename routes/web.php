@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\TopupInvoiceController;
 use App\Http\Controllers\BusinessMetricsController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -376,3 +377,34 @@ Route::get('/internal/metrics/business', BusinessMetricsController::class)
 Route::get('/debug-plans', function () {
     return DB::table('plans')->get();
 });
+
+/*
+|--------------------------------------------------------------------------
+| DEV ONLY — Manual Midtrans Sandbox Settlement
+|--------------------------------------------------------------------------
+| Forces a sandbox transaction to settlement status.
+| BLOCKED in production. Remove after testing.
+*/
+Route::post('/dev/midtrans/settle/{orderId}', function ($orderId) {
+
+    if (app()->environment('production')) {
+        abort(403, 'Not allowed in production');
+    }
+
+    $serverKey = config('services.midtrans.server_key');
+    $url = "https://api.sandbox.midtrans.com/v2/{$orderId}/settlement";
+
+    $response = Http::withBasicAuth($serverKey, '')
+        ->post($url);
+
+    \Log::info('Manual Midtrans settle', [
+        'order_id' => $orderId,
+        'response' => $response->json(),
+    ]);
+
+    return response()->json([
+        'status' => $response->status(),
+        'body' => $response->json(),
+    ]);
+});
+

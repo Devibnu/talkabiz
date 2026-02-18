@@ -45,7 +45,9 @@ Route::prefix('midtrans')->group(function () {
     Route::post('/webhook', [MidtransWebhookController::class, 'handle'])
         ->name('midtrans.webhook');
     
-    // midtrans/status REMOVED → Webhook-only architecture
+    // Check transaction status (internal, requires auth)
+    Route::middleware('auth:sanctum')->get('/status/{orderId}', [MidtransWebhookController::class, 'checkStatus'])
+        ->name('midtrans.status');
 });
 
 /*
@@ -63,7 +65,9 @@ Route::prefix('xendit')->group(function () {
     Route::post('/webhook', [XenditWebhookController::class, 'handle'])
         ->name('xendit.webhook');
     
-    // xendit/status REMOVED → Webhook-only architecture
+    // Check invoice status (internal, requires auth)
+    Route::middleware('auth:sanctum')->get('/status/{invoiceId}', [XenditWebhookController::class, 'checkStatus'])
+        ->name('xendit.status');
 });
 
 /*
@@ -945,9 +949,9 @@ Route::prefix('webhook')->group(function () {
     
     // Legacy route for backward compatibility
     Route::post('/gupshup', [WebhookController::class, 'handle'])
-        ->name('webhook.gupshup.legacy');
+        ->name('webhook.gupshup');
     Route::get('/gupshup', [WebhookController::class, 'healthCheck'])
-        ->name('webhook.gupshup.legacy.verify');
+        ->name('webhook.gupshup.verify');
 
     // ==================== Recipient Complaint Webhooks ====================
     // Endpoints untuk menerima laporan spam/abuse dari recipients
@@ -1662,7 +1666,7 @@ Route::middleware('auth:sanctum')->prefix('alerts')->group(function () {
     
     // Acknowledge specific alert
     Route::post('/{alertId}/acknowledge', [AlertController::class, 'acknowledgeAlert'])
-        ->name('alerts.user.acknowledge');
+        ->name('alerts.acknowledge');
     
     // Mark all notifications as read
     Route::post('/mark-all-read', [AlertController::class, 'markAllAsRead'])
