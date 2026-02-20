@@ -298,16 +298,16 @@ class PlanActivationService
                 $existingPlan->markAsUpgraded();
             }
 
-            // 5b. Expire ALL active subscriptions for this klien (prevent 2 active)
+            // 5b. Expire ALL active/grace subscriptions for this klien (prevent 2 active)
             // Lock rows first to prevent race condition
             $activeSubscriptions = Subscription::where('klien_id', $transaction->klien_id)
-                ->where('status', Subscription::STATUS_ACTIVE)
+                ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_GRACE])
                 ->lockForUpdate()
                 ->get();
 
             if ($activeSubscriptions->isNotEmpty()) {
                 Subscription::where('klien_id', $transaction->klien_id)
-                    ->where('status', Subscription::STATUS_ACTIVE)
+                    ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_GRACE])
                     ->update([
                         'status' => Subscription::STATUS_EXPIRED,
                         'replaced_at' => now(),
@@ -597,8 +597,11 @@ class PlanActivationService
                         }
 
                         // Expire related Subscription record
+                        // Grace period: active → grace (not direct expire)
+                        // But processExpiredPlans is called when UserPlan expires,
+                        // which means the plan is done — go straight to expired
                         Subscription::where('klien_id', $freshPlan->klien_id)
-                            ->where('status', Subscription::STATUS_ACTIVE)
+                            ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_GRACE])
                             ->update([
                                 'status' => Subscription::STATUS_EXPIRED,
                             ]);

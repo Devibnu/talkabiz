@@ -38,6 +38,7 @@ class SubscriptionPolicy
     // ==================== REASON CODES ====================
     public const REASON_NO_SUBSCRIPTION = 'no_subscription';
     public const REASON_SUBSCRIPTION_EXPIRED = 'subscription_expired';
+    public const REASON_SUBSCRIPTION_GRACE = 'subscription_grace';
     public const REASON_FEATURE_DISABLED = 'feature_disabled';
     public const REASON_LIMIT_EXCEEDED = 'limit_exceeded';
     public const REASON_ALLOWED = 'allowed';
@@ -80,7 +81,7 @@ class SubscriptionPolicy
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user) {
             return Subscription::where('klien_id', $user->klien_id)
-                ->where('status', Subscription::STATUS_ACTIVE)
+                ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_GRACE])
                 ->first();
         });
     }
@@ -112,28 +113,64 @@ class SubscriptionPolicy
         }
 
         // REAL-TIME EXPIRY CHECK (fail-closed)
-        // Jika expires_at ada dan sudah lewat → auto-expire di DB + clear cache
-        if ($subscription->expires_at && $subscription->expires_at->isPast()) {
+        // Grace period: if subscription is active but expires_at is past → transition to grace
+        // This is a real-time safety net; the scheduled command also does this.
+        if ($subscription->status === Subscription::STATUS_ACTIVE
+            && $subscription->expires_at 
+            && $subscription->expires_at->isPast()) {
             try {
-                $subscription->markExpired();
+                $subscription->markGrace();
                 Cache::forget("subscription:policy:{$user->klien_id}");
 
-                Log::info('[SubscriptionPolicy] Auto-expired stale subscription', [
+                Log::info('[SubscriptionPolicy] Auto-graced stale subscription', [
                     'subscription_id' => $subscription->id,
                     'klien_id' => $subscription->klien_id,
                     'expires_at' => $subscription->expires_at,
+                    'grace_ends_at' => $subscription->grace_ends_at,
                 ]);
             } catch (\Exception $e) {
-                Log::error('[SubscriptionPolicy] Failed to auto-expire', [
+                Log::error('[SubscriptionPolicy] Failed to auto-grace', [
                     'subscription_id' => $subscription->id,
                     'error' => $e->getMessage(),
                 ]);
             }
 
-            return $this->deny(
-                self::REASON_SUBSCRIPTION_EXPIRED,
-                'Paket Anda sudah berakhir. Perpanjang paket untuk melanjutkan.'
-            );
+            // Allow access with grace warning
+            return $this->allow('Subscription dalam masa tenggang', $subscription, [
+                'grace' => true,
+                'grace_ends_at' => $subscription->grace_ends_at?->toIso8601String(),
+            ]);
+        }
+
+        // GRACE PERIOD CHECK: if in grace and grace_ends_at is past → expire
+        if ($subscription->status === Subscription::STATUS_GRACE) {
+            if ($subscription->grace_ends_at && $subscription->grace_ends_at->isPast()) {
+                try {
+                    $subscription->markExpired();
+                    Cache::forget("subscription:policy:{$user->klien_id}");
+
+                    Log::info('[SubscriptionPolicy] Auto-expired grace subscription', [
+                        'subscription_id' => $subscription->id,
+                        'klien_id' => $subscription->klien_id,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('[SubscriptionPolicy] Failed to auto-expire grace', [
+                        'subscription_id' => $subscription->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
+                return $this->deny(
+                    self::REASON_SUBSCRIPTION_EXPIRED,
+                    'Masa tenggang paket Anda sudah berakhir. Perpanjang paket untuk melanjutkan.'
+                );
+            }
+
+            // Grace period still valid — allow with warning
+            return $this->allow('Subscription dalam masa tenggang', $subscription, [
+                'grace' => true,
+                'grace_ends_at' => $subscription->grace_ends_at?->toIso8601String(),
+            ]);
         }
 
         // Final check: status must be active (defense in depth)

@@ -44,7 +44,11 @@ class Subscription extends Model
 
     const STATUS_TRIAL_SELECTED = 'trial_selected';
     const STATUS_ACTIVE = 'active';
+    const STATUS_GRACE = 'grace';
     const STATUS_EXPIRED = 'expired';
+
+    /** Grace period duration in days */
+    const GRACE_PERIOD_DAYS = 3;
 
     /** @deprecated Use STATUS_EXPIRED — kept for backward compat in transition */
     const STATUS_PENDING = 'trial_selected';
@@ -54,6 +58,7 @@ class Subscription extends Model
     const VALID_STATUSES = [
         self::STATUS_TRIAL_SELECTED,
         self::STATUS_ACTIVE,
+        self::STATUS_GRACE,
         self::STATUS_EXPIRED,
     ];
 
@@ -79,6 +84,7 @@ class Subscription extends Model
         'previous_subscription_id',
         'started_at',
         'expires_at',
+        'grace_ends_at',
         'cancelled_at',
     ];
 
@@ -90,6 +96,7 @@ class Subscription extends Model
         'price' => 'decimal:2',
         'started_at' => 'datetime',
         'expires_at' => 'datetime',
+        'grace_ends_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'replaced_at' => 'datetime',
     ];
@@ -155,11 +162,27 @@ class Subscription extends Model
     }
 
     /**
-     * Scope: Not expired (active or trial_selected)
+     * Scope: Not expired (active, grace, or trial_selected)
      */
     public function scopeNotExpired(Builder $query): Builder
     {
         return $query->where('status', '!=', self::STATUS_EXPIRED);
+    }
+
+    /**
+     * Scope: Grace period subscriptions
+     */
+    public function scopeGrace(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_GRACE);
+    }
+
+    /**
+     * Scope: Active or grace (has access)
+     */
+    public function scopeHasAccess(Builder $query): Builder
+    {
+        return $query->whereIn('status', [self::STATUS_ACTIVE, self::STATUS_GRACE]);
     }
 
     /**
@@ -173,14 +196,34 @@ class Subscription extends Model
     }
 
     /**
-     * Scope: Should be expired (active but expires_at is past)
-     * Used by auto-expire scheduler.
+     * Scope: Should enter grace period (active but expires_at is past)
+     * Used by auto-expire scheduler Phase 1: active → grace.
      */
-    public function scopeShouldBeExpired(Builder $query): Builder
+    public function scopeShouldBeGraced(Builder $query): Builder
     {
         return $query->where('status', self::STATUS_ACTIVE)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', now());
+    }
+
+    /**
+     * Scope: Grace period expired (grace but grace_ends_at is past)
+     * Used by auto-expire scheduler Phase 2: grace → expired.
+     */
+    public function scopeGraceExpired(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_GRACE)
+            ->whereNotNull('grace_ends_at')
+            ->where('grace_ends_at', '<', now());
+    }
+
+    /**
+     * Scope: Should be expired (kept for backward compatibility)
+     * Now redirects to shouldBeGraced since active → grace is the first step.
+     */
+    public function scopeShouldBeExpired(Builder $query): Builder
+    {
+        return $this->scopeShouldBeGraced($query);
     }
 
     // ==================== ACCESSORS ====================
@@ -237,13 +280,22 @@ class Subscription extends Model
      * Check if subscription is truly active (status + not expired).
      * 
      * FAIL-CLOSED: Both conditions MUST be true.
-     * - status === 'active'
-     * - expires_at is null (unlimited) OR expires_at > now()
+     * - status === 'active' OR status === 'grace' (grace = still has access)
+     * - For active: expires_at is null (unlimited) OR expires_at > now()
+     * - For grace: grace_ends_at is null OR grace_ends_at > now()
      * 
      * Use this method instead of hardcoding status strings.
      */
     public function isActive(): bool
     {
+        // Grace period: still has access
+        if ($this->status === self::STATUS_GRACE) {
+            if ($this->grace_ends_at && $this->grace_ends_at->isPast()) {
+                return false;
+            }
+            return true;
+        }
+
         if ($this->status !== self::STATUS_ACTIVE) {
             return false;
         }
@@ -254,6 +306,28 @@ class Subscription extends Model
         }
 
         return true;
+    }
+
+    /**
+     * Check if subscription is in grace period.
+     */
+    public function isGrace(): bool
+    {
+        return $this->status === self::STATUS_GRACE
+            && (!$this->grace_ends_at || $this->grace_ends_at->isFuture());
+    }
+
+    /**
+     * Get remaining grace period days.
+     * Returns null if not in grace period.
+     */
+    public function getGraceDaysRemainingAttribute(): ?int
+    {
+        if ($this->status !== self::STATUS_GRACE || !$this->grace_ends_at) {
+            return null;
+        }
+
+        return max(0, (int) now()->diffInDays($this->grace_ends_at, false));
     }
 
     /**
@@ -342,6 +416,18 @@ class Subscription extends Model
     {
         $this->status = self::STATUS_EXPIRED;
         $this->cancelled_at = now();
+        $this->save();
+        
+        return $this;
+    }
+
+    /**
+     * Mark as grace period (3+0 day grace before full expiry)
+     */
+    public function markGrace(int $graceDays = self::GRACE_PERIOD_DAYS): self
+    {
+        $this->status = self::STATUS_GRACE;
+        $this->grace_ends_at = now()->addDays($graceDays);
         $this->save();
         
         return $this;

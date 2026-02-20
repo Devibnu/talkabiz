@@ -8,6 +8,7 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Models\WebhookLog;
 use App\Services\MidtransPlanService;
+use App\Services\SubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -273,6 +274,26 @@ class MidtransWebhookController extends Controller
                         'type'       => 'credit',
                         'source'     => 'midtrans',
                     ]);
+
+                    // ── 7d. Auto-activate subscription for trial_selected users ──
+                    // If user has selected a plan but never paid for subscription,
+                    // auto-activate it on first topup so they can start using WhatsApp.
+                    try {
+                        $subService = app(SubscriptionService::class);
+                        $activated = $subService->autoActivateOnTopup($invoice->user_id);
+                        if ($activated) {
+                            Log::info('[Midtrans Webhook] Subscription auto-activated on topup', [
+                                'order_id' => $orderId,
+                                'user_id'  => $invoice->user_id,
+                            ]);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::error('[Midtrans Webhook] AutoActivate failed (non-blocking)', [
+                            'order_id' => $orderId,
+                            'user_id'  => $invoice->user_id,
+                            'error'    => $e->getMessage(),
+                        ]);
+                    }
                 });
 
             } elseif (in_array($transactionStatus, ['expire', 'cancel', 'deny', 'failure'])) {

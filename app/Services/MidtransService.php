@@ -382,6 +382,24 @@ class MidtransService
                 'saldo_sesudah' => $saldoSesudah,
             ]);
 
+            // Auto-activate subscription for trial_selected users on first topup
+            try {
+                $subService = app(SubscriptionService::class);
+                $activated = $subService->autoActivateOnTopup($transaksi->pengguna_id);
+                if ($activated) {
+                    Log::info('[MidtransService] Subscription auto-activated on topup', [
+                        'order_id'    => $transaksi->referensi,
+                        'pengguna_id' => $transaksi->pengguna_id,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::error('[MidtransService] AutoActivate failed (non-blocking)', [
+                    'order_id'    => $transaksi->referensi,
+                    'pengguna_id' => $transaksi->pengguna_id,
+                    'error'       => $e->getMessage(),
+                ]);
+            }
+
             return [
                 'success' => true,
                 'message' => 'Payment successful',

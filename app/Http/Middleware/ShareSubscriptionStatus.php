@@ -32,11 +32,15 @@ class ShareSubscriptionStatus
             // SSOT: check Subscription model directly for active status
             $subscription = null;
             $isActive = false;
+            $isGrace = false;
+            $graceDaysRemaining = null;
             if ($user->klien_id) {
                 $subscription = Subscription::where('klien_id', $user->klien_id)
                     ->orderByDesc('created_at')
                     ->first();
                 $isActive = $subscription ? $subscription->isActive() : false;
+                $isGrace = $subscription ? $subscription->isGrace() : false;
+                $graceDaysRemaining = $subscription?->grace_days_remaining;
             }
 
             // Admin/Owner always considered active
@@ -57,8 +61,12 @@ class ShareSubscriptionStatus
 
             // FORCE ACTIVATION GATE: share active boolean for all views
             View::share('subscriptionIsActive', $isActive);
+            View::share('subscriptionIsGrace', $isGrace);
+            View::share('subscriptionGraceDaysRemaining', $graceDaysRemaining);
         } else {
             View::share('subscriptionIsActive', false);
+            View::share('subscriptionIsGrace', false);
+            View::share('subscriptionGraceDaysRemaining', null);
             View::share('subscriptionExpiresInDays', null);
             View::share('subscriptionPlanStatus', null);
             View::share('subscriptionPlanName', null);

@@ -110,7 +110,7 @@ class InvoiceService
         return DB::transaction(function () use ($klien, $newPlan, $dueDays) {
             // Get current subscription
             $currentSubscription = Subscription::where('klien_id', $klien->id)
-                ->where('status', Subscription::STATUS_ACTIVE)
+                ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_GRACE])
                 ->first();
 
             if (!$currentSubscription) {
@@ -414,17 +414,17 @@ class InvoiceService
      */
     protected function activateNewSubscription(Subscription $subscription): void
     {
-        // Lock existing active subscriptions to prevent concurrent activation race
+        // Lock existing active/grace subscriptions to prevent concurrent activation race
         Subscription::lockForUpdate()
             ->where('klien_id', $subscription->klien_id)
             ->where('id', '!=', $subscription->id)
-            ->where('status', Subscription::STATUS_ACTIVE)
+            ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_GRACE])
             ->get();
 
-        // Mark any other active subscription as expired
+        // Mark any other active/grace subscription as expired
         Subscription::where('klien_id', $subscription->klien_id)
             ->where('id', '!=', $subscription->id)
-            ->where('status', Subscription::STATUS_ACTIVE)
+            ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_GRACE])
             ->update(['status' => Subscription::STATUS_EXPIRED]);
 
         // Activate this subscription

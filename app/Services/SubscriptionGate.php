@@ -45,7 +45,7 @@ class SubscriptionGate
         
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($user) {
             return Subscription::where('klien_id', $user->klien_id)
-                ->where('status', Subscription::STATUS_ACTIVE)
+                ->whereIn('status', [Subscription::STATUS_ACTIVE, Subscription::STATUS_GRACE])
                 ->first();
         });
     }
