@@ -2,9 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\WalletService;
 use App\Services\MessageRateService;
-use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -21,12 +19,10 @@ use Illuminate\Support\Facades\Log;
  */
 class DashboardController extends Controller
 {
-    protected WalletService $walletService;
     protected MessageRateService $messageRateService;
 
-    public function __construct(WalletService $walletService, MessageRateService $messageRateService)
+    public function __construct(MessageRateService $messageRateService)
     {
-        $this->walletService = $walletService;
         $this->messageRateService = $messageRateService;
     }
 
@@ -64,68 +60,19 @@ class DashboardController extends Controller
         // Middleware already handles it. Checking again causes redirect loop.
         // If user reaches here, they MUST have complete setup (middleware guarantee).
         
-        // Get wallet for user
-        try {
-            $dompet = $this->walletService->getWallet($user);
-            Log::debug('Dashboard: Wallet found', [
-                'wallet_id' => $dompet->id,
-                'balance' => $dompet->balance,
-            ]);
-        } catch (\RuntimeException $e) {
-            // CRITICAL FIX: Don't redirect to onboarding!
-            // User already has onboarding_complete = true, redirecting to onboarding
-            // will cause middleware to redirect back to dashboard → LOOP!
-            
-            Log::error('Dashboard: Wallet not found but user onboarded', [
-                'user_id' => $user->id,
-                'onboarding_complete' => $user->onboarding_complete,
-                'error' => $e->getMessage(),
-            ]);
-            
-            // FIX: Create wallet now as failsafe for legacy data
-            // This handles users who completed onboarding before wallet refactor
-            try {
-                Log::warning('Dashboard: Creating missing wallet (legacy data fix)', [
-                    'user_id' => $user->id,
-                ]);
-                
-                // Use getOrCreateWallet for legacy data fix
-                $dompet = $this->walletService->getOrCreateWallet($user->id);
-                
-                Log::info('Dashboard: Wallet created successfully (legacy fix)', [
-                    'user_id' => $user->id,
-                    'wallet_id' => $dompet->id,
-                ]);
-            } catch (\Exception $createError) {
-                // If wallet creation also fails, show error view
-                Log::critical('Dashboard: Failed to create wallet', [
-                    'user_id' => $user->id,
-                    'error' => $createError->getMessage(),
-                ]);
-                
-                // Don't redirect! Show error view instead
-                return view('errors.wallet-missing', [
-                    'user' => $user,
-                    'error' => 'Wallet sistem tidak ditemukan. Silakan hubungi administrator.',
-                ]);
-            }
-        } catch (\Exception $e) {
-            // Other unexpected errors
-            Log::critical('Dashboard: Unexpected error', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            
-            return view('errors.wallet-missing', [
-                'user' => $user,
-                'error' => 'Terjadi kesalahan sistem. Silakan hubungi administrator.',
-            ]);
-        }
+        // SSOT: Use legacy DompetSaldo wallet — this is where all topup/deduction happens.
+        // Same source as navbar header (User::getWallet() → klien->dompet).
+        $dompet = $user->getWallet();
         
-        // SALDO & USAGE (pure wallet-based)
-        $saldo = $dompet->balance;
-        $pemakaianBulanIni = $this->walletService->getMonthlyUsage($user);
+        Log::debug('Dashboard: Wallet loaded', [
+            'user_id' => $user->id,
+            'wallet_type' => $dompet ? get_class($dompet) : 'null',
+            'saldo_tersedia' => $dompet?->saldo_tersedia ?? 0,
+        ]);
+        
+        // SALDO & USAGE — from DompetSaldo (SSOT, same as navbar)
+        $saldo = (int) ($dompet?->saldo_tersedia ?? 0);
+        $pemakaianBulanIni = 0; // TODO: calculate from DompetSaldo transactions when available
         
         // Calculate message estimates based on SALDO (not quotas!)
         // Database-driven pricing (NO hardcoded prices!)
@@ -175,7 +122,7 @@ class DashboardController extends Controller
         return view('dashboard', [
             'saldo' => 0,
             'pemakaianBulanIni' => 0,
-            'dompet' => null,
+            'dompet' => $user->getWallet(),
             'hargaPerPesan' => $this->messageRateService->getRate('utility'),
             'estimasiPesanTersisa' => 0,
             'jumlahPesanBulanIni' => 0,

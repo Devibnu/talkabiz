@@ -166,6 +166,19 @@ class User extends Authenticatable
     }
 
     /**
+     * Get unified wallet balance (SSOT).
+     * 
+     * Always returns saldo_tersedia from DompetSaldo (legacy wallet).
+     * This is the single source of truth used by navbar, dashboard, and all views.
+     *
+     * @return int Available balance in Rupiah
+     */
+    public function getWalletBalanceAttribute(): int
+    {
+        return (int) ($this->getWallet()?->saldo_tersedia ?? 0);
+    }
+
+    /**
      * Check if user has complete domain setup (klien + wallet).
      * 
      * IMPORTANT: Checks BOTH legacy (DompetSaldo) AND new (Wallet) system
