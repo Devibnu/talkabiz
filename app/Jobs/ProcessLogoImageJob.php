@@ -37,7 +37,7 @@ class ProcessLogoImageJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
-    public int $timeout = 120;
+    public int $timeout = 60;
     public int $backoff = 30;
 
     /**
@@ -77,6 +77,7 @@ class ProcessLogoImageJob implements ShouldQueue
 
         try {
             $manager = new ImageManager(new GdDriver());
+            $originalSize = filesize($absolutePath);
             $image = $manager->read($absolutePath);
 
             // ── Step 1: Resize (max width 800px, keep aspect ratio, never upscale) ──
@@ -99,7 +100,6 @@ class ProcessLogoImageJob implements ShouldQueue
             // ── Step 5: Finalize (update setting, delete old logo, clear cache) ──
             $this->finalize($optimizedFilename);
 
-            $originalSize = strlen(file_get_contents($absolutePath));
             Log::info('[ProcessLogoImageJob] Logo processed successfully.', [
                 'original_path' => $this->originalPath,
                 'optimized_path' => $optimizedFilename,
