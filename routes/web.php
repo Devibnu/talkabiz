@@ -164,6 +164,10 @@ Route::middleware(['client.access'])->group(function () {
 		Route::post('subscription/checkout', [\App\Http\Controllers\SubscriptionController::class, 'checkout'])->name('subscription.checkout');
 		// subscription/check-status REMOVED → Webhook-only architecture
 
+		// Plan Change Routes (Upgrade/Downgrade with Prorate)
+		Route::post('subscription/change-plan', [\App\Http\Controllers\PlanChangeController::class, 'execute'])->name('subscription.change-plan');
+		Route::post('subscription/change-plan/preview', [\App\Http\Controllers\PlanChangeController::class, 'preview'])->name('subscription.change-plan.preview');
+
 		// Activation Funnel KPI Routes (Growth Engine)
 		Route::post('api/activation/track', [\App\Http\Controllers\Api\ActivationController::class, 'track'])->name('activation.track');
 		Route::post('api/activation/modal-shown', [\App\Http\Controllers\Api\ActivationController::class, 'modalShown'])->name('activation.modal-shown');

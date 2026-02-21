@@ -11,6 +11,7 @@ use App\Models\SubscriptionInvoice;
 use App\Models\User;
 use App\Models\LogAktivitas;
 use App\Services\ActivationTracker;
+use App\Services\PlanChangeService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -454,6 +455,9 @@ class PlanActivationService
                     'user_plan_id' => $userPlan->id,
                 ]);
             }
+
+            // 12. Complete pending plan change log (upgrade via prorate)
+            PlanChangeService::completeUpgradeFromWebhook($transaction, $userPlan, $subscription);
 
             return $userPlan;
         });
