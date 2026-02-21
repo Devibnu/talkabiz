@@ -7,6 +7,25 @@
 .plan-checkout-card.current-plan { border: 2px solid #cb0c9f; }
 .checkout-price { font-size: 1.5rem; font-weight: 800; color: #344767; }
 .active-warning-banner { background: linear-gradient(310deg, #fbb140 0%, #f5365c 100%); border-radius: 12px; }
+
+/* ── Prorate Modal ── */
+.prorate-modal .modal-content { border: none; border-radius: 1rem; overflow: hidden; }
+.prorate-modal .modal-header-gradient-up { background: linear-gradient(310deg, #7928ca 0%, #ff0080 100%); }
+.prorate-modal .modal-header-gradient-down { background: linear-gradient(310deg, #17ad37 0%, #98ec2d 100%); }
+.prorate-modal .prorate-plan-box { background: #f8f9fa; border-radius: .75rem; padding: 1rem; text-align: center; min-width: 0; flex: 1; }
+.prorate-modal .prorate-plan-box.current { border: 2px solid #e9ecef; }
+.prorate-modal .prorate-plan-box.target { border: 2px solid #cb0c9f; }
+.prorate-modal .prorate-plan-box.target-down { border: 2px solid #17ad37; }
+.prorate-modal .prorate-arrow { display: flex; align-items: center; justify-content: center; font-size: 1.25rem; color: #8392ab; padding: 0 .5rem; }
+.prorate-modal .prorate-breakdown { background: #f8f9fa; border-radius: .75rem; padding: 1rem 1.25rem; }
+.prorate-modal .prorate-breakdown .row-item { display: flex; justify-content: space-between; padding: .35rem 0; font-size: .8125rem; }
+.prorate-modal .prorate-breakdown .row-item.total { border-top: 2px solid #344767; margin-top: .5rem; padding-top: .75rem; font-weight: 700; font-size: .9375rem; }
+.prorate-modal .prorate-amount-highlight { font-size: 1.75rem; font-weight: 800; line-height: 1.2; }
+.prorate-modal .prorate-amount-highlight.text-upgrade { color: #7928ca; }
+.prorate-modal .prorate-amount-highlight.text-downgrade { color: #17ad37; }
+.prorate-modal .anti-abuse-notice { background: #fff3cd; border-radius: .5rem; padding: .65rem .85rem; font-size: .75rem; color: #664d03; }
+.prorate-modal .prorate-loading { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.prorate-modal .prorate-error { min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 </style>
 
 {{-- Page Badge --}}
@@ -471,36 +490,132 @@
 </div>
 
 {{-- ============================================================ --}}
-{{-- UPGRADE CONFIRMATION MODAL                                    --}}
-{{-- Tampil jika user klik Upgrade saat paket masih aktif          --}}
+{{-- PRORATE PLAN CHANGE MODAL (Enterprise)                        --}}
+{{-- Shows prorate calculation before upgrade/downgrade            --}}
 {{-- ============================================================ --}}
-<div class="modal fade" id="upgradeConfirmModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title text-white"><i class="fas fa-exclamation-triangle me-2"></i>Konfirmasi Perubahan Paket</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: brightness(0) invert(1);"></button>
-            </div>
-            <div class="modal-body">
-                <div class="text-center mb-3">
-                    <i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i>
-                </div>
-                <p class="text-sm text-center">
-                    Paket Anda masih aktif sampai <strong>{{ $planExpiresAt?->format('d M Y') ?? '-' }}</strong>.
-                </p>
-                <p class="text-sm text-center text-secondary">
-                    Apakah Anda yakin ingin mengganti paket sekarang? Sisa masa aktif tidak akan otomatis digabung kecuali menggunakan sistem prorate.
-                </p>
+<div class="modal fade prorate-modal" id="planChangeModal" tabindex="-1" aria-labelledby="planChangeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow-lg">
 
-                <div class="d-grid gap-2 mt-4">
-                    <button class="btn bg-gradient-warning" id="btn-confirm-upgrade" onclick="proceedToUpgrade()">
-                        <i class="fas fa-check me-1"></i> Ya, Ganti Paket
-                    </button>
-                    <button class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                        Batal
-                    </button>
+            {{-- Header (dynamic gradient via JS) --}}
+            <div class="modal-header modal-header-gradient-up border-0 py-3 px-4" id="planChangeModalHeader">
+                <h6 class="modal-title text-white mb-0" id="planChangeModalLabel">
+                    <i class="fas fa-exchange-alt me-2"></i><span id="pcm-header-text">Konfirmasi Perubahan Paket</span>
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body px-4 pt-3 pb-4">
+
+                {{-- ▸ Loading State --}}
+                <div id="pcm-loading" class="prorate-loading">
+                    <div class="spinner-border text-primary mb-3" role="status" style="width:3rem;height:3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-sm text-secondary mb-0">Menghitung prorate...</p>
+                </div>
+
+                {{-- ▸ Error State --}}
+                <div id="pcm-error" class="prorate-error d-none">
+                    <i class="fas fa-exclamation-circle text-danger fa-3x mb-3"></i>
+                    <p class="text-sm text-secondary mb-1" id="pcm-error-msg">Terjadi kesalahan.</p>
+                    <button class="btn btn-sm btn-outline-secondary mt-2" data-bs-dismiss="modal">Tutup</button>
+                </div>
+
+                {{-- ▸ Content (hidden until data loaded) --}}
+                <div id="pcm-content" class="d-none">
+
+                    {{-- Plan comparison row --}}
+                    <div class="d-flex align-items-stretch gap-2 mb-3">
+                        <div class="prorate-plan-box current">
+                            <p class="text-xs text-secondary text-uppercase mb-1">Paket Saat Ini</p>
+                            <h6 class="font-weight-bolder mb-1" id="pcm-current-name">—</h6>
+                            <p class="text-sm mb-0" id="pcm-current-price">—</p>
+                        </div>
+                        <div class="prorate-arrow">
+                            <i class="fas fa-arrow-right" id="pcm-arrow-icon"></i>
+                        </div>
+                        <div class="prorate-plan-box target" id="pcm-target-box">
+                            <p class="text-xs text-secondary text-uppercase mb-1">Paket Baru</p>
+                            <h6 class="font-weight-bolder mb-1" id="pcm-new-name">—</h6>
+                            <p class="text-sm mb-0" id="pcm-new-price">—</p>
+                        </div>
+                    </div>
+
+                    {{-- Summary badge --}}
+                    <div class="text-center mb-3">
+                        <span class="badge badge-lg px-3 py-2" id="pcm-summary-badge" style="font-size:.8125rem;">—</span>
+                    </div>
+
+                    {{-- Prorate Breakdown --}}
+                    <div class="prorate-breakdown mb-3">
+                        <p class="text-xs text-uppercase font-weight-bold text-secondary mb-2"><i class="fas fa-calculator me-1"></i>Rincian Prorate</p>
+                        <div class="row-item">
+                            <span>Sisa hari aktif</span>
+                            <span id="pcm-remaining-days">—</span>
+                        </div>
+                        <div class="row-item">
+                            <span>Nilai sisa paket lama</span>
+                            <span id="pcm-current-remaining">—</span>
+                        </div>
+                        <div class="row-item">
+                            <span>Biaya paket baru (prorata)</span>
+                            <span id="pcm-new-cost">—</span>
+                        </div>
+                        <div class="row-item">
+                            <span>Selisih harga</span>
+                            <span id="pcm-price-diff">—</span>
+                        </div>
+                        <div class="row-item" id="pcm-tax-row">
+                            <span>Pajak (<span id="pcm-tax-rate">0</span>%)</span>
+                            <span id="pcm-tax-amount">—</span>
+                        </div>
+                        <div class="row-item total" id="pcm-total-row">
+                            <span id="pcm-total-label">Total Bayar</span>
+                            <span class="prorate-amount-highlight text-upgrade" id="pcm-total-amount">—</span>
+                        </div>
+                    </div>
+
+                    {{-- Upgrade: payment note --}}
+                    <div id="pcm-upgrade-note" class="d-none">
+                        <div class="d-flex align-items-start p-3 rounded-lg mb-3" style="background:linear-gradient(310deg,#7928ca08,#ff008008);border:1px solid #cb0c9f20;">
+                            <i class="fas fa-credit-card text-primary me-2 mt-1"></i>
+                            <div>
+                                <p class="text-xs font-weight-bold mb-0">Pembayaran via Midtrans</p>
+                                <p class="text-xs text-secondary mb-0">Setelah klik tombol bayar, popup pembayaran akan terbuka. Paket baru aktif setelah pembayaran berhasil.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Downgrade: wallet credit note --}}
+                    <div id="pcm-downgrade-note" class="d-none">
+                        <div class="d-flex align-items-start p-3 rounded-lg mb-3" style="background:linear-gradient(310deg,#17ad3708,#98ec2d08);border:1px solid #17ad3720;">
+                            <i class="fas fa-wallet text-success me-2 mt-1"></i>
+                            <div>
+                                <p class="text-xs font-weight-bold mb-0">Refund ke Wallet</p>
+                                <p class="text-xs text-secondary mb-0">Selisih sisa nilai paket akan dikreditkan ke wallet Anda. Paket langsung berubah.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Anti-abuse notice --}}
+                    <div class="anti-abuse-notice mb-3">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        <strong>Batas perubahan:</strong> maks. 2× per siklus langganan, jeda min. 3 hari antar perubahan.
+                    </div>
+
+                    {{-- Action Buttons --}}
+                    <div class="d-grid gap-2">
+                        <button class="btn mb-0" id="pcm-btn-confirm" onclick="executePlanChange()">
+                            <i class="fas fa-check-circle me-1"></i> <span id="pcm-btn-text">Konfirmasi</span>
+                        </button>
+                        <button class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-1"></i> Batal
+                        </button>
+                    </div>
                 </div>
             </div>
+
         </div>
     </div>
 </div>
@@ -643,25 +758,216 @@ function confirmUpgrade() {
 }
 
 /**
- * Show upgrade confirmation for a specific plan (from plan card)
- * Requires confirmation because plan is still active.
+ * PRORATE-AWARE: Show plan change modal with live prorate calculation.
+ * Replaces old confirmUpgradeToPlan() — now fetches preview from API.
  */
-function confirmUpgradeToPlan(code) {
+async function confirmUpgradeToPlan(code) {
     pendingUpgrade = { code };
-    new bootstrap.Modal(document.getElementById('upgradeConfirmModal')).show();
+
+    // Reset modal states
+    const modal = document.getElementById('planChangeModal');
+    document.getElementById('pcm-loading').classList.remove('d-none');
+    document.getElementById('pcm-content').classList.add('d-none');
+    document.getElementById('pcm-error').classList.add('d-none');
+
+    // Open modal immediately (shows loading spinner)
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    try {
+        const response = await fetch('{{ route("subscription.change-plan.preview") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ plan_code: code })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Gagal memuat perhitungan prorate.');
+        }
+
+        populateProrateModal(data.data);
+
+    } catch (error) {
+        console.error('Preview error:', error);
+        document.getElementById('pcm-loading').classList.add('d-none');
+        document.getElementById('pcm-error').classList.remove('d-none');
+        document.getElementById('pcm-error-msg').textContent = error.message || 'Tidak dapat terhubung ke server.';
+    }
 }
 
 /**
- * After user confirms upgrade, directly fast checkout
+ * Populate modal with prorate preview data
  */
-function proceedToUpgrade() {
-    bootstrap.Modal.getInstance(document.getElementById('upgradeConfirmModal'))?.hide();
+function populateProrateModal(data) {
+    const { current_plan, new_plan, prorate, summary } = data;
+    const isUpgrade = prorate.direction === 'upgrade';
+    const isDowngrade = prorate.direction === 'downgrade';
+    const fmt = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 
-    if (pendingUpgrade) {
-        setTimeout(() => {
-            fastCheckout(pendingUpgrade.code);
-            pendingUpgrade = null;
-        }, 300);
+    // Header gradient
+    const header = document.getElementById('planChangeModalHeader');
+    header.className = 'modal-header border-0 py-3 px-4 ' +
+        (isUpgrade ? 'modal-header-gradient-up' : 'modal-header-gradient-down');
+    document.getElementById('pcm-header-text').textContent =
+        isUpgrade ? 'Upgrade Paket' : 'Downgrade Paket';
+
+    // Plan names & prices
+    document.getElementById('pcm-current-name').textContent = current_plan.name;
+    document.getElementById('pcm-current-price').textContent = fmt(current_plan.price_monthly) + '/bln';
+    document.getElementById('pcm-new-name').textContent = new_plan.name;
+    document.getElementById('pcm-new-price').textContent = fmt(new_plan.price_monthly) + '/bln';
+
+    // Target box border color
+    const targetBox = document.getElementById('pcm-target-box');
+    targetBox.classList.remove('target', 'target-down');
+    targetBox.classList.add(isUpgrade ? 'target' : 'target-down');
+
+    // Arrow icon
+    const arrow = document.getElementById('pcm-arrow-icon');
+    arrow.className = isUpgrade ? 'fas fa-arrow-up text-primary' : 'fas fa-arrow-down text-success';
+
+    // Summary badge
+    const badge = document.getElementById('pcm-summary-badge');
+    badge.textContent = summary;
+    badge.className = 'badge badge-lg px-3 py-2 ' +
+        (isUpgrade ? 'bg-gradient-primary' : 'bg-gradient-success');
+    badge.style.fontSize = '.8125rem';
+
+    // Breakdown
+    document.getElementById('pcm-remaining-days').textContent = prorate.remaining_days + ' hari';
+    document.getElementById('pcm-current-remaining').textContent = fmt(prorate.current_remaining_value);
+    document.getElementById('pcm-new-cost').textContent = fmt(prorate.new_remaining_cost);
+    document.getElementById('pcm-price-diff').textContent = fmt(Math.abs(prorate.price_difference));
+    document.getElementById('pcm-tax-rate').textContent = ((prorate.tax_rate || 0) * 100).toFixed(0);
+    document.getElementById('pcm-tax-amount').textContent = fmt(prorate.tax_amount);
+
+    // Tax row visibility
+    document.getElementById('pcm-tax-row').style.display =
+        (prorate.tax_amount && prorate.tax_amount > 0) ? 'flex' : 'none';
+
+    // Total row
+    const totalLabel = document.getElementById('pcm-total-label');
+    const totalAmt = document.getElementById('pcm-total-amount');
+
+    if (isUpgrade) {
+        totalLabel.textContent = 'Total Bayar';
+        totalAmt.textContent = fmt(prorate.charge_amount || prorate.total_with_tax);
+        totalAmt.className = 'prorate-amount-highlight text-upgrade';
+    } else {
+        totalLabel.textContent = 'Refund ke Wallet';
+        totalAmt.textContent = fmt(prorate.refund_amount);
+        totalAmt.className = 'prorate-amount-highlight text-downgrade';
+    }
+
+    // Notes visibility
+    document.getElementById('pcm-upgrade-note').classList.toggle('d-none', !isUpgrade);
+    document.getElementById('pcm-downgrade-note').classList.toggle('d-none', isUpgrade);
+
+    // Button style
+    const btnConfirm = document.getElementById('pcm-btn-confirm');
+    btnConfirm.className = 'btn mb-0 ' + (isUpgrade ? 'bg-gradient-primary' : 'bg-gradient-success');
+    btnConfirm.disabled = false;
+    document.getElementById('pcm-btn-text').textContent =
+        isUpgrade ? 'Bayar & Upgrade Sekarang' : 'Konfirmasi Downgrade';
+
+    // Reveal content, hide loading
+    document.getElementById('pcm-loading').classList.add('d-none');
+    document.getElementById('pcm-content').classList.remove('d-none');
+}
+
+/**
+ * EXECUTE PLAN CHANGE — called from modal confirm button.
+ * Handles upgrade (Snap popup) and downgrade (instant) flows.
+ */
+async function executePlanChange() {
+    if (!pendingUpgrade || isCheckoutProcessing) return;
+    isCheckoutProcessing = true;
+
+    const btn = document.getElementById('pcm-btn-confirm');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Memproses...';
+
+    try {
+        const response = await fetch('{{ route("subscription.change-plan") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ plan_code: pendingUpgrade.code })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Gagal memproses perubahan paket.');
+        }
+
+        // Close the modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('planChangeModal'));
+        modal?.hide();
+
+        // Handle by type
+        if (data.type === 'upgrade' && data.requires_payment && data.snap_token) {
+            // Upgrade: open Midtrans Snap popup
+            setTimeout(() => {
+                snap.pay(data.snap_token, {
+                    onSuccess: function(result) {
+                        showToast('success', '<strong>Pembayaran berhasil!</strong> Paket upgrade Anda akan segera aktif.');
+                        setTimeout(() => location.reload(), 2000);
+                    },
+                    onPending: function(result) {
+                        showToast('info', 'Pembayaran menunggu konfirmasi. Status akan diupdate otomatis.');
+                        setTimeout(() => location.reload(), 3000);
+                    },
+                    onError: function(result) {
+                        showToast('danger', 'Pembayaran gagal. Silakan coba lagi.');
+                        resetButton(btn, originalHtml);
+                    },
+                    onClose: function() {
+                        showToast('info', 'Popup ditutup. Jika sudah bayar, status akan diupdate otomatis.');
+                        resetButton(btn, originalHtml);
+                    }
+                });
+            }, 400);
+
+        } else if (data.type === 'downgrade') {
+            // Downgrade: instant, wallet credit
+            const refundAmt = data.prorate?.refund_amount
+                ? 'Rp ' + Number(data.prorate.refund_amount).toLocaleString('id-ID')
+                : '';
+            showToast('success',
+                '<strong>Paket berhasil diubah!</strong> ' +
+                (refundAmt ? refundAmt + ' dikreditkan ke wallet Anda.' : data.message)
+            );
+            setTimeout(() => location.reload(), 2500);
+
+        } else if (data.type === 'immediate') {
+            // Immediate switch (e.g. same-price or free tier)
+            showToast('success', '<strong>Paket berhasil diubah!</strong> ' + (data.message || ''));
+            setTimeout(() => location.reload(), 2000);
+
+        } else {
+            showToast('info', data.message || 'Perubahan paket diproses.');
+            setTimeout(() => location.reload(), 2500);
+        }
+
+        pendingUpgrade = null;
+
+    } catch (error) {
+        console.error('Plan change error:', error);
+        showToast('danger', error.message || 'Tidak dapat terhubung ke server.');
+        resetButton(btn, originalHtml);
+    } finally {
+        isCheckoutProcessing = false;
     }
 }
 
