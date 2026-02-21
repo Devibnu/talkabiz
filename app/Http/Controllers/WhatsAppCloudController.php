@@ -7,6 +7,8 @@ use App\Models\WhatsappTemplate;
 use App\Models\WhatsappContact;
 use App\Services\GupshupService;
 use App\Services\RevenueGuardService;
+use App\Services\PlanLimitService;
+use App\Exceptions\Subscription\PlanLimitExceededException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -82,6 +84,9 @@ class WhatsAppCloudController extends Controller
         ]);
 
         try {
+            // HARD LIMIT: Enforce WA number limit from plan
+            app(PlanLimitService::class)->enforceWaNumberLimit(auth()->user());
+
             // Create or update connection with PLATFORM API key (from .env)
             $connection = WhatsappConnection::updateOrCreate(
                 ['klien_id' => $klien->id],
@@ -132,6 +137,14 @@ class WhatsAppCloudController extends Controller
             
             return back()->with('error', $errorMsg);
 
+        } catch (PlanLimitExceededException $e) {
+            Log::info('WA Connect blocked by plan limit', $e->getContext());
+
+            if ($request->wantsJson()) {
+                return response()->json($e->toArray(), $e->getHttpStatusCode());
+            }
+
+            return back()->with('error', $e->getUserMessage());
         } catch (Exception $e) {
             Log::error('WhatsApp Cloud: Connection failed', [
                 'klien_id' => $klien->id,

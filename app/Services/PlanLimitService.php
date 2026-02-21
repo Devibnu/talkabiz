@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Exceptions\Subscription\PlanLimitExceededException;
 use App\Models\Plan;
 use App\Models\User;
+use App\Models\WhatsappCampaign;
+use App\Models\WhatsappConnection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -214,6 +217,133 @@ class PlanLimitService
         }
         
         return ['allowed' => true];
+    }
+
+    // ==================== HARD LIMIT ENFORCEMENT (throw on violation) ====================
+
+    /**
+     * Enforce WA number limit — throws PlanLimitExceededException.
+     *
+     * Call this BEFORE creating/connecting a new WhatsApp number.
+     * Counts actual rows in whatsapp_connections (not the cached user column).
+     *
+     * @throws PlanLimitExceededException
+     */
+    public function enforceWaNumberLimit(User $user): void
+    {
+        $plan = $user->currentPlan;
+
+        if (!$plan) {
+            throw new PlanLimitExceededException('wa_number', 0, 0, 1);
+        }
+
+        $limit = (int) $plan->max_wa_numbers;
+
+        // 0 = unlimited
+        if ($limit <= 0) {
+            return;
+        }
+
+        // Real-time count from DB (not cached user column)
+        $current = WhatsappConnection::where('klien_id', $user->klien_id)
+            ->whereNotIn('status', [
+                WhatsappConnection::STATUS_DISCONNECTED,
+                WhatsappConnection::STATUS_FAILED,
+            ])
+            ->count();
+
+        if ($current >= $limit) {
+            Log::warning('PlanLimit: WA number limit enforced', [
+                'user_id' => $user->id,
+                'klien_id' => $user->klien_id,
+                'current' => $current,
+                'limit' => $limit,
+                'plan' => $plan->name,
+            ]);
+
+            throw new PlanLimitExceededException('wa_number', $current, $limit, 1, $plan->name);
+        }
+    }
+
+    /**
+     * Enforce campaign creation limit — throws PlanLimitExceededException.
+     *
+     * Call this BEFORE creating a new campaign.
+     * Counts non-terminal campaigns (draft, scheduled, running, paused).
+     *
+     * @throws PlanLimitExceededException
+     */
+    public function enforceCampaignLimit(User $user): void
+    {
+        $plan = $user->currentPlan;
+
+        if (!$plan) {
+            throw new PlanLimitExceededException('campaign', 0, 0, 1);
+        }
+
+        $limit = (int) $plan->max_campaigns;
+
+        // 0 = unlimited
+        if ($limit <= 0) {
+            return;
+        }
+
+        // Count active (non-terminal) campaigns for this klien
+        $current = WhatsappCampaign::where('klien_id', $user->klien_id)
+            ->whereIn('status', [
+                WhatsappCampaign::STATUS_DRAFT,
+                WhatsappCampaign::STATUS_SCHEDULED,
+                WhatsappCampaign::STATUS_RUNNING,
+                WhatsappCampaign::STATUS_PAUSED,
+            ])
+            ->count();
+
+        if ($current >= $limit) {
+            Log::warning('PlanLimit: Campaign limit enforced', [
+                'user_id' => $user->id,
+                'klien_id' => $user->klien_id,
+                'current' => $current,
+                'limit' => $limit,
+                'plan' => $plan->name,
+            ]);
+
+            throw new PlanLimitExceededException('campaign', $current, $limit, 1, $plan->name);
+        }
+    }
+
+    /**
+     * Enforce recipient-per-campaign limit — throws PlanLimitExceededException.
+     *
+     * Call this BEFORE creating campaign recipients or importing contacts into a campaign.
+     *
+     * @param int $recipientCount Number of recipients being added
+     * @throws PlanLimitExceededException
+     */
+    public function enforceRecipientLimit(User $user, int $recipientCount): void
+    {
+        $plan = $user->currentPlan;
+
+        if (!$plan) {
+            throw new PlanLimitExceededException('recipient', 0, 0, $recipientCount);
+        }
+
+        $limit = (int) $plan->max_recipients_per_campaign;
+
+        // 0 = unlimited
+        if ($limit <= 0) {
+            return;
+        }
+
+        if ($recipientCount > $limit) {
+            Log::warning('PlanLimit: Recipient limit enforced', [
+                'user_id' => $user->id,
+                'requested' => $recipientCount,
+                'limit' => $limit,
+                'plan' => $plan->name,
+            ]);
+
+            throw new PlanLimitExceededException('recipient', 0, $limit, $recipientCount, $plan->name);
+        }
     }
 
     // ==================== REMAINING QUOTA METHODS ====================

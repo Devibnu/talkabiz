@@ -11,7 +11,9 @@ use App\Jobs\ProcessWhatsappCampaign;
 use App\Services\RevenueGuardService;
 use App\Services\Message\MessageDispatchService;
 use App\Services\Message\MessageDispatchRequest;
+use App\Services\PlanLimitService;
 use App\Exceptions\InsufficientBalanceException;
+use App\Exceptions\Subscription\PlanLimitExceededException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -184,6 +186,21 @@ class WhatsAppCampaignController extends Controller
 
         if ($totalRecipients === 0) {
             return back()->with('error', 'Tidak ada kontak yang memenuhi kriteria. Pastikan kontak sudah opt-in.');
+        }
+
+        // HARD LIMIT: Enforce plan limits before creating campaign
+        try {
+            $planLimitService = app(PlanLimitService::class);
+            $planLimitService->enforceCampaignLimit(auth()->user());
+            $planLimitService->enforceRecipientLimit(auth()->user(), $totalRecipients);
+        } catch (PlanLimitExceededException $e) {
+            Log::info('Campaign creation blocked by plan limit', $e->getContext());
+
+            if ($request->wantsJson()) {
+                return response()->json($e->toArray(), $e->getHttpStatusCode());
+            }
+
+            return back()->with('error', $e->getUserMessage());
         }
 
         // Calculate estimated cost
