@@ -86,6 +86,11 @@ class Subscription extends Model
         'expires_at',
         'grace_ends_at',
         'cancelled_at',
+        'midtrans_subscription_id',
+        'recurring_token',
+        'auto_renew',
+        'last_renewal_at',
+        'renewal_attempts',
     ];
 
     // ==================== CASTS ====================
@@ -99,6 +104,9 @@ class Subscription extends Model
         'grace_ends_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'replaced_at' => 'datetime',
+        'auto_renew' => 'boolean',
+        'last_renewal_at' => 'datetime',
+        'renewal_attempts' => 'integer',
     ];
 
     // ==================== RELATIONSHIPS ====================
@@ -183,6 +191,26 @@ class Subscription extends Model
     public function scopeHasAccess(Builder $query): Builder
     {
         return $query->whereIn('status', [self::STATUS_ACTIVE, self::STATUS_GRACE]);
+    }
+
+    /**
+     * Scope: Due for auto-renewal (active, auto_renew=true, has token, expiring within N days)
+     */
+    public function scopeDueForRenewal(Builder $query, int $daysBeforeExpiry = 3): Builder
+    {
+        return $query->where('status', self::STATUS_ACTIVE)
+            ->where('auto_renew', true)
+            ->whereNotNull('recurring_token')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now()->addDays($daysBeforeExpiry));
+    }
+
+    /**
+     * Check if subscription has auto-renewal enabled with a valid token
+     */
+    public function hasAutoRenew(): bool
+    {
+        return $this->auto_renew && !empty($this->recurring_token);
     }
 
     /**

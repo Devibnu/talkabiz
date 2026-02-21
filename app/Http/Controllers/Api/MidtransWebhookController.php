@@ -8,6 +8,7 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Models\WebhookLog;
 use App\Services\MidtransPlanService;
+use App\Services\RecurringService;
 use App\Services\SubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -105,6 +106,41 @@ class MidtransWebhookController extends Controller
                 }
 
                 // Return 200 to prevent Midtrans retry-storm
+                return response()->json(['message' => 'Webhook processed'], 200);
+            }
+        }
+
+        // ── 3c. Route RENEW- orders to RecurringService ─────────────
+        // Recurring auto-renewal charges use RENEW- prefix.
+        if (str_starts_with($orderId, 'RENEW-')) {
+            Log::info('[Midtrans Webhook] RENEW- prefix detected, routing to RecurringService', [
+                'order_id' => $orderId,
+                'status'   => $transactionStatus,
+                'ip'       => $ip,
+            ]);
+
+            try {
+                $recurringService = app(RecurringService::class);
+                $result = $recurringService->handleRecurringWebhook($payload);
+
+                if ($webhookLog) {
+                    $webhookLog->markProcessed(json_encode($result));
+                }
+
+                return response()->json([
+                    'message' => $result['message'] ?? 'Recurring webhook processed',
+                ], 200);
+            } catch (\Throwable $e) {
+                Log::error('[Midtrans Webhook] RENEW routing error', [
+                    'order_id' => $orderId,
+                    'error'    => $e->getMessage(),
+                    'trace'    => $e->getTraceAsString(),
+                ]);
+
+                if ($webhookLog) {
+                    $webhookLog->markFailed('Renew routing error: ' . $e->getMessage());
+                }
+
                 return response()->json(['message' => 'Webhook processed'], 200);
             }
         }

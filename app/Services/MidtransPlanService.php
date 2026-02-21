@@ -224,6 +224,11 @@ class MidtransPlanService
                 'unfinish' => $appUrl . '/billing/plan/unfinish',
                 'error' => $appUrl . '/billing/plan/error',
             ],
+            // Enable credit card tokenization for recurring payments
+            'credit_card' => [
+                'secure' => true,
+                'save_card' => true,
+            ],
             'expiry' => [
                 'start_time' => now()->format('Y-m-d H:i:s O'),
                 'unit' => 'hours',
@@ -697,6 +702,44 @@ class MidtransPlanService
             'payment_type' => $paymentType,
             'expires_at' => $userPlan->expires_at?->toISOString(),
         ]);
+
+        // ================================================================
+        // STEP 3: Store recurring token for auto-renewal (non-blocking)
+        // If Midtrans returns saved_token_id, store it on the subscription
+        // for future server-to-server recurring charges.
+        // ================================================================
+        try {
+            $savedTokenId = $payload['saved_token_id'] ?? null;
+            $midtransTransactionId = $payload['transaction_id'] ?? null;
+
+            if ($savedTokenId && $paymentType === 'credit_card') {
+                $subscription = \App\Models\Subscription::where('klien_id', $transaction->klien_id)
+                    ->where('status', \App\Models\Subscription::STATUS_ACTIVE)
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($subscription) {
+                    $recurringService = app(\App\Services\RecurringService::class);
+                    $recurringService->storeRecurringToken(
+                        $subscription,
+                        $savedTokenId,
+                        $midtransTransactionId
+                    );
+
+                    Log::info('Recurring token stored from initial payment', [
+                        'subscription_id' => $subscription->id,
+                        'klien_id' => $transaction->klien_id,
+                        'order_id' => $transaction->pg_order_id,
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            // Non-blocking: don't fail the payment if token storage fails
+            Log::warning('Failed to store recurring token (non-blocking)', [
+                'order_id' => $transaction->pg_order_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return [
             'success' => true,

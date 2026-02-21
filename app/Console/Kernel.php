@@ -122,6 +122,21 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->name('process-invoice-grace-period');
 
+        // ==================== AUTO-RENEWAL RECURRING ====================
+
+        /**
+         * Auto-renew recurring subscriptions via Midtrans Core API
+         * Runs every 6 hours to:
+         * 1. Find subscriptions expiring within 3 days with auto_renew=true
+         * 2. Charge saved credit card token via Midtrans
+         * 3. On success → extend subscription +30 days
+         * 4. On failure → increment attempt counter → grace on max retries
+         */
+        $schedule->command('subscription:renew')
+            ->everySixHours()
+            ->withoutOverlapping()
+            ->name('subscription-auto-renew');
+
         /**
          * Subscription cleanup — Phase 3 (Duplicate Payment Lock)
          * Runs every 6 hours to:
