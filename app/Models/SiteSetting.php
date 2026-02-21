@@ -41,10 +41,14 @@ class SiteSetting extends Model
 
     /**
      * Set a setting value by key.
+     * Creates the row if it doesn't exist yet (updateOrCreate).
      */
     public static function setValue(string $key, $value): void
     {
-        static::where('key', $key)->update(['value' => $value]);
+        static::updateOrCreate(
+            ['key' => $key],
+            ['value' => $value]
+        );
     }
 
     /**
