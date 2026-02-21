@@ -197,6 +197,7 @@
                             </thead>
                             <tbody>
                                 @foreach($revenueBreakdown['subscription']['by_plan'] as $plan)
+                                @php $plan = (array) $plan; @endphp
                                 <tr>
                                     <td>
                                         <span class="text-xs font-weight-bold">{{ $plan['display_name'] }}</span>
