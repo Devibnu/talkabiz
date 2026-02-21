@@ -296,7 +296,7 @@ class RecurringService
                 'final_amount' => $subscription->price,
                 'status' => 'paid',
                 'paid_at' => now(),
-                'description' => "Auto-renewal: {$subscription->plan_snapshot['name'] ?? 'Subscription'}",
+                'description' => 'Auto-renewal: ' . ($subscription->plan_snapshot['name'] ?? 'Subscription'),
             ]);
 
             // Sync user plan_status
