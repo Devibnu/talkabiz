@@ -42,6 +42,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        // Register model observers
+        \App\Models\PlanTransaction::observe(\App\Observers\PlanTransactionObserver::class);
+
         // Share branding data to ALL views (SSOT)
         View::composer('*', function ($view) {
             // Avoid query if table doesn't exist yet (pre-migration)

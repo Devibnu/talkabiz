@@ -21,6 +21,7 @@ use App\Http\Controllers\AccountUnlockController;
 use App\Http\Controllers\ForcePasswordChangeController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\TopupInvoiceController;
+use App\Http\Controllers\InvoiceWebController;
 use App\Http\Controllers\BusinessMetricsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -180,12 +181,22 @@ Route::middleware(['client.access'])->group(function () {
 		Route::get('billing/plan', fn() => redirect()->route('subscription.index'))->name('billing.plan.index');
 		Route::get('billing/plan/{code}', fn() => redirect()->route('subscription.index'));
 
-		// Topup Invoice Routes (receipt / bukti pembayaran)
+		// ==================== INVOICE ROUTES ====================
+
+		// Topup Invoice Routes (specific prefix — MUST be before general {id} catch-all)
 		Route::prefix('invoices/topup')->name('invoices.topup.')->group(function () {
 			Route::get('/', [TopupInvoiceController::class, 'index'])->name('index');
 			Route::get('{id}', [TopupInvoiceController::class, 'show'])->name('show');
 			Route::get('{id}/pdf', [TopupInvoiceController::class, 'pdf'])->name('pdf');
 			Route::get('{id}/download', [TopupInvoiceController::class, 'download'])->name('download');
+		});
+
+		// Unified Invoice Routes (all types: subscription, topup, recurring, upgrade)
+		Route::prefix('invoices')->name('invoices.')->group(function () {
+			Route::get('/', [InvoiceWebController::class, 'index'])->name('index');
+			Route::get('{id}/pdf', [InvoiceWebController::class, 'pdf'])->name('pdf')->where('id', '[0-9]+');
+			Route::get('{id}/download', [InvoiceWebController::class, 'download'])->name('download')->where('id', '[0-9]+');
+			Route::get('{id}', [InvoiceWebController::class, 'show'])->name('show')->where('id', '[0-9]+');
 		});
 
 		// Topup Routes (SSOT for saldo management)
