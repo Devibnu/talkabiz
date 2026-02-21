@@ -94,6 +94,21 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->name('check-subscription-expiry-reminders');
 
+        // ==================== PRE-EXPIRY EMAIL AUTOMATION ====================
+
+        /**
+         * Send subscription lifecycle email reminders
+         * Runs hourly to:
+         * 1. T-3 days → Pre-expiry reminder (once)
+         * 2. Grace start → Grace warning email (once)
+         * 3. Expired → Expiration notice email (once)
+         * Anti-duplicate: tracked by timestamp columns on subscriptions table
+         */
+        $schedule->command('subscription:send-reminders')
+            ->hourly()
+            ->withoutOverlapping()
+            ->name('subscription-email-reminders');
+
         // ==================== TRIAL ACTIVATION REMINDERS ====================
 
         /**

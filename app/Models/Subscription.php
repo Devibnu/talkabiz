@@ -91,6 +91,9 @@ class Subscription extends Model
         'auto_renew',
         'last_renewal_at',
         'renewal_attempts',
+        'reminder_sent_at',
+        'grace_email_sent_at',
+        'expired_email_sent_at',
     ];
 
     // ==================== CASTS ====================
@@ -107,6 +110,9 @@ class Subscription extends Model
         'auto_renew' => 'boolean',
         'last_renewal_at' => 'datetime',
         'renewal_attempts' => 'integer',
+        'reminder_sent_at' => 'datetime',
+        'grace_email_sent_at' => 'datetime',
+        'expired_email_sent_at' => 'datetime',
     ];
 
     // ==================== RELATIONSHIPS ====================
@@ -211,6 +217,38 @@ class Subscription extends Model
     public function hasAutoRenew(): bool
     {
         return $this->auto_renew && !empty($this->recurring_token);
+    }
+
+    // ==================== EMAIL REMINDER SCOPES ====================
+
+    /**
+     * Scope: Needs pre-expiry reminder (active, expiring within 3 days, not yet sent)
+     */
+    public function scopeNeedsExpiryReminder(Builder $query, int $daysBefore = 3): Builder
+    {
+        return $query->where('status', self::STATUS_ACTIVE)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now()->addDays($daysBefore))
+            ->where('expires_at', '>', now())
+            ->whereNull('reminder_sent_at');
+    }
+
+    /**
+     * Scope: Needs grace period email (grace status, not yet sent)
+     */
+    public function scopeNeedsGraceEmail(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_GRACE)
+            ->whereNull('grace_email_sent_at');
+    }
+
+    /**
+     * Scope: Needs expired email (expired status, not yet sent)
+     */
+    public function scopeNeedsExpiredEmail(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_EXPIRED)
+            ->whereNull('expired_email_sent_at');
     }
 
     /**
