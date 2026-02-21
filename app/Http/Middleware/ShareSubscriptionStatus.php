@@ -30,17 +30,49 @@ class ShareSubscriptionStatus
             $planName = $user->currentPlan?->name ?? null;
 
             // SSOT: check Subscription model directly for active status
-            $subscription = null;
+            // Uses case-insensitive status check + expires_at validation + exists() optimization
             $isActive = false;
             $isGrace = false;
             $graceDaysRemaining = null;
             if ($user->klien_id) {
-                $subscription = Subscription::where('klien_id', $user->klien_id)
-                    ->orderByDesc('created_at')
-                    ->first();
-                $isActive = $subscription ? $subscription->isActive() : false;
-                $isGrace = $subscription ? $subscription->isGrace() : false;
-                $graceDaysRemaining = $subscription?->grace_days_remaining;
+                // Step 1: Optimized exists() check — active or grace with valid expires_at
+                $isActive = Subscription::where('klien_id', $user->klien_id)
+                    ->whereRaw("LOWER(status) IN (?, ?)", [
+                        strtolower(Subscription::STATUS_ACTIVE),
+                        strtolower(Subscription::STATUS_GRACE),
+                    ])
+                    ->where(function ($q) {
+                        $q->whereNull('expires_at')
+                          ->orWhere('expires_at', '>=', now());
+                    })
+                    ->exists();
+
+                // Step 2: Grace check — only query if subscription is active
+                if ($isActive) {
+                    $graceSubscription = Subscription::where('klien_id', $user->klien_id)
+                        ->whereRaw("LOWER(status) = ?", [strtolower(Subscription::STATUS_GRACE)])
+                        ->where(function ($q) {
+                            $q->whereNull('grace_ends_at')
+                              ->orWhere('grace_ends_at', '>=', now());
+                        })
+                        ->first();
+
+                    if ($graceSubscription) {
+                        $isGrace = true;
+                        $graceDaysRemaining = $graceSubscription->grace_days_remaining;
+                    }
+                }
+
+                // TEMPORARY DEBUG LOG — hapus setelah verified
+                \Log::info('[ShareSubscriptionStatus] klien_id=' . $user->klien_id, [
+                    'isActive' => $isActive,
+                    'isGrace' => $isGrace,
+                    'graceDaysRemaining' => $graceDaysRemaining,
+                    'user_id' => $user->id,
+                    'plan_status' => $user->plan_status,
+                ]);
+                // Uncomment dd() di bawah untuk debug langsung di browser:
+                // dd('ShareSubscriptionStatus', compact('isActive', 'isGrace', 'graceDaysRemaining'));
             }
 
             // Admin/Owner always considered active
