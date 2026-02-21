@@ -79,6 +79,8 @@ class UserPlan extends Model
         'idempotency_key',
         'transaction_id',
         'notes',
+        'last_plan_change_at',
+        'plan_change_count',
     ];
 
     // ==================== CASTS ====================
@@ -94,6 +96,8 @@ class UserPlan extends Model
         'quota_campaigns_initial' => 'integer',
         'quota_campaigns_active' => 'integer',
         'price_paid' => 'decimal:2',
+        'last_plan_change_at' => 'datetime',
+        'plan_change_count' => 'integer',
     ];
 
     // ==================== RELATIONSHIPS ====================

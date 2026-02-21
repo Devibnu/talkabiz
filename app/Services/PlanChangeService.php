@@ -252,6 +252,25 @@ class PlanChangeService
             );
         }
 
+        // Check for any pending PlanTransaction (not just plan change)
+        $pendingTransaction = PlanTransaction::where('klien_id', $klien->id)
+            ->whereIn('status', [
+                PlanTransaction::STATUS_PENDING,
+                PlanTransaction::STATUS_WAITING_PAYMENT,
+            ])
+            ->exists();
+
+        if ($pendingTransaction) {
+            throw new DomainException(
+                'Masih ada transaksi yang belum selesai. Selesaikan atau batalkan transaksi terlebih dahulu.'
+            );
+        }
+
+        // ================================================================
+        // ANTI-ABUSE CHECKS
+        // ================================================================
+        $this->enforceAntiAbuseRules($currentUserPlan, $klien->id);
+
         // ================================================================  
         // CALCULATE PRORATE
         // ================================================================
@@ -524,6 +543,9 @@ class PlanChangeService
             Cache::forget("subscription:policy:{$klien->id}");
             Cache::forget("subscription:active:{$klien->id}");
 
+            // 10. Increment anti-abuse counters on new UserPlan
+            $this->incrementChangeCounters($newUserPlan);
+
             Log::info('[PlanChange] Downgrade completed immediately', [
                 'change_log_id' => $changeLog->id,
                 'user_id' => $user->id,
@@ -657,6 +679,9 @@ class PlanChangeService
             Cache::forget("subscription:policy:{$klien->id}");
             Cache::forget("subscription:active:{$klien->id}");
 
+            // Increment anti-abuse counters on new UserPlan
+            $this->incrementChangeCounters($newUserPlan);
+
             Log::info('[PlanChange] Immediate switch completed', [
                 'change_log_id' => $changeLog->id,
                 'user_id' => $user->id,
@@ -714,6 +739,9 @@ class PlanChangeService
                 'new_user_plan_id' => $newUserPlan->id,
                 'new_subscription_id' => $newSubscription->id,
             ]);
+
+            // Increment anti-abuse counters on the newly activated UserPlan
+            self::incrementChangeCountersStatic($newUserPlan);
 
             Log::info('[PlanChange] Upgrade completed from webhook', [
                 'change_log_id' => $changeLog->id,
@@ -787,6 +815,94 @@ class PlanChangeService
                 ? "Upgrade: bayar selisih Rp " . number_format($prorate['charge_amount'], 0, ',', '.')
                 : "Downgrade: refund Rp " . number_format($prorate['refund_amount'], 0, ',', '.') . " ke wallet",
         ];
+    }
+
+    // ==================== ANTI-ABUSE ENGINE ====================
+
+    /**
+     * Enforce anti-abuse rules before allowing plan change.
+     *
+     * Rules:
+     *   1. Max 2 plan changes per billing cycle (30 days from activated_at)
+     *   2. 3-day cooldown between changes
+     *
+     * @throws DomainException
+     */
+    protected function enforceAntiAbuseRules(UserPlan $currentUserPlan, int $klienId): void
+    {
+        // Rule 1: Max 2 plan changes per billing cycle
+        $cycleChanges = $this->getChangesInCurrentCycle($klienId, $currentUserPlan);
+
+        if ($cycleChanges >= 2) {
+            throw new DomainException(
+                'Maksimal 2 kali ganti paket per siklus billing. Silakan tunggu siklus berikutnya.'
+            );
+        }
+
+        // Rule 2: 3-day cooldown since last plan change
+        $lastChangeAt = $currentUserPlan->last_plan_change_at;
+
+        if (!$lastChangeAt) {
+            // Check from plan_change_logs as fallback
+            $lastLog = PlanChangeLog::where('klien_id', $klienId)
+                ->where('status', PlanChangeLog::STATUS_COMPLETED)
+                ->latest('created_at')
+                ->first();
+
+            $lastChangeAt = $lastLog?->created_at;
+        }
+
+        if ($lastChangeAt && $lastChangeAt->diffInDays(now()) < 3) {
+            $nextAllowed = $lastChangeAt->addDays(3)->format('d M Y H:i');
+            throw new DomainException(
+                "Perubahan paket hanya bisa dilakukan setiap 3 hari. Coba lagi setelah {$nextAllowed}."
+            );
+        }
+    }
+
+    /**
+     * Count completed plan changes in the current billing cycle.
+     * Cycle = 30 days from current UserPlan's activated_at.
+     */
+    protected function getChangesInCurrentCycle(int $klienId, UserPlan $currentUserPlan): int
+    {
+        // Use plan_change_count from UserPlan if available
+        if ($currentUserPlan->plan_change_count > 0) {
+            return $currentUserPlan->plan_change_count;
+        }
+
+        // Fallback: count from plan_change_logs within the billing cycle
+        $cycleStart = $currentUserPlan->activated_at ?? $currentUserPlan->created_at;
+
+        return PlanChangeLog::where('klien_id', $klienId)
+            ->where('status', PlanChangeLog::STATUS_COMPLETED)
+            ->where('created_at', '>=', $cycleStart)
+            ->count();
+    }
+
+    /**
+     * Increment plan change counters on UserPlan.
+     * Called after a successful plan change (downgrade/immediate)
+     * or after webhook completes an upgrade.
+     */
+    protected function incrementChangeCounters(UserPlan $userPlan): void
+    {
+        $userPlan->update([
+            'last_plan_change_at' => now(),
+            'plan_change_count' => ($userPlan->plan_change_count ?? 0) + 1,
+        ]);
+    }
+
+    /**
+     * Increment counters on the NEW UserPlan after upgrade webhook.
+     * Static so it can be called from completeUpgradeFromWebhook.
+     */
+    protected static function incrementChangeCountersStatic(UserPlan $userPlan): void
+    {
+        $userPlan->update([
+            'last_plan_change_at' => now(),
+            'plan_change_count' => ($userPlan->plan_change_count ?? 0) + 1,
+        ]);
     }
 
     // ==================== HELPERS ====================
