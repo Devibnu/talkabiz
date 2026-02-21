@@ -56,15 +56,30 @@
                 </div>
                 <div class="card-body">
                     {{-- Current Logo Preview --}}
-                    <div class="text-center mb-4 p-4" style="background: #f8f9fa; border-radius: 12px; border: 2px dashed #dee2e6;">
+                    <div class="text-center mb-4 p-4" id="logo-preview-container" style="background: #f8f9fa; border-radius: 12px; border: 2px dashed #dee2e6;">
                         @if($logoUrl)
-                            <img src="{{ $logoUrl }}" alt="Logo saat ini" style="max-height: 80px; max-width: 280px; object-fit: contain;">
-                            <p class="text-muted mt-2 mb-0" style="font-size: 0.75rem;">Logo aktif saat ini</p>
+                            <img src="{{ $logoUrl }}" alt="Logo saat ini" id="logo-preview-img" style="max-height: 80px; max-width: 280px; object-fit: contain;">
+                            <p class="text-muted mt-2 mb-0" style="font-size: 0.75rem;" id="logo-preview-label">Logo aktif saat ini</p>
                         @else
                             <div style="font-size: 2.5rem; color: #adb5bd;">
                                 <i class="fas fa-image"></i>
                             </div>
                             <p class="text-muted mb-0" style="font-size: 0.85rem;">Belum ada logo. Tampil sebagai teks "<strong>{{ $branding['site_name'] }}</strong>"</p>
+                        @endif
+
+                        {{-- Processing indicator (shown when job is running) --}}
+                        @if(!empty($logoProcessing))
+                        <div id="logo-processing-banner" class="mt-3 p-2" style="background: linear-gradient(135deg, #e0cffc 0%, #d4e0ff 100%); border-radius: 8px;">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                                    <span class="visually-hidden">Processing...</span>
+                                </div>
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #5a3e8e;">
+                                    <i class="fas fa-magic me-1"></i> Mengoptimasi logo... (resize + konversi WebP)
+                                </span>
+                            </div>
+                            <p class="mb-0 mt-1" style="font-size: 0.7rem; color: #7c6b9e;">Preview akan otomatis terupdate setelah selesai.</p>
+                        </div>
                         @endif
                     </div>
 
@@ -315,3 +330,69 @@
 
 </div>
 @endsection
+
+@push('scripts')
+<script>
+/**
+ * Logo Processing Poller — auto-refresh preview when background job completes.
+ * Only active when processing flag is set.
+ */
+(function() {
+    const banner = document.getElementById('logo-processing-banner');
+    if (!banner) return; // No processing in progress
+
+    const statusUrl = '{{ route("owner.branding.logo-status") }}';
+    let pollCount = 0;
+    const maxPolls = 20; // Max ~60 seconds (20 × 3s)
+
+    const poller = setInterval(async () => {
+        pollCount++;
+        if (pollCount > maxPolls) {
+            clearInterval(poller);
+            banner.innerHTML = '<p class="mb-0" style="font-size:0.8rem;color:#664d03;"><i class="fas fa-clock me-1"></i> Optimasi memakan waktu lebih lama dari biasanya. Refresh halaman secara manual.</p>';
+            return;
+        }
+
+        try {
+            const res = await fetch(statusUrl, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+
+            if (!data.processing) {
+                clearInterval(poller);
+
+                // Update preview
+                const container = document.getElementById('logo-preview-container');
+                const img = document.getElementById('logo-preview-img');
+                const label = document.getElementById('logo-preview-label');
+
+                if (data.logo_url && img) {
+                    img.src = data.logo_url + '?t=' + Date.now();
+                    if (label) label.textContent = 'Logo dioptimasi ✓';
+                } else if (data.logo_url && container) {
+                    // Logo baru — replace placeholder
+                    container.innerHTML = '<img src="' + data.logo_url + '?t=' + Date.now() + '" alt="Logo" style="max-height:80px;max-width:280px;object-fit:contain;">' +
+                        '<p class="text-muted mt-2 mb-0" style="font-size:0.75rem;">Logo dioptimasi ✓</p>';
+                }
+
+                // Remove processing banner with fade
+                banner.style.transition = 'opacity 0.5s';
+                banner.style.opacity = '0';
+                setTimeout(() => banner.remove(), 500);
+
+                // Show success toast
+                const toast = document.createElement('div');
+                toast.className = 'alert alert-success shadow-lg';
+                toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;max-width:400px;border-radius:12px;animation:slideIn 0.3s ease;';
+                toast.innerHTML = '<i class="fas fa-check-circle me-2"></i> Logo berhasil dioptimasi (WebP, max 800px).';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 4000);
+            }
+        } catch (e) {
+            console.warn('Logo status poll failed:', e);
+        }
+    }, 3000);
+})();
+</script>
+@endpush

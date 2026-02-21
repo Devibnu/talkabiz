@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessLogoImageJob;
 use App\Models\SiteSetting;
 use App\Services\BrandingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class OwnerBrandingController extends Controller
 {
@@ -25,8 +27,9 @@ class OwnerBrandingController extends Controller
         $logoUrl = $this->brandingService->getLogoUrl();
         $faviconUrl = $this->brandingService->getFaviconUrl();
         $salesWhatsappUrl = $this->brandingService->getSalesWhatsappUrl();
+        $logoProcessing = SiteSetting::getValue('site_logo_processing');
 
-        return view('owner.branding.index', compact('branding', 'logoUrl', 'faviconUrl', 'salesWhatsappUrl'));
+        return view('owner.branding.index', compact('branding', 'logoUrl', 'faviconUrl', 'salesWhatsappUrl', 'logoProcessing'));
     }
 
     /**
@@ -53,7 +56,8 @@ class OwnerBrandingController extends Controller
     }
 
     /**
-     * Upload logo baru — auto-resize & compress oleh sistem.
+     * Upload logo baru — store original immediately, process async via queue.
+     * Response is instant; background job handles resize + WebP conversion.
      */
     public function uploadLogo(Request $request)
     {
@@ -63,20 +67,45 @@ class OwnerBrandingController extends Controller
             'logo.required' => 'Silakan pilih file logo.',
             'logo.file' => 'File logo tidak valid.',
             'logo.mimes' => 'Format logo harus PNG, JPG, SVG, atau WebP.',
-            'logo.max' => 'Ukuran file maksimal 10MB. Sistem akan auto-resize & compress ke ≤ 2MB.',
+            'logo.max' => 'Ukuran file maksimal 10MB. Sistem akan auto-resize & compress.',
         ]);
 
-        try {
-            $this->brandingService->uploadLogo($request->file('logo'));
-        } catch (\RuntimeException $e) {
-            return redirect()
-                ->route('owner.branding.index')
-                ->with('error', $e->getMessage());
-        }
+        $file = $request->file('logo');
+
+        // ── Step 1: Store original file immediately (fast) ──
+        $extension = $file->getClientOriginalExtension();
+        $filename = 'branding/' . uniqid('logo_raw_') . '.' . $extension;
+        Storage::disk('public')->put($filename, file_get_contents($file->getRealPath()));
+
+        // ── Step 2: Get old logo path for cleanup ──
+        $oldLogoPath = SiteSetting::getValue('site_logo');
+
+        // ── Step 3: Set temporary logo path + processing flag ──
+        SiteSetting::setValue('site_logo', $filename);
+        SiteSetting::setValue('site_logo_processing', '1');
+        $this->brandingService->clearCache();
+
+        // ── Step 4: Dispatch background job ──
+        ProcessLogoImageJob::dispatch($filename, $oldLogoPath);
 
         return redirect()
             ->route('owner.branding.index')
-            ->with('success', 'Logo berhasil diupload & dioptimasi. Perubahan langsung terlihat di semua halaman publik.');
+            ->with('success', 'Logo berhasil diupload! Optimasi sedang berjalan di background (resize + konversi WebP).');
+    }
+
+    /**
+     * AJAX endpoint: check if logo processing is complete.
+     * Used by frontend to auto-refresh preview.
+     */
+    public function logoStatus()
+    {
+        $processing = SiteSetting::getValue('site_logo_processing');
+        $logoUrl = $this->brandingService->getLogoUrl();
+
+        return response()->json([
+            'processing' => !empty($processing),
+            'logo_url' => $logoUrl,
+        ]);
     }
 
     /**

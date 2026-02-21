@@ -210,6 +210,7 @@ Route::middleware(['auth', 'ensure.owner', 'force.password.change'])
             Route::get('/', [OwnerBrandingController::class, 'index'])->name('index');
             Route::put('/info', [OwnerBrandingController::class, 'updateInfo'])->name('update-info');
             Route::post('/logo', [OwnerBrandingController::class, 'uploadLogo'])->name('upload-logo');
+            Route::get('/logo/status', [OwnerBrandingController::class, 'logoStatus'])->name('logo-status');
             Route::delete('/logo', [OwnerBrandingController::class, 'removeLogo'])->name('remove-logo');
             Route::post('/favicon', [OwnerBrandingController::class, 'uploadFavicon'])->name('upload-favicon');
             Route::delete('/favicon', [OwnerBrandingController::class, 'removeFavicon'])->name('remove-favicon');
