@@ -35,23 +35,27 @@
 
     {{-- INFO BOX --}}
     <div class="alert alert-info" style="border-radius: 12px; border: none; background: linear-gradient(135deg, #cce5ff 0%, #b8daff 100%);">
-        <h6 class="mb-2"><i class="fas fa-info-circle me-2"></i> SSOT Branding</h6>
+        <h6 class="mb-2"><i class="fas fa-info-circle me-2"></i> SSOT Branding — Enterprise</h6>
         <p class="mb-0" style="font-size: 0.85rem;">
             Semua perubahan di halaman ini langsung diterapkan ke <strong>seluruh halaman publik</strong> (Landing, Login, Register, Sidebar).
-            Logo & nama brand diambil dari sini — tidak ada hardcode di tempat lain.
+            Logo & favicon diproses async — sistem otomatis generate <strong>3 varian WebP</strong> untuk setiap upload.
         </p>
     </div>
 
     <div class="row">
         {{-- LEFT COLUMN: Logo & Favicon Upload --}}
         <div class="col-lg-7">
-            {{-- Logo Upload Card --}}
+
+            {{-- ═══════════════ LOGO UPLOAD CARD ═══════════════ --}}
             <div class="card mb-4" style="border-radius: 16px; border: none; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
                 <div class="card-header pb-0" style="background: transparent; border: none;">
                     <h6 class="mb-1"><i class="fas fa-image me-2 text-primary"></i> Logo Utama</h6>
                     <p class="text-muted mb-0" style="font-size: 0.8rem;">
                         Ditampilkan di navbar landing, login, register, dan sidebar. Rekomendasi: PNG/SVG transparan.
-                        <br><span class="badge bg-info text-white mt-1" style="font-weight: 500;"><i class="fas fa-magic me-1"></i> Auto-resize & compress — Anda tidak perlu resize manual</span>
+                        <br>
+                        <span class="badge bg-primary text-white mt-1" style="font-weight: 500;">
+                            <i class="fas fa-magic me-1"></i> Auto-generate 3 varian WebP: 800px · 400px · 200px
+                        </span>
                     </p>
                 </div>
                 <div class="card-body">
@@ -75,13 +79,27 @@
                                     <span class="visually-hidden">Processing...</span>
                                 </div>
                                 <span style="font-size: 0.8rem; font-weight: 600; color: #5a3e8e;">
-                                    <i class="fas fa-magic me-1"></i> Mengoptimasi logo... (resize + konversi WebP)
+                                    <i class="fas fa-magic me-1"></i> Mengoptimasi logo... (3 varian WebP: 800px, 400px, 200px)
                                 </span>
                             </div>
                             <p class="mb-0 mt-1" style="font-size: 0.7rem; color: #7c6b9e;">Preview akan otomatis terupdate setelah selesai.</p>
                         </div>
                         @endif
                     </div>
+
+                    {{-- Version variants info --}}
+                    @if(!empty($logoVersions) && !$logoProcessing)
+                    <div id="logo-versions-info" class="mb-3 p-3" style="background: #f0f7ff; border-radius: 10px; border: 1px solid #d0e3ff;">
+                        <small class="d-block mb-2 fw-bold" style="color: #3a6fb0;"><i class="fas fa-layer-group me-1"></i> Varian Tersedia:</small>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach($logoVersions as $width => $path)
+                            <span class="badge" style="background: #3a6fb0; font-size: 0.75rem; padding: 5px 10px;">
+                                <i class="fas fa-check-circle me-1"></i> {{ $width }}px
+                            </span>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
 
                     {{-- Upload Form --}}
                     <form action="{{ route('owner.branding.upload-logo') }}" method="POST" enctype="multipart/form-data">
@@ -93,8 +111,7 @@
                             </button>
                         </div>
                         <small class="text-muted">
-                            Format: PNG, JPG, SVG, WebP. Maks upload 10MB.
-                            <br>Sistem otomatis resize ke maks 800×400px & compress ≤ 2MB. Transparansi dijaga.
+                            Format: PNG, JPG, SVG, WebP. Maks 10MB. Async — langsung redirect, optimasi di background.
                         </small>
                     </form>
 
@@ -110,23 +127,57 @@
                 </div>
             </div>
 
-            {{-- Favicon Upload Card --}}
+            {{-- ═══════════════ FAVICON UPLOAD CARD ═══════════════ --}}
             <div class="card mb-4" style="border-radius: 16px; border: none; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
                 <div class="card-header pb-0" style="background: transparent; border: none;">
                     <h6 class="mb-1"><i class="fas fa-globe me-2 text-warning"></i> Favicon</h6>
                     <p class="text-muted mb-0" style="font-size: 0.8rem;">
-                        Icon kecil di tab browser. Rekomendasi: PNG 32×32 atau 64×64.
-                        <br><span class="badge bg-info text-white mt-1" style="font-weight: 500;"><i class="fas fa-magic me-1"></i> Auto-resize & compress</span>
+                        Icon kecil di tab browser & bookmark. Rekomendasi: PNG persegi.
+                        <br>
+                        <span class="badge bg-warning text-dark mt-1" style="font-weight: 500;">
+                            <i class="fas fa-magic me-1"></i> Auto-generate 3 varian WebP: 180×180 · 64×64 · 32×32
+                        </span>
                     </p>
                 </div>
                 <div class="card-body">
-                    <div class="text-center mb-4 p-3" style="background: #f8f9fa; border-radius: 12px; border: 2px dashed #dee2e6;">
-                        <img src="{{ $faviconUrl }}" alt="Favicon saat ini" style="width: 48px; height: 48px; object-fit: contain;">
-                        <p class="text-muted mt-2 mb-0" style="font-size: 0.75rem;">
+                    {{-- Current Favicon Preview --}}
+                    <div class="text-center mb-4 p-3" id="favicon-preview-container" style="background: #f8f9fa; border-radius: 12px; border: 2px dashed #dee2e6;">
+                        <img src="{{ $faviconUrl }}" alt="Favicon saat ini" id="favicon-preview-img" style="width: 48px; height: 48px; object-fit: contain;">
+                        <p class="text-muted mt-2 mb-0" style="font-size: 0.75rem;" id="favicon-preview-label">
                             {{ $branding['site_favicon'] ? 'Favicon custom aktif' : 'Favicon default' }}
                         </p>
+
+                        {{-- Favicon Processing indicator --}}
+                        @if(!empty($faviconProcessing))
+                        <div id="favicon-processing-banner" class="mt-3 p-2" style="background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); border-radius: 8px;">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <div class="spinner-border spinner-border-sm text-warning me-2" role="status">
+                                    <span class="visually-hidden">Processing...</span>
+                                </div>
+                                <span style="font-size: 0.8rem; font-weight: 600; color: #856404;">
+                                    <i class="fas fa-magic me-1"></i> Mengoptimasi favicon... (3 varian: 180×180, 64×64, 32×32)
+                                </span>
+                            </div>
+                            <p class="mb-0 mt-1" style="font-size: 0.7rem; color: #a68307;">Preview akan otomatis terupdate setelah selesai.</p>
+                        </div>
+                        @endif
                     </div>
 
+                    {{-- Version variants info --}}
+                    @if(!empty($faviconVersions) && !$faviconProcessing)
+                    <div id="favicon-versions-info" class="mb-3 p-3" style="background: #fff8e6; border-radius: 10px; border: 1px solid #ffe5a0;">
+                        <small class="d-block mb-2 fw-bold" style="color: #8a6d1b;"><i class="fas fa-layer-group me-1"></i> Varian Tersedia:</small>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach($faviconVersions as $size => $path)
+                            <span class="badge" style="background: #c69500; font-size: 0.75rem; padding: 5px 10px;">
+                                <i class="fas fa-check-circle me-1"></i> {{ $size }}×{{ $size }}
+                            </span>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
+
+                    {{-- Upload Form --}}
                     <form action="{{ route('owner.branding.upload-favicon') }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         <div class="input-group">
@@ -136,8 +187,7 @@
                             </button>
                         </div>
                         <small class="text-muted">
-                            Format: PNG, ICO, SVG, WebP. Maks upload 5MB.
-                            <br>Sistem otomatis resize ke maks 256×256px & compress.
+                            Format: PNG, ICO, SVG, WebP. Maks 5MB. Async — langsung redirect, optimasi di background.
                         </small>
                     </form>
 
@@ -334,65 +384,149 @@
 @push('scripts')
 <script>
 /**
- * Logo Processing Poller — auto-refresh preview when background job completes.
- * Only active when processing flag is set.
+ * Dual Branding Pollers — auto-refresh previews when background jobs complete.
+ * Polls logo-status and favicon-status endpoints every 3 seconds.
  */
 (function() {
-    const banner = document.getElementById('logo-processing-banner');
-    if (!banner) return; // No processing in progress
+    // ─── Logo Poller ───
+    const logoBanner = document.getElementById('logo-processing-banner');
+    if (logoBanner) {
+        const logoStatusUrl = '{{ route("owner.branding.logo-status") }}';
+        let logoPollCount = 0;
+        const maxPolls = 20;
 
-    const statusUrl = '{{ route("owner.branding.logo-status") }}';
-    let pollCount = 0;
-    const maxPolls = 20; // Max ~60 seconds (20 × 3s)
-
-    const poller = setInterval(async () => {
-        pollCount++;
-        if (pollCount > maxPolls) {
-            clearInterval(poller);
-            banner.innerHTML = '<p class="mb-0" style="font-size:0.8rem;color:#664d03;"><i class="fas fa-clock me-1"></i> Optimasi memakan waktu lebih lama dari biasanya. Refresh halaman secara manual.</p>';
-            return;
-        }
-
-        try {
-            const res = await fetch(statusUrl, {
-                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            const data = await res.json();
-
-            if (!data.processing) {
-                clearInterval(poller);
-
-                // Update preview
-                const container = document.getElementById('logo-preview-container');
-                const img = document.getElementById('logo-preview-img');
-                const label = document.getElementById('logo-preview-label');
-
-                if (data.logo_url && img) {
-                    img.src = data.logo_url + '?t=' + Date.now();
-                    if (label) label.textContent = 'Logo dioptimasi ✓';
-                } else if (data.logo_url && container) {
-                    // Logo baru — replace placeholder
-                    container.innerHTML = '<img src="' + data.logo_url + '?t=' + Date.now() + '" alt="Logo" style="max-height:80px;max-width:280px;object-fit:contain;">' +
-                        '<p class="text-muted mt-2 mb-0" style="font-size:0.75rem;">Logo dioptimasi ✓</p>';
-                }
-
-                // Remove processing banner with fade
-                banner.style.transition = 'opacity 0.5s';
-                banner.style.opacity = '0';
-                setTimeout(() => banner.remove(), 500);
-
-                // Show success toast
-                const toast = document.createElement('div');
-                toast.className = 'alert alert-success shadow-lg';
-                toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;max-width:400px;border-radius:12px;animation:slideIn 0.3s ease;';
-                toast.innerHTML = '<i class="fas fa-check-circle me-2"></i> Logo berhasil dioptimasi (WebP, max 800px).';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 4000);
+        const logoPoller = setInterval(async () => {
+            logoPollCount++;
+            if (logoPollCount > maxPolls) {
+                clearInterval(logoPoller);
+                logoBanner.innerHTML = '<p class="mb-0" style="font-size:0.8rem;color:#664d03;"><i class="fas fa-clock me-1"></i> Optimasi memakan waktu lebih lama. Refresh halaman secara manual.</p>';
+                return;
             }
-        } catch (e) {
-            console.warn('Logo status poll failed:', e);
-        }
-    }, 3000);
+
+            try {
+                const res = await fetch(logoStatusUrl, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const data = await res.json();
+
+                if (!data.processing) {
+                    clearInterval(logoPoller);
+
+                    // Update preview image
+                    const img = document.getElementById('logo-preview-img');
+                    const label = document.getElementById('logo-preview-label');
+                    const container = document.getElementById('logo-preview-container');
+
+                    if (data.logo_url && img) {
+                        img.src = data.logo_url + '&t=' + Date.now();
+                        if (label) label.textContent = 'Logo dioptimasi \u2713';
+                    } else if (data.logo_url && container) {
+                        container.innerHTML = '<img src="' + data.logo_url + '&t=' + Date.now() + '" alt="Logo" id="logo-preview-img" style="max-height:80px;max-width:280px;object-fit:contain;">' +
+                            '<p class="text-muted mt-2 mb-0" style="font-size:0.75rem;">Logo dioptimasi \u2713</p>';
+                    }
+
+                    // Show version badges
+                    if (data.versions && Object.keys(data.versions).length > 0) {
+                        let versionsHtml = '<div id="logo-versions-info" class="mb-3 p-3" style="background:#f0f7ff;border-radius:10px;border:1px solid #d0e3ff;">';
+                        versionsHtml += '<small class="d-block mb-2 fw-bold" style="color:#3a6fb0;"><i class="fas fa-layer-group me-1"></i> Varian Tersedia:</small>';
+                        versionsHtml += '<div class="d-flex flex-wrap gap-2">';
+                        for (const w of Object.keys(data.versions)) {
+                            versionsHtml += '<span class="badge" style="background:#3a6fb0;font-size:0.75rem;padding:5px 10px;"><i class="fas fa-check-circle me-1"></i> ' + w + 'px</span>';
+                        }
+                        versionsHtml += '</div></div>';
+                        const existing = document.getElementById('logo-versions-info');
+                        if (existing) existing.outerHTML = versionsHtml;
+                        else container.insertAdjacentHTML('afterend', versionsHtml);
+                    }
+
+                    // Fade out banner
+                    logoBanner.style.transition = 'opacity 0.5s';
+                    logoBanner.style.opacity = '0';
+                    setTimeout(() => logoBanner.remove(), 500);
+
+                    showToast('Logo berhasil dioptimasi (3 varian WebP).', 'success');
+                }
+            } catch (e) {
+                console.warn('Logo status poll failed:', e);
+            }
+        }, 3000);
+    }
+
+    // ─── Favicon Poller ───
+    const faviconBanner = document.getElementById('favicon-processing-banner');
+    if (faviconBanner) {
+        const faviconStatusUrl = '{{ route("owner.branding.favicon-status") }}';
+        let faviconPollCount = 0;
+        const maxPolls = 20;
+
+        const faviconPoller = setInterval(async () => {
+            faviconPollCount++;
+            if (faviconPollCount > maxPolls) {
+                clearInterval(faviconPoller);
+                faviconBanner.innerHTML = '<p class="mb-0" style="font-size:0.8rem;color:#664d03;"><i class="fas fa-clock me-1"></i> Optimasi memakan waktu lebih lama. Refresh halaman secara manual.</p>';
+                return;
+            }
+
+            try {
+                const res = await fetch(faviconStatusUrl, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const data = await res.json();
+
+                if (!data.processing) {
+                    clearInterval(faviconPoller);
+
+                    // Update preview image
+                    const img = document.getElementById('favicon-preview-img');
+                    const label = document.getElementById('favicon-preview-label');
+
+                    if (data.favicon_url && img) {
+                        img.src = data.favicon_url + '&t=' + Date.now();
+                        if (label) label.textContent = 'Favicon dioptimasi \u2713';
+                    }
+
+                    // Show version badges
+                    const container = document.getElementById('favicon-preview-container');
+                    if (data.versions && Object.keys(data.versions).length > 0) {
+                        let versionsHtml = '<div id="favicon-versions-info" class="mb-3 p-3" style="background:#fff8e6;border-radius:10px;border:1px solid #ffe5a0;">';
+                        versionsHtml += '<small class="d-block mb-2 fw-bold" style="color:#8a6d1b;"><i class="fas fa-layer-group me-1"></i> Varian Tersedia:</small>';
+                        versionsHtml += '<div class="d-flex flex-wrap gap-2">';
+                        for (const s of Object.keys(data.versions)) {
+                            versionsHtml += '<span class="badge" style="background:#c69500;font-size:0.75rem;padding:5px 10px;"><i class="fas fa-check-circle me-1"></i> ' + s + '\u00d7' + s + '</span>';
+                        }
+                        versionsHtml += '</div></div>';
+                        const existing = document.getElementById('favicon-versions-info');
+                        if (existing) existing.outerHTML = versionsHtml;
+                        else if (container) container.insertAdjacentHTML('afterend', versionsHtml);
+                    }
+
+                    // Fade out banner
+                    faviconBanner.style.transition = 'opacity 0.5s';
+                    faviconBanner.style.opacity = '0';
+                    setTimeout(() => faviconBanner.remove(), 500);
+
+                    showToast('Favicon berhasil dioptimasi (3 varian WebP).', 'warning');
+                }
+            } catch (e) {
+                console.warn('Favicon status poll failed:', e);
+            }
+        }, 3000);
+    }
+
+    // ─── Toast Helper ───
+    function showToast(message, type) {
+        const colors = { success: '#198754', warning: '#ffc107', danger: '#dc3545' };
+        const textColor = type === 'warning' ? '#000' : '#fff';
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;max-width:420px;padding:16px 20px;border-radius:12px;color:' + textColor + ';background:' + (colors[type] || colors.success) + ';box-shadow:0 8px 32px rgba(0,0,0,0.2);animation:slideIn 0.3s ease;font-size:0.9rem;';
+        toast.innerHTML = '<i class="fas fa-check-circle me-2"></i> ' + message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.transition = 'opacity 0.5s';
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 500);
+        }, 4000);
+    }
 })();
 </script>
 @endpush

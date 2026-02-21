@@ -14,21 +14,21 @@ use Illuminate\Support\Facades\Storage;
 use Intervention\Image\ImageManager;
 
 /**
- * ProcessLogoImageJob — Enterprise async logo optimization.
+ * ProcessFaviconJob — Enterprise async favicon optimization.
  *
- * Generates 3 responsive WebP variants:
- *   - 800px width (primary / desktop navbar)
- *   - 400px width (mobile / sidebar)
- *   - 200px width (small contexts / thumbnails)
+ * Generates 3 size-specific WebP variants:
+ *   - 180×180 (Apple Touch Icon)
+ *   - 64×64  (Standard favicon)
+ *   - 32×32  (Small favicon)
  *
- * All stored in: storage/app/public/branding/logo/
- * Paths saved as JSON in site_settings key `site_logo_versions`.
- * Primary path (800px) also saved in `site_logo` for backward compatibility.
+ * All stored in: storage/app/public/branding/favicon/
+ * Paths saved as JSON in site_settings key `site_favicon_versions`.
+ * Primary path (64×64) also saved in `site_favicon` for backward compatibility.
  *
  * Queue: default (Redis)
  * Retries: 3, backoff: 30s, timeout: 60s
  */
-class ProcessLogoImageJob implements ShouldQueue
+class ProcessFaviconJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -36,19 +36,19 @@ class ProcessLogoImageJob implements ShouldQueue
     public int $timeout = 60;
     public int $backoff = 30;
 
-    /** Responsive widths to generate (px) */
-    private const WIDTHS = [800, 400, 200];
+    /** Sizes to generate (px, square) */
+    private const SIZES = [180, 64, 32];
 
     /** WebP quality */
-    private const QUALITY = 75;
+    private const QUALITY = 80;
 
     /** Storage subdirectory */
-    private const DIR = 'branding/logo';
+    private const DIR = 'branding/favicon';
 
     public function __construct(
         protected string $originalPath,
-        protected ?string $oldLogoPrimary = null,
-        protected ?array  $oldLogoVersions = null,
+        protected ?string $oldFaviconPrimary = null,
+        protected ?array  $oldFaviconVersions = null,
     ) {
         $this->onQueue('default');
     }
@@ -58,83 +58,78 @@ class ProcessLogoImageJob implements ShouldQueue
         $disk = Storage::disk('public');
 
         if (!$disk->exists($this->originalPath)) {
-            Log::warning('[ProcessLogoImageJob] Original not found, skipping.', ['path' => $this->originalPath]);
+            Log::warning('[ProcessFaviconJob] Original not found, skipping.', ['path' => $this->originalPath]);
             return;
         }
 
         $absolutePath = $disk->path($this->originalPath);
         $ext = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
 
-        // SVG: vector format — no raster processing needed
+        // SVG: vector format — store as-is
         if ($ext === 'svg') {
-            $svgPath = self::DIR . '/' . uniqid('logo_') . '.svg';
+            $svgPath = self::DIR . '/' . uniqid('fav_') . '.svg';
             $disk->put($svgPath, $disk->get($this->originalPath));
             if ($this->originalPath !== $svgPath) {
                 $disk->delete($this->originalPath);
             }
-            $versions = ['800' => $svgPath, '400' => $svgPath, '200' => $svgPath];
+            $versions = ['180' => $svgPath, '64' => $svgPath, '32' => $svgPath];
             $this->finalize($svgPath, $versions);
-            Log::info('[ProcessLogoImageJob] SVG logo stored.', ['path' => $svgPath]);
+            Log::info('[ProcessFaviconJob] SVG favicon stored.', ['path' => $svgPath]);
             return;
         }
 
         try {
-            $manager = self::createImageManager();
+            $manager = ProcessLogoImageJob::createImageManager();
             $originalSize = filesize($absolutePath);
 
-            // Ensure output directory exists
             $disk->makeDirectory(self::DIR);
 
             $versions = [];
             $primaryPath = null;
-            $uid = uniqid('logo_');
+            $uid = uniqid('fav_');
 
-            foreach (self::WIDTHS as $width) {
+            foreach (self::SIZES as $size) {
                 $image = $manager->read($absolutePath);
 
-                // Scale down only — never upscale
-                if ($image->width() > $width) {
-                    $image = $image->scale(width: $width);
-                }
+                // Cover crop to exact square, then resize
+                $image = $image->cover($size, $size);
 
                 $webpData = (string) $image->toWebp(quality: self::QUALITY);
-                $filename = self::DIR . "/{$uid}_{$width}w.webp";
+                $filename = self::DIR . "/{$uid}_{$size}x{$size}.webp";
                 $disk->put($filename, $webpData);
 
-                $versions[(string) $width] = $filename;
+                $versions[(string) $size] = $filename;
 
-                if ($width === 800) {
+                if ($size === 64) {
                     $primaryPath = $filename;
                 }
 
-                Log::debug("[ProcessLogoImageJob] Generated {$width}px variant.", [
+                Log::debug("[ProcessFaviconJob] Generated {$size}x{$size} variant.", [
                     'file' => $filename,
                     'size' => self::formatBytes(strlen($webpData)),
-                    'dimensions' => $image->width() . 'x' . $image->height(),
                 ]);
             }
 
             // Delete original raw upload
             $disk->delete($this->originalPath);
 
-            // Finalize
             $this->finalize($primaryPath, $versions);
 
-            Log::info('[ProcessLogoImageJob] All variants generated.', [
+            Log::info('[ProcessFaviconJob] All variants generated.', [
                 'original_size' => self::formatBytes($originalSize),
                 'versions' => array_map(fn($p) => basename($p), $versions),
             ]);
 
         } catch (\Throwable $e) {
-            Log::error('[ProcessLogoImageJob] Processing failed.', [
+            Log::error('[ProcessFaviconJob] Processing failed.', [
                 'path' => $this->originalPath,
                 'error' => $e->getMessage(),
                 'attempt' => $this->attempts(),
             ]);
 
             if ($this->attempts() >= $this->tries) {
-                Log::warning('[ProcessLogoImageJob] All retries exhausted. Keeping raw upload.');
-                $this->finalize($this->originalPath, ['800' => $this->originalPath]);
+                Log::warning('[ProcessFaviconJob] All retries exhausted. Keeping raw upload.');
+                $this->finalize($this->originalPath, ['64' => $this->originalPath]);
             }
 
             throw $e;
@@ -145,10 +140,10 @@ class ProcessLogoImageJob implements ShouldQueue
     {
         $timestamp = time();
 
-        SiteSetting::setValue('site_logo', $primaryPath);
-        SiteSetting::setValue('site_logo_versions', json_encode($versions));
-        SiteSetting::setValue('site_logo_version', (string) $timestamp);
-        SiteSetting::setValue('site_logo_processing', null);
+        SiteSetting::setValue('site_favicon', $primaryPath);
+        SiteSetting::setValue('site_favicon_versions', json_encode($versions));
+        SiteSetting::setValue('site_favicon_version', (string) $timestamp);
+        SiteSetting::setValue('site_favicon_processing', null);
 
         $this->cleanupOldFiles();
         app(BrandingService::class)->clearCache();
@@ -158,12 +153,12 @@ class ProcessLogoImageJob implements ShouldQueue
     {
         $disk = Storage::disk('public');
 
-        if ($this->oldLogoPrimary && $disk->exists($this->oldLogoPrimary)) {
-            $disk->delete($this->oldLogoPrimary);
+        if ($this->oldFaviconPrimary && $disk->exists($this->oldFaviconPrimary)) {
+            $disk->delete($this->oldFaviconPrimary);
         }
 
-        if ($this->oldLogoVersions) {
-            foreach (array_unique($this->oldLogoVersions) as $path) {
+        if ($this->oldFaviconVersions) {
+            foreach (array_unique($this->oldFaviconVersions) as $path) {
                 if ($path && $disk->exists($path)) {
                     $disk->delete($path);
                 }
@@ -173,28 +168,17 @@ class ProcessLogoImageJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('[ProcessLogoImageJob] Permanently failed.', [
+        Log::error('[ProcessFaviconJob] Permanently failed.', [
             'path' => $this->originalPath,
             'error' => $exception->getMessage(),
         ]);
 
-        SiteSetting::setValue('site_logo_processing', null);
+        SiteSetting::setValue('site_favicon_processing', null);
 
         if (Storage::disk('public')->exists($this->originalPath)) {
-            SiteSetting::setValue('site_logo', $this->originalPath);
+            SiteSetting::setValue('site_favicon', $this->originalPath);
             app(BrandingService::class)->clearCache();
         }
-    }
-
-    /**
-     * Create ImageManager — prefer Imagick if available, fallback GD.
-     */
-    public static function createImageManager(): ImageManager
-    {
-        if (extension_loaded('imagick')) {
-            return new ImageManager(new \Intervention\Image\Drivers\Imagick\Driver());
-        }
-        return new ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
     }
 
     private static function formatBytes(int $bytes): string

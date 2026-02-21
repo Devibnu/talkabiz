@@ -69,21 +69,48 @@ class BrandingService
     }
 
     /**
-     * Get logo URL (or null if not uploaded).
+     * Get logo URL with cache-busting version param (or null if not uploaded).
      */
     public function getLogoUrl(): ?string
     {
         $path = $this->getAll()['site_logo'];
-        return $path ? asset('storage/' . $path) : null;
+        if (!$path) return null;
+        $v = SiteSetting::getValue('site_logo_version', '0');
+        return asset('storage/' . $path) . '?v=' . $v;
     }
 
     /**
-     * Get favicon URL (or fallback to default).
+     * Get logo URL for a specific size variant.
+     * Falls back to primary if variant unavailable.
+     */
+    public function getLogoUrlForSize(int $width = 800): ?string
+    {
+        $versions = json_decode(SiteSetting::getValue('site_logo_versions', '{}'), true) ?: [];
+        $v = SiteSetting::getValue('site_logo_version', '0');
+        $path = $versions[(string) $width] ?? ($this->getAll()['site_logo'] ?? null);
+        return $path ? asset('storage/' . $path) . '?v=' . $v : null;
+    }
+
+    /**
+     * Get favicon URL with cache-busting version param (or fallback to default).
      */
     public function getFaviconUrl(): string
     {
         $path = $this->getAll()['site_favicon'];
-        return $path ? asset('storage/' . $path) : asset('assets/img/favicon.png');
+        if (!$path) return asset('assets/img/favicon.png');
+        $v = SiteSetting::getValue('site_favicon_version', '0');
+        return asset('storage/' . $path) . '?v=' . $v;
+    }
+
+    /**
+     * Get favicon URL for a specific size variant.
+     */
+    public function getFaviconUrlForSize(int $size = 64): string
+    {
+        $versions = json_decode(SiteSetting::getValue('site_favicon_versions', '{}'), true) ?: [];
+        $v = SiteSetting::getValue('site_favicon_version', '0');
+        $path = $versions[(string) $size] ?? ($this->getAll()['site_favicon'] ?? null);
+        return $path ? asset('storage/' . $path) . '?v=' . $v : asset('assets/img/favicon.png');
     }
 
     /**
@@ -257,28 +284,58 @@ class BrandingService
     }
 
     /**
-     * Remove the current logo.
+     * Remove the current logo (all versions).
      */
     public function removeLogo(): void
     {
+        $disk = Storage::disk('public');
+
+        // Delete primary
         $path = SiteSetting::getValue('site_logo');
-        if ($path && Storage::disk('public')->exists($path)) {
-            Storage::disk('public')->delete($path);
+        if ($path && $disk->exists($path)) {
+            $disk->delete($path);
         }
+
+        // Delete all version variants
+        $versions = json_decode(SiteSetting::getValue('site_logo_versions', '{}'), true) ?: [];
+        foreach (array_unique($versions) as $vPath) {
+            if ($vPath && $disk->exists($vPath)) {
+                $disk->delete($vPath);
+            }
+        }
+
         SiteSetting::setValue('site_logo', null);
+        SiteSetting::setValue('site_logo_versions', null);
+        SiteSetting::setValue('site_logo_version', null);
+        SiteSetting::setValue('site_logo_processing', null);
         $this->clearCache();
     }
 
     /**
-     * Remove the current favicon.
+     * Remove the current favicon (all versions).
      */
     public function removeFavicon(): void
     {
+        $disk = Storage::disk('public');
+
+        // Delete primary
         $path = SiteSetting::getValue('site_favicon');
-        if ($path && Storage::disk('public')->exists($path)) {
-            Storage::disk('public')->delete($path);
+        if ($path && $disk->exists($path)) {
+            $disk->delete($path);
         }
+
+        // Delete all version variants
+        $versions = json_decode(SiteSetting::getValue('site_favicon_versions', '{}'), true) ?: [];
+        foreach (array_unique($versions) as $vPath) {
+            if ($vPath && $disk->exists($vPath)) {
+                $disk->delete($vPath);
+            }
+        }
+
         SiteSetting::setValue('site_favicon', null);
+        SiteSetting::setValue('site_favicon_versions', null);
+        SiteSetting::setValue('site_favicon_version', null);
+        SiteSetting::setValue('site_favicon_processing', null);
         $this->clearCache();
     }
 

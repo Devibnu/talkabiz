@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessFaviconJob;
 use App\Jobs\ProcessLogoImageJob;
 use App\Models\SiteSetting;
 use App\Services\BrandingService;
@@ -27,9 +28,16 @@ class OwnerBrandingController extends Controller
         $logoUrl = $this->brandingService->getLogoUrl();
         $faviconUrl = $this->brandingService->getFaviconUrl();
         $salesWhatsappUrl = $this->brandingService->getSalesWhatsappUrl();
-        $logoProcessing = SiteSetting::getValue('site_logo_processing');
 
-        return view('owner.branding.index', compact('branding', 'logoUrl', 'faviconUrl', 'salesWhatsappUrl', 'logoProcessing'));
+        $logoProcessing = SiteSetting::getValue('site_logo_processing');
+        $faviconProcessing = SiteSetting::getValue('site_favicon_processing');
+        $logoVersions = json_decode(SiteSetting::getValue('site_logo_versions', '{}'), true) ?: [];
+        $faviconVersions = json_decode(SiteSetting::getValue('site_favicon_versions', '{}'), true) ?: [];
+
+        return view('owner.branding.index', compact(
+            'branding', 'logoUrl', 'faviconUrl', 'salesWhatsappUrl',
+            'logoProcessing', 'faviconProcessing', 'logoVersions', 'faviconVersions'
+        ));
     }
 
     /**
@@ -55,9 +63,13 @@ class OwnerBrandingController extends Controller
             ->with('success', 'Informasi branding berhasil diperbarui.');
     }
 
+    // ─────────────────────────────────────────────────────────
+    //  LOGO — Async Upload + Status
+    // ─────────────────────────────────────────────────────────
+
     /**
-     * Upload logo baru — store original immediately, process async via queue.
-     * Response is instant; background job handles resize + WebP conversion.
+     * Upload logo — store raw immediately, dispatch async resize job.
+     * Generates 3 WebP variants: 800px, 400px, 200px.
      */
     public function uploadLogo(Request $request)
     {
@@ -67,44 +79,43 @@ class OwnerBrandingController extends Controller
             'logo.required' => 'Silakan pilih file logo.',
             'logo.file' => 'File logo tidak valid.',
             'logo.mimes' => 'Format logo harus PNG, JPG, SVG, atau WebP.',
-            'logo.max' => 'Ukuran file maksimal 10MB. Sistem akan auto-resize & compress.',
+            'logo.max' => 'Ukuran file maksimal 10MB.',
         ]);
 
         $file = $request->file('logo');
+        $ext = $file->getClientOriginalExtension();
+        $rawPath = 'branding/logo/raw_' . uniqid() . '.' . $ext;
+        Storage::disk('public')->put($rawPath, file_get_contents($file->getRealPath()));
 
-        // ── Step 1: Store original file immediately (fast) ──
-        $extension = $file->getClientOriginalExtension();
-        $filename = 'branding/' . uniqid('logo_raw_') . '.' . $extension;
-        Storage::disk('public')->put($filename, file_get_contents($file->getRealPath()));
+        // Get old data for cleanup by job
+        $oldPrimary = SiteSetting::getValue('site_logo');
+        $oldVersions = json_decode(SiteSetting::getValue('site_logo_versions', '{}'), true) ?: [];
 
-        // ── Step 2: Get old logo path for cleanup ──
-        $oldLogoPath = SiteSetting::getValue('site_logo');
-
-        // ── Step 3: Set temporary logo path + processing flag ──
-        SiteSetting::setValue('site_logo', $filename);
+        // Set processing flag + temp raw path
+        SiteSetting::setValue('site_logo', $rawPath);
         SiteSetting::setValue('site_logo_processing', '1');
         $this->brandingService->clearCache();
 
-        // ── Step 4: Dispatch background job ──
-        ProcessLogoImageJob::dispatch($filename, $oldLogoPath);
+        ProcessLogoImageJob::dispatch($rawPath, $oldPrimary, $oldVersions);
 
         return redirect()
             ->route('owner.branding.index')
-            ->with('success', 'Logo berhasil diupload! Optimasi sedang berjalan di background (resize + konversi WebP).');
+            ->with('success', 'Logo diupload! Optimasi berjalan di background (3 varian WebP).');
     }
 
     /**
-     * AJAX endpoint: check if logo processing is complete.
-     * Used by frontend to auto-refresh preview.
+     * AJAX: check logo processing status.
      */
     public function logoStatus()
     {
         $processing = SiteSetting::getValue('site_logo_processing');
         $logoUrl = $this->brandingService->getLogoUrl();
+        $versions = json_decode(SiteSetting::getValue('site_logo_versions', '{}'), true) ?: [];
 
         return response()->json([
             'processing' => !empty($processing),
             'logo_url' => $logoUrl,
+            'versions' => $versions,
         ]);
     }
 
@@ -117,11 +128,16 @@ class OwnerBrandingController extends Controller
 
         return redirect()
             ->route('owner.branding.index')
-            ->with('success', 'Logo dihapus. Akan tampil teks default di semua halaman.');
+            ->with('success', 'Logo dihapus. Semua halaman menampilkan teks default.');
     }
 
+    // ─────────────────────────────────────────────────────────
+    //  FAVICON — Async Upload + Status
+    // ─────────────────────────────────────────────────────────
+
     /**
-     * Upload favicon baru — auto-resize & compress oleh sistem.
+     * Upload favicon — store raw immediately, dispatch async resize job.
+     * Generates 3 WebP variants: 180×180, 64×64, 32×32.
      */
     public function uploadFavicon(Request $request)
     {
@@ -131,20 +147,44 @@ class OwnerBrandingController extends Controller
             'favicon.required' => 'Silakan pilih file favicon.',
             'favicon.file' => 'File favicon tidak valid.',
             'favicon.mimes' => 'Format favicon harus PNG, ICO, SVG, atau WebP.',
-            'favicon.max' => 'Ukuran file maksimal 5MB. Sistem akan auto-resize & compress.',
+            'favicon.max' => 'Ukuran file maksimal 5MB.',
         ]);
 
-        try {
-            $this->brandingService->uploadFavicon($request->file('favicon'));
-        } catch (\RuntimeException $e) {
-            return redirect()
-                ->route('owner.branding.index')
-                ->with('error', $e->getMessage());
-        }
+        $file = $request->file('favicon');
+        $ext = $file->getClientOriginalExtension();
+        $rawPath = 'branding/favicon/raw_' . uniqid() . '.' . $ext;
+        Storage::disk('public')->put($rawPath, file_get_contents($file->getRealPath()));
+
+        // Get old data for cleanup by job
+        $oldPrimary = SiteSetting::getValue('site_favicon');
+        $oldVersions = json_decode(SiteSetting::getValue('site_favicon_versions', '{}'), true) ?: [];
+
+        // Set processing flag + temp raw path
+        SiteSetting::setValue('site_favicon', $rawPath);
+        SiteSetting::setValue('site_favicon_processing', '1');
+        $this->brandingService->clearCache();
+
+        ProcessFaviconJob::dispatch($rawPath, $oldPrimary, $oldVersions);
 
         return redirect()
             ->route('owner.branding.index')
-            ->with('success', 'Favicon berhasil diupload & dioptimasi.');
+            ->with('success', 'Favicon diupload! Optimasi berjalan di background (3 varian WebP).');
+    }
+
+    /**
+     * AJAX: check favicon processing status.
+     */
+    public function faviconStatus()
+    {
+        $processing = SiteSetting::getValue('site_favicon_processing');
+        $faviconUrl = $this->brandingService->getFaviconUrl();
+        $versions = json_decode(SiteSetting::getValue('site_favicon_versions', '{}'), true) ?: [];
+
+        return response()->json([
+            'processing' => !empty($processing),
+            'favicon_url' => $faviconUrl,
+            'versions' => $versions,
+        ]);
     }
 
     /**
