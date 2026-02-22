@@ -436,6 +436,12 @@
                                     </span>
                                 </td>
                                 <td class="align-middle text-center">
+                                    <form action="{{ route('owner.impersonate.start', $client['id']) }}" method="POST" class="d-inline" title="Lihat sebagai Client">
+                                        @csrf
+                                        <button type="submit" class="btn btn-link text-primary p-1 mb-0" title="Impersonate Client">
+                                            <i class="fas fa-eye text-sm"></i>
+                                        </button>
+                                    </form>
                                     <button class="btn btn-link text-warning p-1 mb-0" onclick="limitClient({{ $client['id'] }})" title="Batasi Limit">
                                         <i class="fas fa-lock text-sm"></i>
                                     </button>

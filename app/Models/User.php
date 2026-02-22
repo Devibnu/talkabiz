@@ -14,6 +14,148 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    // ==================== IMPERSONATION SUPPORT ====================
+    
+    /**
+     * Runtime attribute overrides for client impersonation.
+     * 
+     * When an Owner impersonates a Client, these overrides replace
+     * the real attribute values for klien_id, plan fields, etc.
+     * This makes ALL 120+ existing call sites transparently resolve
+     * to the impersonated client without any code changes.
+     * 
+     * NEVER persisted to database — request-scoped only.
+     * Set by ImpersonateClient middleware via ClientContextService.
+     * 
+     * @var array<string, mixed>
+     */
+    protected array $impersonationOverrides = [];
+
+    /**
+     * The impersonated client User model (for reference/logging).
+     * 
+     * @var User|null
+     */
+    protected ?User $impersonatedClientUser = null;
+
+    /**
+     * Start impersonation — set attribute overrides from client user.
+     * 
+     * Called by ClientContextService::applyImpersonation().
+     * Once set, getAttribute() intercepts all reads for overridden keys.
+     * 
+     * Overridden attributes:
+     * - klien_id → client's klien_id (drives wallet, subscription, contacts, campaigns)
+     * - current_plan_id → client's plan
+     * - plan_started_at → client's plan start
+     * - plan_expires_at → client's plan expiry
+     * - plan_status → client's plan status
+     * - plan_source → client's plan source
+     * - messages_sent_monthly, messages_sent_daily → client's usage
+     * - active_campaigns_count, connected_wa_numbers → client's counts
+     * 
+     * @param User $clientUser The client User being impersonated
+     */
+    public function startImpersonation(User $clientUser): void
+    {
+        $this->impersonatedClientUser = $clientUser;
+        
+        $this->impersonationOverrides = [
+            // Core FK — drives ALL klien-based lookups (wallet, subscription, contacts, campaigns)
+            'klien_id' => $clientUser->getRawOriginal('klien_id'),
+            
+            // Plan fields — so dashboard/plan display shows client's plan
+            'current_plan_id' => $clientUser->getRawOriginal('current_plan_id'),
+            'plan_started_at' => $clientUser->getRawOriginal('plan_started_at'),
+            'plan_expires_at' => $clientUser->getRawOriginal('plan_expires_at'),
+            'plan_status' => $clientUser->getRawOriginal('plan_status'),
+            'plan_source' => $clientUser->getRawOriginal('plan_source'),
+            
+            // Usage counters — so quota displays show client's usage
+            'messages_sent_monthly' => $clientUser->getRawOriginal('messages_sent_monthly'),
+            'messages_sent_daily' => $clientUser->getRawOriginal('messages_sent_daily'),
+            'messages_sent_hourly' => $clientUser->getRawOriginal('messages_sent_hourly'),
+            'active_campaigns_count' => $clientUser->getRawOriginal('active_campaigns_count'),
+            'connected_wa_numbers' => $clientUser->getRawOriginal('connected_wa_numbers'),
+            
+            // Onboarding (for domain.setup middleware bypass)
+            'onboarding_complete' => $clientUser->getRawOriginal('onboarding_complete'),
+        ];
+
+        // Clear cached relationships so they re-resolve with overridden FK values
+        $this->unsetRelation('klien');
+        $this->unsetRelation('currentPlan');
+        $this->unsetRelation('wallet');
+    }
+
+    /**
+     * Stop impersonation — clear all overrides.
+     */
+    public function stopImpersonation(): void
+    {
+        $this->impersonationOverrides = [];
+        $this->impersonatedClientUser = null;
+        
+        // Clear cached relationships to restore real values
+        $this->unsetRelation('klien');
+        $this->unsetRelation('currentPlan');
+        $this->unsetRelation('wallet');
+    }
+
+    /**
+     * Check if this user is currently impersonating a client.
+     */
+    public function isImpersonating(): bool
+    {
+        return !empty($this->impersonationOverrides);
+    }
+
+    /**
+     * Get the impersonated client User model.
+     */
+    public function getImpersonatedClientUser(): ?User
+    {
+        return $this->impersonatedClientUser;
+    }
+
+    /**
+     * Get the real (non-impersonated) klien_id.
+     * Always returns the owner's actual klien_id from the database.
+     */
+    public function getRealKlienId(): ?int
+    {
+        return $this->getRawOriginal('klien_id');
+    }
+
+    /**
+     * Override getAttribute to transparently return impersonated values.
+     * 
+     * CRITICAL: This is the zero-footprint impersonation mechanism.
+     * ALL existing code reading $user->klien_id, $user->current_plan_id, etc.
+     * will automatically get the impersonated values without any changes.
+     * 
+     * @param string $key
+     * @return mixed
+     */
+    public function getAttribute($key)
+    {
+        // Check impersonation overrides FIRST (before any Eloquent resolution)
+        if (!empty($this->impersonationOverrides) && array_key_exists($key, $this->impersonationOverrides)) {
+            $value = $this->impersonationOverrides[$key];
+            
+            // Apply casts for datetime fields (so they return Carbon instances)
+            if (in_array($key, ['plan_started_at', 'plan_expires_at']) && $value !== null) {
+                return \Illuminate\Support\Carbon::parse($value);
+            }
+            
+            return $value;
+        }
+
+        return parent::getAttribute($key);
+    }
+
+    // ==================== END IMPERSONATION SUPPORT ====================
+
     /**
      * The attributes that are mass assignable.
      *
@@ -186,8 +328,8 @@ class User extends Authenticatable
      */
     public function hasCompleteDomainSetup(): bool
     {
-        // Super admin and owner don't need klien/wallet
-        if (in_array($this->role, ['super_admin', 'superadmin', 'owner'])) {
+        // Super admin and owner don't need klien/wallet (UNLESS impersonating)
+        if (in_array($this->role, ['super_admin', 'superadmin', 'owner']) && !$this->isImpersonating()) {
             return true;
         }
         

@@ -68,6 +68,7 @@ class Kernel extends HttpKernel
          */
         'client.access' => [
             'auth',           // Step 1: Authentication (guest → /login)
+            'impersonate.client', // Step 1.5: Apply impersonation overrides (BEFORE domain.setup)
             'domain.setup',   // Step 2: Onboarding check (CLIENT only, OWNER bypass)
             'share.subscription.status', // Step 3: Share plan expiry data for banner display
         ],
@@ -92,6 +93,7 @@ class Kernel extends HttpKernel
         // ============ CORE AUTHENTICATION & ACCESS CONTROL ============
         'auth' => \App\Http\Middleware\Authenticate::class,
         'domain.setup' => \App\Http\Middleware\EnsureDomainSetup::class, // ONBOARDING CHECK (LOCKED)
+        'impersonate.client' => \App\Http\Middleware\ImpersonateClient::class, // CLIENT IMPERSONATION (Owner-only)
         
         // ============ ROLE-BASED ACCESS ============
         'role' => \App\Http\Middleware\CheckRole::class,

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\BrandingService;
 use App\Services\CacheVersionService;
 use App\Services\CfoCacheService;
+use App\Services\ClientContextService;
 use App\Services\LandingCacheService;
 use App\Services\SettingsService;
 use App\Services\TaxCacheService;
@@ -30,6 +31,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CfoCacheService::class);
         $this->app->singleton(LandingCacheService::class);
 
+        // Client impersonation service (singleton — shared state per request)
+        $this->app->singleton(ClientContextService::class);
+
         $this->app->singleton(BrandingService::class, function () {
             return new BrandingService();
         });
@@ -44,6 +48,18 @@ class AppServiceProvider extends ServiceProvider
     {
         // Register model observers
         \App\Models\PlanTransaction::observe(\App\Observers\PlanTransactionObserver::class);
+
+        // Share impersonation state to ALL views
+        View::composer('*', function ($view) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $view->with('__isImpersonating', $user?->isImpersonating() ?? false);
+            if ($user?->isImpersonating()) {
+                $meta = app(ClientContextService::class)->getImpersonationMeta();
+                $view->with('__impersonationMeta', $meta);
+            } else {
+                $view->with('__impersonationMeta', []);
+            }
+        });
 
         // Share branding data to ALL views (SSOT)
         View::composer('*', function ($view) {

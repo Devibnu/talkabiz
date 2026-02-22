@@ -75,8 +75,9 @@ class ShareSubscriptionStatus
                 // dd('ShareSubscriptionStatus', compact('isActive', 'isGrace', 'graceDaysRemaining'));
             }
 
-            // Admin/Owner always considered active
-            if (in_array($user->role, ['super_admin', 'superadmin', 'owner'], true)) {
+            // Admin/Owner always considered active (UNLESS impersonating a client)
+            // When impersonating, we want to see the CLIENT's real subscription status
+            if (in_array($user->role, ['super_admin', 'superadmin', 'owner'], true) && !$user->isImpersonating()) {
                 $isActive = true;
             }
 

@@ -51,7 +51,8 @@ class DashboardController extends Controller
         ]);
         
         // Super Admin and Owner handling - no wallet needed
-        if (in_array($user->role, ['super_admin', 'superadmin', 'owner', 'admin'])) {
+        // EXCEPTION: When impersonating a client, show client dashboard instead
+        if (in_array($user->role, ['super_admin', 'superadmin', 'owner', 'admin']) && !$user->isImpersonating()) {
             Log::debug('Dashboard: Render admin dashboard', ['role' => $user->role]);
             return $this->renderAdminDashboard($user);
         }

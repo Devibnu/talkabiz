@@ -3,6 +3,7 @@
 use App\Http\Controllers\ChangePasswordController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\InfoUserController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\RegisterController;
@@ -232,6 +233,13 @@ Route::middleware(['client.access'])->group(function () {
 		// Client (umkm) DIBLOKIR dari route berikut
 		// Hanya role 'owner', 'super_admin', 'admin' yang bisa akses
 		Route::middleware(['ensure.owner'])->group(function () {
+
+			// ============ CLIENT IMPERSONATION (Owner/Super Admin only) ============
+			// Owner can "view as client" to see their dashboard, subscription, wallet, etc.
+			// All impersonation events are logged to security channel.
+			Route::post('owner/impersonate/{klienId}', [ImpersonationController::class, 'start'])->name('owner.impersonate.start');
+			Route::post('owner/impersonate-stop', [ImpersonationController::class, 'stop'])->name('owner.impersonate.stop');
+			Route::get('owner/impersonate/status', [ImpersonationController::class, 'status'])->name('owner.impersonate.status');
 
 			// Settings - Payment Gateway (Super Admin only)
 			Route::get('settings/payment-gateway', [PaymentGatewayController::class, 'index'])->name('settings.payment-gateway');

@@ -32,6 +32,41 @@
 
 <body class="g-sidenav-show  bg-gray-100 {{ (\Request::is('rtl') ? 'rtl' : (Request::is('virtual-reality') ? 'virtual-reality' : '')) }} ">
   @auth
+    {{-- ============ IMPERSONATION BANNER ============ --}}
+    {{-- Shows when Owner is viewing as a Client --}}
+    @if(auth()->user()->isImpersonating())
+      @php
+        $impersonationMeta = app(\App\Services\ClientContextService::class)->getImpersonationMeta();
+      @endphp
+      <div id="impersonation-banner" 
+           style="position: fixed; top: 0; left: 0; right: 0; z-index: 9999; 
+                  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                  color: white; padding: 8px 20px; text-align: center; 
+                  font-size: 14px; font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+          <span>
+            <i class="fas fa-eye" style="margin-right: 6px;"></i>
+            Mode Impersonasi — Melihat sebagai: 
+            <strong>{{ $impersonationMeta['klien_nama'] ?? 'Unknown' }}</strong>
+            (Klien #{{ $impersonationMeta['klien_id'] ?? '-' }})
+          </span>
+          <form action="{{ route('owner.impersonate.stop') }}" method="POST" style="display: inline;">
+            @csrf
+            <button type="submit" 
+                    style="background: rgba(255,255,255,0.25); border: 2px solid white; color: white; 
+                           padding: 4px 16px; border-radius: 20px; cursor: pointer; font-weight: 600;
+                           font-size: 13px; transition: all 0.2s;">
+              <i class="fas fa-times-circle" style="margin-right: 4px;"></i>
+              Kembali ke Owner
+            </button>
+          </form>
+        </div>
+      </div>
+      {{-- Push body down to account for fixed banner --}}
+      <div style="height: 44px;"></div>
+    @endif
+    {{-- ============ END IMPERSONATION BANNER ============ --}}
+
     @yield('auth')
   @endauth
   @guest

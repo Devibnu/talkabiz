@@ -44,6 +44,13 @@ class EnsureClient
             abort(403, 'Unauthorized access. Authentication required.');
         }
 
+        // IMPERSONATION BYPASS: Owner impersonating a client is allowed through
+        // The ImpersonateClient middleware has already set klien_id overrides,
+        // so all downstream code sees the client's data transparently.
+        if ($user->isImpersonating()) {
+            return $next($request);
+        }
+
         // Block owner/admin roles from client-only routes
         if (in_array($user->role, self::BLOCKED_ROLES, true)) {
             SecurityLog::warning('CLIENT_ROUTE_BLOCKED', [

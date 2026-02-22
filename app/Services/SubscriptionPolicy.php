@@ -530,10 +530,18 @@ class SubscriptionPolicy
     // ==================== HELPER METHODS ====================
 
     /**
-     * Check if user has admin role (bypass all checks)
+     * Check if user has admin role (bypass all checks).
+     * 
+     * IMPERSONATION: When owner is impersonating a client, do NOT bypass.
+     * The owner should see the client's actual subscription state.
      */
     protected function isAdminRole(User $user): bool
     {
+        // When impersonating, treat as client (no admin bypass)
+        if ($user->isImpersonating()) {
+            return false;
+        }
+        
         return in_array($user->role, ['super_admin', 'superadmin', 'owner'], true);
     }
 
