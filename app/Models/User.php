@@ -53,6 +53,8 @@ class User extends Authenticatable
      * - plan_source → client's plan source
      * - messages_sent_monthly, messages_sent_daily → client's usage
      * - active_campaigns_count, connected_wa_numbers → client's counts
+     * - campaign_send_enabled, max_active_campaign → campaign guards
+     * - daily_message_quota, monthly_message_quota → quota guards
      * 
      * @param User $clientUser The client User being impersonated
      */
@@ -71,6 +73,13 @@ class User extends Authenticatable
             'plan_status' => $clientUser->getRawOriginal('plan_status'),
             'plan_source' => $clientUser->getRawOriginal('plan_source'),
             
+            // Campaign & Safety Guards — OnboardingService/CampaignGuard reads these
+            'campaign_send_enabled' => $clientUser->getRawOriginal('campaign_send_enabled'),
+            'max_active_campaign' => $clientUser->getRawOriginal('max_active_campaign'),
+            'template_status' => $clientUser->getRawOriginal('template_status'),
+            'daily_message_quota' => $clientUser->getRawOriginal('daily_message_quota'),
+            'monthly_message_quota' => $clientUser->getRawOriginal('monthly_message_quota'),
+            
             // Usage counters — so quota displays show client's usage
             'messages_sent_monthly' => $clientUser->getRawOriginal('messages_sent_monthly'),
             'messages_sent_daily' => $clientUser->getRawOriginal('messages_sent_daily'),
@@ -78,8 +87,13 @@ class User extends Authenticatable
             'active_campaigns_count' => $clientUser->getRawOriginal('active_campaigns_count'),
             'connected_wa_numbers' => $clientUser->getRawOriginal('connected_wa_numbers'),
             
-            // Onboarding (for domain.setup middleware bypass)
+            // Onboarding & Profile (for domain.setup and campaign flow)
             'onboarding_complete' => $clientUser->getRawOriginal('onboarding_complete'),
+            'onboarding_completed_at' => $clientUser->getRawOriginal('onboarding_completed_at'),
+            'segment' => $clientUser->getRawOriginal('segment'),
+            'launch_phase' => $clientUser->getRawOriginal('launch_phase'),
+            'approved_at' => $clientUser->getRawOriginal('approved_at'),
+            'risk_level' => $clientUser->getRawOriginal('risk_level'),
         ];
 
         // Clear cached relationships so they re-resolve with overridden FK values
@@ -144,8 +158,18 @@ class User extends Authenticatable
             $value = $this->impersonationOverrides[$key];
             
             // Apply casts for datetime fields (so they return Carbon instances)
-            if (in_array($key, ['plan_started_at', 'plan_expires_at']) && $value !== null) {
+            if (in_array($key, ['plan_started_at', 'plan_expires_at', 'onboarding_completed_at', 'approved_at']) && $value !== null) {
                 return \Illuminate\Support\Carbon::parse($value);
+            }
+            
+            // Apply boolean cast
+            if (in_array($key, ['campaign_send_enabled', 'onboarding_complete'])) {
+                return (bool) $value;
+            }
+            
+            // Apply integer cast
+            if (in_array($key, ['max_active_campaign', 'daily_message_quota', 'monthly_message_quota', 'messages_sent_monthly', 'messages_sent_daily', 'messages_sent_hourly', 'active_campaigns_count', 'connected_wa_numbers'])) {
+                return (int) ($value ?? 0);
             }
             
             return $value;

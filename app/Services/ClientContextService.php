@@ -220,6 +220,25 @@ class ClientContextService
     }
 
     /**
+     * Get the effective client user — impersonated or current auth user.
+     * 
+     * Convenience method for any code that needs "the current client context".
+     * Returns the impersonated client User when impersonating,
+     * or the authenticated user when not (if they have a klien_id).
+     * 
+     * @return User|null
+     */
+    public function currentClient(): ?User
+    {
+        if ($this->isImpersonating()) {
+            return $this->getClientUser();
+        }
+
+        $user = Auth::user();
+        return ($user && $user->klien_id) ? $user : null;
+    }
+
+    /**
      * Apply impersonation overrides to the authenticated user.
      * Called by ImpersonateClient middleware early in the pipeline.
      * 

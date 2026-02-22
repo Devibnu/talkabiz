@@ -41,8 +41,9 @@
                 </a>
             </li>
             
-            @if(in_array(auth()->user()->role ?? '', ['super_admin', 'owner', 'admin']))
+            @if(in_array(auth()->user()->role ?? '', ['super_admin', 'owner', 'admin', 'umkm']))
             {{-- Campaign - Show lock if WA not connected --}}
+            {{-- Visible to all authenticated roles including impersonating owners --}}
             @php
                 $canAccessCampaign = auth()->user()->klien?->wa_terhubung ?? false;
             @endphp
