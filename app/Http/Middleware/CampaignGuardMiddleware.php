@@ -47,6 +47,26 @@ class CampaignGuardMiddleware
         }
 
         // =============================
+        // 0. Impersonation bypass (VIEW-ONLY)
+        // =============================
+        // When owner is impersonating a client, allow campaign page access
+        // so the owner can VIEW the client's campaign state.
+        // Subscription is still validated, but onboarding/WA/quota checks
+        // are relaxed since the owner is just viewing, not sending.
+        if ($user->isImpersonating()) {
+            // Still verify the client has an active subscription
+            try {
+                $this->subscriptionGate->requireActiveSubscription($user);
+            } catch (NoActiveSubscriptionException $e) {
+                return $this->denyAccess($request, $e->getMessage(), 'no_subscription');
+            } catch (SubscriptionExpiredException $e) {
+                return $this->denyAccess($request, $e->getMessage(), 'subscription_expired');
+            }
+            // Skip onboarding/WA/quota checks — owner is viewing, not sending
+            return $next($request);
+        }
+
+        // =============================
         // 1. Check subscription enforcement
         // =============================
         try {
