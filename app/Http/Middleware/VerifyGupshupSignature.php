@@ -54,7 +54,7 @@ class VerifyGupshupSignature
         
         // Check if secret is configured
         if (empty($secret)) {
-            Log::channel('security')->error('GUPSHUP_WEBHOOK_SECRET not configured', [
+            \App\Helpers\SecurityLog::error('GUPSHUP_WEBHOOK_SECRET not configured', [
                 'ip' => $clientIp,
             ]);
             
@@ -94,7 +94,7 @@ class VerifyGupshupSignature
      */
     private function logSecurityViolation(string $event, array $context): void
     {
-        Log::channel('security')->warning("GUPSHUP_SECURITY: {$event}", array_merge($context, [
+        \App\Helpers\SecurityLog::warning("GUPSHUP_SECURITY: {$event}", array_merge($context, [
             'timestamp' => now()->toIso8601String(),
             'middleware' => 'VerifyGupshupSignature',
         ]));

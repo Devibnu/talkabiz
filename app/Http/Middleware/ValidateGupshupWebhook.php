@@ -240,7 +240,7 @@ class ValidateGupshupWebhook
         
         // Secret WAJIB ada di production
         if (empty($secret)) {
-            Log::channel('security')->critical('GUPSHUP_WEBHOOK_SECRET not configured!');
+            \App\Helpers\SecurityLog::critical('GUPSHUP_WEBHOOK_SECRET not configured!');
             return [
                 'valid' => false,
                 'reason' => 'webhook_secret_not_configured',
@@ -378,7 +378,7 @@ class ValidateGupshupWebhook
      */
     private function logSecurityViolation(string $type, array $context): void
     {
-        Log::channel('security')->warning("WEBHOOK_SECURITY_VIOLATION: {$type}", array_merge($context, [
+        \App\Helpers\SecurityLog::warning("WEBHOOK_SECURITY_VIOLATION: {$type}", array_merge($context, [
             'provider' => 'gupshup',
             'severity' => $this->getViolationSeverity($type),
             'timestamp' => now()->toIso8601String(),

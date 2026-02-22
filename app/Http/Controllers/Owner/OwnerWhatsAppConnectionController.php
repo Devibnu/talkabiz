@@ -162,7 +162,7 @@ class OwnerWhatsAppConnectionController extends Controller
             Cache::forget("whatsapp_connection_status:{$connection->klien_id}");
             
             // Log to security
-            Log::channel('security')->info('OWNER_FORCE_DISCONNECT', [
+            \App\Helpers\SecurityLog::info('OWNER_FORCE_DISCONNECT', [
                 'action' => 'force_disconnect',
                 'connection_id' => $id,
                 'klien_id' => $connection->klien_id,
@@ -201,7 +201,7 @@ class OwnerWhatsAppConnectionController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             
-            Log::channel('security')->error('OWNER_FORCE_DISCONNECT_FAILED', [
+            \App\Helpers\SecurityLog::error('OWNER_FORCE_DISCONNECT_FAILED', [
                 'connection_id' => $id,
                 'error' => $e->getMessage(),
             ]);
@@ -251,7 +251,7 @@ class OwnerWhatsAppConnectionController extends Controller
             
             Cache::forget("whatsapp_connection_status:{$connection->klien_id}");
             
-            Log::channel('security')->info('OWNER_RESET_TO_PENDING', [
+            \App\Helpers\SecurityLog::info('OWNER_RESET_TO_PENDING', [
                 'connection_id' => $id,
                 'klien_id' => $connection->klien_id,
                 'old_status' => $oldStatus,

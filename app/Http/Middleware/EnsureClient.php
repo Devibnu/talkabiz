@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Helpers\SecurityLog;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -45,7 +46,7 @@ class EnsureClient
 
         // Block owner/admin roles from client-only routes
         if (in_array($user->role, self::BLOCKED_ROLES, true)) {
-            \Illuminate\Support\Facades\Log::channel('security')->warning('CLIENT_ROUTE_BLOCKED', [
+            SecurityLog::warning('CLIENT_ROUTE_BLOCKED', [
                 'user_id' => $user->id,
                 'user_email' => $user->email,
                 'user_role' => $user->role,

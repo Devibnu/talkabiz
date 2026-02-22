@@ -203,7 +203,7 @@ class PreventReplayAttack
      */
     private function logSecurityViolation(string $event, array $context): void
     {
-        Log::channel('security')->warning("GUPSHUP_SECURITY: {$event}", array_merge($context, [
+        \App\Helpers\SecurityLog::warning("GUPSHUP_SECURITY: {$event}", array_merge($context, [
             'timestamp' => now()->toIso8601String(),
             'middleware' => 'PreventReplayAttack',
         ]));

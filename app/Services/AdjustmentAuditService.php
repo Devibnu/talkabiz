@@ -425,7 +425,7 @@ class AdjustmentAuditService
         if ($shouldNotify) {
             // Send notification (email, Slack, etc.)
             // Implementation depends on your notification system
-            Log::channel('security')->info('Security team notification', [
+            \App\Helpers\SecurityLog::info('Security team notification', [
                 'adjustment_id' => $adjustment->adjustment_id,
                 'action' => $action,
                 'amount' => $adjustment->amount,
@@ -446,7 +446,7 @@ class AdjustmentAuditService
         string $message, 
         array $data = []
     ): void {
-        Log::channel('security')->alert($message, array_merge($data, [
+        \App\Helpers\SecurityLog::alert($message, array_merge($data, [
             'adjustment_id' => $adjustment?->adjustment_id,
             'timestamp' => now()->toISOString(),
             'requires_immediate_attention' => true
@@ -524,7 +524,7 @@ class AdjustmentAuditService
     {
         // Implementation depends on your user management system
         // For example: disable user account, invalidate sessions, etc.
-        Log::channel('security')->critical('User auto-blocked due to security violation', [
+        \App\Helpers\SecurityLog::critical('User auto-blocked due to security violation', [
             'user_id' => $userId,
             'reason' => $reason,
             'timestamp' => now()->toISOString(),
@@ -539,7 +539,7 @@ class AdjustmentAuditService
     {
         // Send immediate notifications to security team
         // SMS, Slack, email, webhook, etc.
-        Log::channel('security')->emergency('CRITICAL SECURITY VIOLATION', [
+        \App\Helpers\SecurityLog::emergency('CRITICAL SECURITY VIOLATION', [
             'violation_type' => $violationType,
             'data' => $violationData,
             'timestamp' => now()->toISOString(),

@@ -230,7 +230,7 @@ class GupshupWhatsAppNumberController extends Controller
         // Validate transition using enum rules
         // isWebhook = true because we ARE the webhook
         if (!$currentStatusEnum->canTransitionTo($newStatusEnum, isWebhook: true)) {
-            Log::channel('security')->warning('invalid_status_transition_attempt', [
+            \App\Helpers\SecurityLog::warning('invalid_status_transition_attempt', [
                 'connection_id' => $connection->id,
                 'from' => $currentStatusEnum->value,
                 'to' => $newStatusValue,
@@ -318,7 +318,7 @@ class GupshupWhatsAppNumberController extends Controller
                 // Validate app_id if provided (anti-spoof)
                 if (!empty($appId) && !empty($connection->gupshup_app_id) 
                     && $connection->gupshup_app_id !== $appId) {
-                    Log::channel('security')->warning('webhook_app_id_mismatch', [
+                    \App\Helpers\SecurityLog::warning('webhook_app_id_mismatch', [
                         'phone' => $this->maskPhone($phone),
                         'expected_app_id' => $connection->gupshup_app_id,
                         'received_app_id' => $appId,

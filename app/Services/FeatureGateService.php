@@ -326,7 +326,7 @@ class FeatureGateService
      */
     protected function logAccessDenied(User $user, string $feature, string $code): void
     {
-        Log::channel('security')->warning('FeatureGate: Access denied', [
+        \App\Helpers\SecurityLog::warning('FeatureGate: Access denied', [
             'user_id' => $user->id,
             'user_email' => $user->email,
             'feature' => $feature,

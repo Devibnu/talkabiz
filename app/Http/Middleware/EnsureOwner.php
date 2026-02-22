@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Helpers\SecurityLog;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -39,7 +40,7 @@ class EnsureOwner
         // Check if user has owner role
         if (!in_array($user->role, self::ALLOWED_ROLES, true)) {
             // Log unauthorized access attempt
-            \Illuminate\Support\Facades\Log::channel('security')->warning('OWNER_ACCESS_DENIED', [
+            SecurityLog::warning('OWNER_ACCESS_DENIED', [
                 'user_id' => $user->id,
                 'user_email' => $user->email,
                 'user_role' => $user->role,
