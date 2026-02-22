@@ -77,16 +77,20 @@ Route::prefix('xendit')->group(function () {
 */
 
 Route::middleware('auth:sanctum')->prefix('billing')->group(function () {
-    // Unified Top Up - Auto-routes to active gateway (RECOMMENDED)
-    Route::post('/topup', [BillingController::class, 'topUpUnified'])
-        ->name('billing.topup-unified');
-    
-    // Gateway-specific routes (legacy, still supported)
-    Route::post('/topup-midtrans', [BillingController::class, 'topUpMidtrans'])
-        ->name('billing.topup-midtrans');
-    
-    Route::post('/topup-xendit', [BillingController::class, 'topUpXendit'])
-        ->name('billing.topup-xendit');
+    // ==================== CLIENT-ONLY BILLING API ====================
+    // Topup routes — Owner/Admin BLOCKED (ensure.client)
+    Route::middleware('ensure.client')->group(function () {
+        // Unified Top Up - Auto-routes to active gateway (RECOMMENDED)
+        Route::post('/topup', [BillingController::class, 'topUpUnified'])
+            ->name('billing.topup-unified');
+        
+        // Gateway-specific routes (legacy, still supported)
+        Route::post('/topup-midtrans', [BillingController::class, 'topUpMidtrans'])
+            ->name('billing.topup-midtrans');
+        
+        Route::post('/topup-xendit', [BillingController::class, 'topUpXendit'])
+            ->name('billing.topup-xendit');
+    });
 
     // ==================== Billing Usage & Cost API ====================
     // Cost tracking and billing dashboard endpoints
@@ -412,7 +416,7 @@ Route::middleware(['auth:sanctum', 'role:owner|admin'])->prefix('owner/adjustmen
 |
 */
 
-Route::middleware('auth:sanctum')->prefix('subscription')->group(function () {
+Route::middleware(['auth:sanctum', 'ensure.client'])->prefix('subscription')->group(function () {
     // Get current subscription
     Route::get('/current', [\App\Http\Controllers\Api\SubscriptionChangeController::class, 'current'])
         ->name('subscription.current');
@@ -1857,8 +1861,9 @@ Route::prefix('wallet')->middleware('auth:sanctum')->group(function () {
     Route::get('/transactions', [App\Http\Controllers\Api\WalletController::class, 'getTransactions'])
         ->name('api.wallet.transactions');
     
-    // Request topup
+    // Request topup (Client-only — Owner/Admin BLOCKED)
     Route::post('/topup', [App\Http\Controllers\Api\WalletController::class, 'requestTopup'])
+        ->middleware('ensure.client')
         ->name('api.wallet.topup');
     
     // Check message sending eligibility

@@ -55,6 +55,7 @@ class SubscriptionController extends Controller
         PaymentGatewayService $gatewayService
     ) {
         $this->middleware('auth');
+        $this->middleware('ensure.client');
         $this->activationService = $activationService;
         $this->midtransService = $midtransService;
         $this->subscriptionService = $subscriptionService;

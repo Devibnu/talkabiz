@@ -33,6 +33,7 @@ class PlanChangeController extends Controller
     public function __construct(PlanChangeService $planChangeService)
     {
         $this->middleware('auth');
+        $this->middleware('ensure.client');
         $this->planChangeService = $planChangeService;
     }
 

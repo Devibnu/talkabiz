@@ -34,6 +34,7 @@ class TopupController extends Controller
         WalletService $walletService,
         AutoPricingService $pricingService
     ) {
+        $this->middleware('ensure.client');
         $this->walletService = $walletService;
         $this->pricingService = $pricingService;
     }

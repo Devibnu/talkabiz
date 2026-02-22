@@ -155,63 +155,70 @@ Route::middleware(['client.access'])->group(function () {
 		Route::delete('kontak/{id}', [KontakController::class, 'destroy'])->name('kontak.destroy');
 		Route::get('api/kontak', [KontakController::class, 'list'])->name('kontak.list');
 
-		// Billing Routes
-		Route::get('billing', [BillingController::class, 'index'])->name('billing');
-		Route::get('billing/upgrade', [BillingController::class, 'upgrade'])->name('billing.upgrade');
+		// ==================== CLIENT-ONLY ROUTES ====================
+		// Owner/Admin DIBLOKIR dari route berikut (subscription, billing, topup, invoice)
+		// Hanya role 'umkm' (Client) yang bisa akses
+		Route::middleware(['ensure.client'])->group(function () {
 
-		// Subscription Routes (Paket & Langganan — separated from Billing/Wallet)
-		Route::get('subscription', [\App\Http\Controllers\SubscriptionController::class, 'index'])->name('subscription.index');
-		Route::post('subscription/checkout', [\App\Http\Controllers\SubscriptionController::class, 'checkout'])->name('subscription.checkout');
-		// subscription/check-status REMOVED → Webhook-only architecture
+			// Billing Routes
+			Route::get('billing', [BillingController::class, 'index'])->name('billing');
+			Route::get('billing/upgrade', [BillingController::class, 'upgrade'])->name('billing.upgrade');
 
-		// Plan Change Routes (Upgrade/Downgrade with Prorate)
-		Route::post('subscription/change-plan', [\App\Http\Controllers\PlanChangeController::class, 'execute'])->name('subscription.change-plan');
-		Route::post('subscription/change-plan/preview', [\App\Http\Controllers\PlanChangeController::class, 'preview'])->name('subscription.change-plan.preview');
+			// Subscription Routes (Paket & Langganan — separated from Billing/Wallet)
+			Route::get('subscription', [\App\Http\Controllers\SubscriptionController::class, 'index'])->name('subscription.index');
+			Route::post('subscription/checkout', [\App\Http\Controllers\SubscriptionController::class, 'checkout'])->name('subscription.checkout');
+			// subscription/check-status REMOVED → Webhook-only architecture
 
-		// Activation Funnel KPI Routes (Growth Engine)
-		Route::post('api/activation/track', [\App\Http\Controllers\Api\ActivationController::class, 'track'])->name('activation.track');
-		Route::post('api/activation/modal-shown', [\App\Http\Controllers\Api\ActivationController::class, 'modalShown'])->name('activation.modal-shown');
+			// Plan Change Routes (Upgrade/Downgrade with Prorate)
+			Route::post('subscription/change-plan', [\App\Http\Controllers\PlanChangeController::class, 'execute'])->name('subscription.change-plan');
+			Route::post('subscription/change-plan/preview', [\App\Http\Controllers\PlanChangeController::class, 'preview'])->name('subscription.change-plan.preview');
 
-		Route::post('billing/topup', [BillingController::class, 'topUp'])->name('billing.topup');
-		Route::get('api/billing/history', [BillingController::class, 'history'])->name('billing.history');
-		Route::get('api/billing/wallet', [BillingController::class, 'getWalletInfo'])->name('billing.wallet');
-		Route::get('api/billing/quota', [BillingController::class, 'getQuota'])->name('billing.quota');
-		Route::post('billing/topup/{id}/confirm', [BillingController::class, 'confirmTopUp'])->name('billing.topup.confirm');
-		Route::post('billing/topup/{id}/reject', [BillingController::class, 'rejectTopUp'])->name('billing.topup.reject');
-		Route::post('billing/quick-topup', [BillingController::class, 'quickTopUp'])->name('billing.quick-topup');
+			// Activation Funnel KPI Routes (Growth Engine)
+			Route::post('api/activation/track', [\App\Http\Controllers\Api\ActivationController::class, 'track'])->name('activation.track');
+			Route::post('api/activation/modal-shown', [\App\Http\Controllers\Api\ActivationController::class, 'modalShown'])->name('activation.modal-shown');
 
-		// LEGACY: /billing/plan routes removed — subscription is at /subscription
-		// Redirect legacy URLs so old bookmarks/emails still work
-		Route::get('billing/plan', fn() => redirect()->route('subscription.index'))->name('billing.plan.index');
-		Route::get('billing/plan/{code}', fn() => redirect()->route('subscription.index'));
+			Route::post('billing/topup', [BillingController::class, 'topUp'])->name('billing.topup');
+			Route::get('api/billing/history', [BillingController::class, 'history'])->name('billing.history');
+			Route::get('api/billing/wallet', [BillingController::class, 'getWalletInfo'])->name('billing.wallet');
+			Route::get('api/billing/quota', [BillingController::class, 'getQuota'])->name('billing.quota');
+			Route::post('billing/topup/{id}/confirm', [BillingController::class, 'confirmTopUp'])->name('billing.topup.confirm');
+			Route::post('billing/topup/{id}/reject', [BillingController::class, 'rejectTopUp'])->name('billing.topup.reject');
+			Route::post('billing/quick-topup', [BillingController::class, 'quickTopUp'])->name('billing.quick-topup');
 
-		// ==================== INVOICE ROUTES ====================
+			// LEGACY: /billing/plan routes removed — subscription is at /subscription
+			// Redirect legacy URLs so old bookmarks/emails still work
+			Route::get('billing/plan', fn() => redirect()->route('subscription.index'))->name('billing.plan.index');
+			Route::get('billing/plan/{code}', fn() => redirect()->route('subscription.index'));
 
-		// Topup Invoice Routes (specific prefix — MUST be before general {id} catch-all)
-		Route::prefix('invoices/topup')->name('invoices.topup.')->group(function () {
-			Route::get('/', [TopupInvoiceController::class, 'index'])->name('index');
-			Route::get('{id}', [TopupInvoiceController::class, 'show'])->name('show');
-			Route::get('{id}/pdf', [TopupInvoiceController::class, 'pdf'])->name('pdf');
-			Route::get('{id}/download', [TopupInvoiceController::class, 'download'])->name('download');
-		});
+			// ==================== INVOICE ROUTES ====================
 
-		// Unified Invoice Routes (all types: subscription, topup, recurring, upgrade)
-		Route::prefix('invoices')->name('invoices.')->group(function () {
-			Route::get('/', [InvoiceWebController::class, 'index'])->name('index');
-			Route::get('{id}/pdf', [InvoiceWebController::class, 'pdf'])->name('pdf')->where('id', '[0-9]+');
-			Route::get('{id}/download', [InvoiceWebController::class, 'download'])->name('download')->where('id', '[0-9]+');
-			Route::get('{id}', [InvoiceWebController::class, 'show'])->name('show')->where('id', '[0-9]+');
-		});
+			// Topup Invoice Routes (specific prefix — MUST be before general {id} catch-all)
+			Route::prefix('invoices/topup')->name('invoices.topup.')->group(function () {
+				Route::get('/', [TopupInvoiceController::class, 'index'])->name('index');
+				Route::get('{id}', [TopupInvoiceController::class, 'show'])->name('show');
+				Route::get('{id}/pdf', [TopupInvoiceController::class, 'pdf'])->name('pdf');
+				Route::get('{id}/download', [TopupInvoiceController::class, 'download'])->name('download');
+			});
 
-		// Topup Routes (SSOT for saldo management)
-		Route::prefix('topup')->name('topup.')->group(function () {
-			Route::get('/', [\App\Http\Controllers\TopupController::class, 'index'])->name('index');
-			Route::get('modal', [\App\Http\Controllers\TopupController::class, 'modal'])->name('modal');
-			Route::post('process', [\App\Http\Controllers\TopupController::class, 'process'])->name('process');
-			Route::get('payment', function () {
-				return view('topup.payment'); // TODO: implement payment page
-			})->name('payment.process');
-		});
+			// Unified Invoice Routes (all types: subscription, topup, recurring, upgrade)
+			Route::prefix('invoices')->name('invoices.')->group(function () {
+				Route::get('/', [InvoiceWebController::class, 'index'])->name('index');
+				Route::get('{id}/pdf', [InvoiceWebController::class, 'pdf'])->name('pdf')->where('id', '[0-9]+');
+				Route::get('{id}/download', [InvoiceWebController::class, 'download'])->name('download')->where('id', '[0-9]+');
+				Route::get('{id}', [InvoiceWebController::class, 'show'])->name('show')->where('id', '[0-9]+');
+			});
+
+			// Topup Routes (SSOT for saldo management)
+			Route::prefix('topup')->name('topup.')->group(function () {
+				Route::get('/', [\App\Http\Controllers\TopupController::class, 'index'])->name('index');
+				Route::get('modal', [\App\Http\Controllers\TopupController::class, 'modal'])->name('modal');
+				Route::post('process', [\App\Http\Controllers\TopupController::class, 'process'])->name('process');
+				Route::get('payment', function () {
+					return view('topup.payment'); // TODO: implement payment page
+				})->name('payment.process');
+			});
+
+		}); // End ensure.client middleware group
 
 		Route::get('activity-log', function () {
 			return view('activity-log');
@@ -221,72 +228,77 @@ Route::middleware(['client.access'])->group(function () {
 			return view('settings');
 		})->name('settings');
 
-		// Settings - Payment Gateway (Super Admin only)
-		Route::get('settings/payment-gateway', [PaymentGatewayController::class, 'index'])->name('settings.payment-gateway');
-		Route::post('settings/payment-gateway/midtrans', [PaymentGatewayController::class, 'updateMidtrans'])->name('settings.payment-gateway.update-midtrans');
-		Route::post('settings/payment-gateway/xendit', [PaymentGatewayController::class, 'updateXendit'])->name('settings.payment-gateway.update-xendit');
-		Route::post('settings/payment-gateway/set-active', [PaymentGatewayController::class, 'setActive'])->name('settings.payment-gateway.set-active');
-		Route::post('settings/payment-gateway/test', [PaymentGatewayController::class, 'testConnection'])->name('settings.payment-gateway.test');
+		// ==================== OWNER-ONLY ROUTES ====================
+		// Client (umkm) DIBLOKIR dari route berikut
+		// Hanya role 'owner', 'super_admin', 'admin' yang bisa akses
+		Route::middleware(['ensure.owner'])->group(function () {
 
-		
-		// Owner Dashboard (Super Admin & Owner only)
-		Route::get('owner/dashboard', [OwnerDashboardController::class, 'index'])->name('owner.dashboard');
-		Route::get('api/owner/summary', [OwnerDashboardController::class, 'apiSummary'])->name('owner.api.summary');
-		Route::get('api/owner/clients', [OwnerDashboardController::class, 'apiClientProfitability'])->name('owner.api.clients');
-		Route::get('api/owner/usage', [OwnerDashboardController::class, 'apiUsageMonitor'])->name('owner.api.usage');
-		Route::get('api/owner/flagged', [OwnerDashboardController::class, 'apiFlaggedClients'])->name('owner.api.flagged');
-		Route::get('api/owner/trial-stats', [OwnerDashboardController::class, 'apiTrialStats'])->name('owner.api.trial-stats');
-		Route::post('owner/client/{id}/limit', [OwnerDashboardController::class, 'limitClient'])->name('owner.client.limit');
-		Route::post('owner/client/{id}/pause', [OwnerDashboardController::class, 'pauseClientCampaigns'])->name('owner.client.pause');
-		Route::post('owner/refresh-cache', [OwnerDashboardController::class, 'refreshCache'])->name('owner.refresh-cache');
-		
-		// Risk Approval Panel (Owner & Super Admin only)
-		Route::get('owner/risk-approval', [RiskApprovalController::class, 'index'])->name('risk-approval.index');
-		Route::get('owner/risk-approval/{id}', [RiskApprovalController::class, 'show'])->name('risk-approval.show');
-		Route::post('owner/risk-approval/{id}/approve', [RiskApprovalController::class, 'approve'])->name('risk-approval.approve');
-		Route::post('owner/risk-approval/{id}/reject', [RiskApprovalController::class, 'reject'])->name('risk-approval.reject');
-		Route::post('owner/risk-approval/{id}/suspend', [RiskApprovalController::class, 'suspend'])->name('risk-approval.suspend');
-		Route::post('owner/risk-approval/{id}/reactivate', [RiskApprovalController::class, 'reactivate'])->name('risk-approval.reactivate');
-		
-		// Abuse Monitor Panel (Owner & Super Admin only)
-		Route::get('owner/abuse-monitor', [App\Http\Controllers\AbuseMonitorController::class, 'index'])->name('abuse-monitor.index');
-		Route::get('owner/abuse-monitor/{id}', [App\Http\Controllers\AbuseMonitorController::class, 'show'])->name('abuse-monitor.show');
-		Route::post('owner/abuse-monitor/{id}/reset', [App\Http\Controllers\AbuseMonitorController::class, 'resetScore'])->name('abuse-monitor.reset');
-		Route::post('owner/abuse-monitor/{id}/suspend', [App\Http\Controllers\AbuseMonitorController::class, 'suspendKlien'])->name('abuse-monitor.suspend');
-		Route::post('owner/abuse-monitor/{id}/approve', [App\Http\Controllers\AbuseMonitorController::class, 'approveKlien'])->name('abuse-monitor.approve');
-		
-		// Risk Rules Panel (Owner & Super Admin only)
-		Route::get('owner/risk-rules', [App\Http\Controllers\RiskRulesController::class, 'index'])->name('risk-rules.index');
-		Route::post('owner/risk-rules/update', [App\Http\Controllers\RiskRulesController::class, 'updateSettings'])->name('risk-rules.update');
-		Route::get('owner/risk-rules/escalation-history', [App\Http\Controllers\RiskRulesController::class, 'escalationHistory'])->name('risk-rules.escalation-history');
-		Route::get('owner/risk-rules/escalation-history/data', [App\Http\Controllers\RiskRulesController::class, 'escalationHistoryData'])->name('risk-rules.escalation-history.data');
-		
-		// Rate Limit Rules Panel (Owner & Super Admin only)
-		Route::get('owner/rate-limit-rules', [App\Http\Controllers\RateLimitRulesController::class, 'index'])->name('rate-limit-rules.index');
-		Route::post('owner/rate-limit-rules/{id}/update', [App\Http\Controllers\RateLimitRulesController::class, 'updateRule'])->name('rate-limit-rules.update');
-		Route::post('owner/rate-limit-rules/{id}/toggle', [App\Http\Controllers\RateLimitRulesController::class, 'toggleRule'])->name('rate-limit-rules.toggle');
-		Route::post('owner/rate-limit-rules/create', [App\Http\Controllers\RateLimitRulesController::class, 'createRule'])->name('rate-limit-rules.create');
-		Route::delete('owner/rate-limit-rules/{id}', [App\Http\Controllers\RateLimitRulesController::class, 'deleteRule'])->name('rate-limit-rules.delete');
-		Route::get('owner/rate-limit-rules/statistics', [App\Http\Controllers\RateLimitRulesController::class, 'getStatistics'])->name('rate-limit-rules.statistics');
-		Route::post('owner/rate-limit-rules/clear-logs', [App\Http\Controllers\RateLimitRulesController::class, 'clearLogs'])->name('rate-limit-rules.clear-logs');
-		
-		// Complaint Monitor Panel (Owner & Super Admin only)
-		// Static routes MUST come before {id} wildcard to avoid route conflicts
-		Route::get('owner/complaint-monitor', [App\Http\Controllers\ComplaintMonitorController::class, 'index'])->name('complaint-monitor.index');
-		Route::get('owner/complaint-monitor/statistics/data', [App\Http\Controllers\ComplaintMonitorController::class, 'getStatistics'])->name('complaint-monitor.statistics');
-		Route::get('owner/complaint-monitor/export/csv', [App\Http\Controllers\ComplaintMonitorController::class, 'export'])->name('complaint-monitor.export');
-		Route::post('owner/complaint-monitor/bulk-action', [App\Http\Controllers\ComplaintMonitorController::class, 'bulkAction'])->name('complaint-monitor.bulk-action');
-		Route::get('owner/complaint-monitor/{id}', [App\Http\Controllers\ComplaintMonitorController::class, 'show'])->name('complaint-monitor.show');
-		Route::post('owner/complaint-monitor/{id}/suspend-klien', [App\Http\Controllers\ComplaintMonitorController::class, 'suspendKlien'])->name('complaint-monitor.suspend-klien');
-		Route::post('owner/complaint-monitor/{id}/block-recipient', [App\Http\Controllers\ComplaintMonitorController::class, 'blockRecipient'])->name('complaint-monitor.block-recipient');
-		Route::post('owner/complaint-monitor/{id}/mark-processed', [App\Http\Controllers\ComplaintMonitorController::class, 'markAsProcessed'])->name('complaint-monitor.mark-processed');
-		Route::post('owner/complaint-monitor/{id}/dismiss', [App\Http\Controllers\ComplaintMonitorController::class, 'dismissComplaint'])->name('complaint-monitor.dismiss');
-		
-		// Compliance Log Panel (Owner & Super Admin only) — READ-ONLY
-		Route::get('owner/compliance-log', [App\Http\Controllers\ComplianceLogController::class, 'index'])->name('compliance-log.index');
-		Route::get('owner/compliance-log/export/csv', [App\Http\Controllers\ComplianceLogController::class, 'export'])->name('compliance-log.export');
-		Route::get('owner/compliance-log/verify-integrity', [App\Http\Controllers\ComplianceLogController::class, 'verifyIntegrity'])->name('compliance-log.verify');
-		Route::get('owner/compliance-log/{id}', [App\Http\Controllers\ComplianceLogController::class, 'show'])->name('compliance-log.show');
+			// Settings - Payment Gateway (Super Admin only)
+			Route::get('settings/payment-gateway', [PaymentGatewayController::class, 'index'])->name('settings.payment-gateway');
+			Route::post('settings/payment-gateway/midtrans', [PaymentGatewayController::class, 'updateMidtrans'])->name('settings.payment-gateway.update-midtrans');
+			Route::post('settings/payment-gateway/xendit', [PaymentGatewayController::class, 'updateXendit'])->name('settings.payment-gateway.update-xendit');
+			Route::post('settings/payment-gateway/set-active', [PaymentGatewayController::class, 'setActive'])->name('settings.payment-gateway.set-active');
+			Route::post('settings/payment-gateway/test', [PaymentGatewayController::class, 'testConnection'])->name('settings.payment-gateway.test');
+
+			// Owner Dashboard (Super Admin & Owner only)
+			Route::get('owner/dashboard', [OwnerDashboardController::class, 'index'])->name('owner.dashboard');
+			Route::get('api/owner/summary', [OwnerDashboardController::class, 'apiSummary'])->name('owner.api.summary');
+			Route::get('api/owner/clients', [OwnerDashboardController::class, 'apiClientProfitability'])->name('owner.api.clients');
+			Route::get('api/owner/usage', [OwnerDashboardController::class, 'apiUsageMonitor'])->name('owner.api.usage');
+			Route::get('api/owner/flagged', [OwnerDashboardController::class, 'apiFlaggedClients'])->name('owner.api.flagged');
+			Route::get('api/owner/trial-stats', [OwnerDashboardController::class, 'apiTrialStats'])->name('owner.api.trial-stats');
+			Route::post('owner/client/{id}/limit', [OwnerDashboardController::class, 'limitClient'])->name('owner.client.limit');
+			Route::post('owner/client/{id}/pause', [OwnerDashboardController::class, 'pauseClientCampaigns'])->name('owner.client.pause');
+			Route::post('owner/refresh-cache', [OwnerDashboardController::class, 'refreshCache'])->name('owner.refresh-cache');
+			
+			// Risk Approval Panel (Owner & Super Admin only)
+			Route::get('owner/risk-approval', [RiskApprovalController::class, 'index'])->name('risk-approval.index');
+			Route::get('owner/risk-approval/{id}', [RiskApprovalController::class, 'show'])->name('risk-approval.show');
+			Route::post('owner/risk-approval/{id}/approve', [RiskApprovalController::class, 'approve'])->name('risk-approval.approve');
+			Route::post('owner/risk-approval/{id}/reject', [RiskApprovalController::class, 'reject'])->name('risk-approval.reject');
+			Route::post('owner/risk-approval/{id}/suspend', [RiskApprovalController::class, 'suspend'])->name('risk-approval.suspend');
+			Route::post('owner/risk-approval/{id}/reactivate', [RiskApprovalController::class, 'reactivate'])->name('risk-approval.reactivate');
+			
+			// Abuse Monitor Panel (Owner & Super Admin only)
+			Route::get('owner/abuse-monitor', [App\Http\Controllers\AbuseMonitorController::class, 'index'])->name('abuse-monitor.index');
+			Route::get('owner/abuse-monitor/{id}', [App\Http\Controllers\AbuseMonitorController::class, 'show'])->name('abuse-monitor.show');
+			Route::post('owner/abuse-monitor/{id}/reset', [App\Http\Controllers\AbuseMonitorController::class, 'resetScore'])->name('abuse-monitor.reset');
+			Route::post('owner/abuse-monitor/{id}/suspend', [App\Http\Controllers\AbuseMonitorController::class, 'suspendKlien'])->name('abuse-monitor.suspend');
+			Route::post('owner/abuse-monitor/{id}/approve', [App\Http\Controllers\AbuseMonitorController::class, 'approveKlien'])->name('abuse-monitor.approve');
+			
+			// Risk Rules Panel (Owner & Super Admin only)
+			Route::get('owner/risk-rules', [App\Http\Controllers\RiskRulesController::class, 'index'])->name('risk-rules.index');
+			Route::post('owner/risk-rules/update', [App\Http\Controllers\RiskRulesController::class, 'updateSettings'])->name('risk-rules.update');
+			Route::get('owner/risk-rules/escalation-history', [App\Http\Controllers\RiskRulesController::class, 'escalationHistory'])->name('risk-rules.escalation-history');
+			Route::get('owner/risk-rules/escalation-history/data', [App\Http\Controllers\RiskRulesController::class, 'escalationHistoryData'])->name('risk-rules.escalation-history.data');
+			
+			// Rate Limit Rules Panel (Owner & Super Admin only)
+			Route::get('owner/rate-limit-rules', [App\Http\Controllers\RateLimitRulesController::class, 'index'])->name('rate-limit-rules.index');
+			Route::post('owner/rate-limit-rules/{id}/update', [App\Http\Controllers\RateLimitRulesController::class, 'updateRule'])->name('rate-limit-rules.update');
+			Route::post('owner/rate-limit-rules/{id}/toggle', [App\Http\Controllers\RateLimitRulesController::class, 'toggleRule'])->name('rate-limit-rules.toggle');
+			Route::post('owner/rate-limit-rules/create', [App\Http\Controllers\RateLimitRulesController::class, 'createRule'])->name('rate-limit-rules.create');
+			Route::delete('owner/rate-limit-rules/{id}', [App\Http\Controllers\RateLimitRulesController::class, 'deleteRule'])->name('rate-limit-rules.delete');
+			Route::get('owner/rate-limit-rules/statistics', [App\Http\Controllers\RateLimitRulesController::class, 'getStatistics'])->name('rate-limit-rules.statistics');
+			Route::post('owner/rate-limit-rules/clear-logs', [App\Http\Controllers\RateLimitRulesController::class, 'clearLogs'])->name('rate-limit-rules.clear-logs');
+			
+			// Complaint Monitor Panel (Owner & Super Admin only)
+			Route::get('owner/complaint-monitor', [App\Http\Controllers\ComplaintMonitorController::class, 'index'])->name('complaint-monitor.index');
+			Route::get('owner/complaint-monitor/statistics/data', [App\Http\Controllers\ComplaintMonitorController::class, 'getStatistics'])->name('complaint-monitor.statistics');
+			Route::get('owner/complaint-monitor/export/csv', [App\Http\Controllers\ComplaintMonitorController::class, 'export'])->name('complaint-monitor.export');
+			Route::post('owner/complaint-monitor/bulk-action', [App\Http\Controllers\ComplaintMonitorController::class, 'bulkAction'])->name('complaint-monitor.bulk-action');
+			Route::get('owner/complaint-monitor/{id}', [App\Http\Controllers\ComplaintMonitorController::class, 'show'])->name('complaint-monitor.show');
+			Route::post('owner/complaint-monitor/{id}/suspend-klien', [App\Http\Controllers\ComplaintMonitorController::class, 'suspendKlien'])->name('complaint-monitor.suspend-klien');
+			Route::post('owner/complaint-monitor/{id}/block-recipient', [App\Http\Controllers\ComplaintMonitorController::class, 'blockRecipient'])->name('complaint-monitor.block-recipient');
+			Route::post('owner/complaint-monitor/{id}/mark-processed', [App\Http\Controllers\ComplaintMonitorController::class, 'markAsProcessed'])->name('complaint-monitor.mark-processed');
+			Route::post('owner/complaint-monitor/{id}/dismiss', [App\Http\Controllers\ComplaintMonitorController::class, 'dismissComplaint'])->name('complaint-monitor.dismiss');
+			
+			// Compliance Log Panel (Owner & Super Admin only) — READ-ONLY
+			Route::get('owner/compliance-log', [App\Http\Controllers\ComplianceLogController::class, 'index'])->name('compliance-log.index');
+			Route::get('owner/compliance-log/export/csv', [App\Http\Controllers\ComplianceLogController::class, 'export'])->name('compliance-log.export');
+			Route::get('owner/compliance-log/verify-integrity', [App\Http\Controllers\ComplianceLogController::class, 'verifyIntegrity'])->name('compliance-log.verify');
+			Route::get('owner/compliance-log/{id}', [App\Http\Controllers\ComplianceLogController::class, 'show'])->name('compliance-log.show');
+
+		}); // End ensure.owner middleware group
 		
 }); // End client.access middleware group
 

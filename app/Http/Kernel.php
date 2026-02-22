@@ -96,6 +96,7 @@ class Kernel extends HttpKernel
         // ============ ROLE-BASED ACCESS ============
         'role' => \App\Http\Middleware\CheckRole::class,
         'ensure.owner' => \App\Http\Middleware\EnsureOwner::class,
+        'ensure.client' => \App\Http\Middleware\EnsureClient::class,
         
         // ============ FEATURE & BILLING GUARDS ============
         'campaign.guard' => \App\Http\Middleware\CampaignGuardMiddleware::class,
