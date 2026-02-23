@@ -3,6 +3,10 @@
 @section('title', 'WhatsApp Business')
 
 @section('content')
+@php
+    // View-only mode: impersonating OR owner/admin with no klien (CLIENT VIEW)
+    $__isViewOnly = ($__isImpersonating ?? false) || (!$klien && in_array(auth()->user()->role, ['super_admin', 'superadmin', 'owner'], true));
+@endphp
 <div class="container-fluid py-4">
     {{-- Impersonation View-Only Banner --}}
     @if($__isImpersonating ?? false)
@@ -25,7 +29,7 @@
                     <h4 class="mb-1">WhatsApp Business Cloud API</h4>
                     <p class="text-sm text-muted mb-0">Kelola koneksi WhatsApp Business resmi via Gupshup</p>
                 </div>
-                @if($connection && $connection->isConnected() && !($__isImpersonating ?? false))
+                @if($connection && $connection->isConnected() && !$__isViewOnly)
                 <a href="{{ route('whatsapp.campaigns.index') }}" class="btn btn-primary">
                     <i class="fas fa-paper-plane me-2"></i>WA Blast
                 </a>
@@ -58,13 +62,17 @@
                             </div>
                             <h5>Belum Terhubung</h5>
                             <p class="text-sm text-muted mb-4">
-                                @if($__isImpersonating ?? false)
-                                    Klien ini belum menghubungkan WhatsApp Business.
+                                @if($__isViewOnly)
+                                    @if($__isImpersonating ?? false)
+                                        Klien ini belum menghubungkan WhatsApp Business.
+                                    @else
+                                        Belum ada koneksi WhatsApp Business.
+                                    @endif
                                 @else
                                     Hubungkan WhatsApp Business Anda untuk mulai mengirim pesan template dan broadcast.
                                 @endif
                             </p>
-                            @if(!($__isImpersonating ?? false))
+                            @if(!$__isViewOnly)
                             <button type="button" class="btn btn-success btn-lg" data-bs-toggle="modal" data-bs-target="#connectModal">
                                 <i class="fab fa-whatsapp me-2"></i>Hubungkan WhatsApp Business (Resmi)
                             </button>
@@ -119,12 +127,12 @@
                         <hr class="horizontal dark my-3">
 
                         <div class="d-flex justify-content-between">
-                            @if($connection->isConnected() && !($__isImpersonating ?? false))
+                            @if($connection->isConnected() && !$__isViewOnly)
                             <button type="button" class="btn btn-outline-primary btn-sm" id="btnSyncTemplates">
                                 <i class="fas fa-sync me-1"></i>Sync Templates
                             </button>
                             @endif
-                            @if(!($__isImpersonating ?? false))
+                            @if(!$__isViewOnly)
                             <button type="button" class="btn btn-outline-danger btn-sm" id="btnDisconnect">
                                 <i class="fas fa-unlink me-1"></i>Putuskan
                             </button>
@@ -203,7 +211,7 @@
                         <h6 class="mb-0">Template Pesan</h6>
                         <p class="text-xs text-muted mb-0">Template yang disetujui untuk broadcast</p>
                     </div>
-                    @if(!($__isImpersonating ?? false))
+                    @if(!$__isViewOnly)
                     <button type="button" class="btn btn-sm btn-outline-primary" id="btnSyncTemplates2">
                         <i class="fas fa-sync me-1"></i>Sync
                     </button>
@@ -249,7 +257,7 @@
                                         @endif
                                     </td>
                                     <td class="align-middle">
-                                        @if($template->isApproved() && !($__isImpersonating ?? false))
+                                        @if($template->isApproved() && !$__isViewOnly)
                                         <a href="{{ route('whatsapp.campaigns.create', ['template' => $template->id]) }}" 
                                            class="btn btn-link text-primary mb-0" title="Buat Kampanye">
                                             <i class="fas fa-paper-plane"></i>
@@ -332,7 +340,7 @@
 </div>
 
 {{-- Connect Modal (SaaS Flow - NO API Key from user) --}}
-@if(!($__isImpersonating ?? false))
+@if(!$__isViewOnly)
 <div class="modal fade" id="connectModal" tabindex="-1" aria-labelledby="connectModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
