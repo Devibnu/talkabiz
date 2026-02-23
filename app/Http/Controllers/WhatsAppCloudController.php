@@ -64,6 +64,14 @@ class WhatsAppCloudController extends Controller
      */
     public function connect(Request $request)
     {
+        // IMPERSONATION GUARD: Block mutating actions during impersonation
+        if (auth()->user()->isImpersonating()) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'Aksi tidak diizinkan dalam mode lihat saja.'], 403);
+            }
+            return back()->with('error', 'Aksi tidak diizinkan dalam mode lihat saja.');
+        }
+
         $klien = auth()->user()->klien;
         
         if (!$klien) {
@@ -202,6 +210,11 @@ class WhatsAppCloudController extends Controller
      */
     public function storeCredentials(Request $request)
     {
+        // IMPERSONATION GUARD: Block mutating actions during impersonation
+        if (auth()->user()->isImpersonating()) {
+            return back()->with('error', 'Aksi tidak diizinkan dalam mode lihat saja.');
+        }
+
         $request->validate([
             'api_key' => 'required|string',
             'api_secret' => 'nullable|string',
@@ -258,6 +271,14 @@ class WhatsAppCloudController extends Controller
      */
     public function disconnect(Request $request)
     {
+        // IMPERSONATION GUARD: Block mutating actions during impersonation
+        if (auth()->user()->isImpersonating()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aksi tidak diizinkan dalam mode lihat saja.',
+            ], 403);
+        }
+
         try {
             $klien = auth()->user()->klien;
             
@@ -335,6 +356,11 @@ class WhatsAppCloudController extends Controller
      */
     public function syncTemplates()
     {
+        // IMPERSONATION GUARD: Block mutating actions during impersonation
+        if (auth()->user()->isImpersonating()) {
+            return response()->json(['success' => false, 'message' => 'Aksi tidak diizinkan dalam mode lihat saja.'], 403);
+        }
+
         $klien = auth()->user()->klien;
         
         if (!$klien) {
@@ -423,6 +449,11 @@ class WhatsAppCloudController extends Controller
      */
     public function importContacts(Request $request)
     {
+        // IMPERSONATION GUARD: Block mutating actions during impersonation
+        if (auth()->user()->isImpersonating()) {
+            return response()->json(['success' => false, 'message' => 'Aksi tidak diizinkan dalam mode lihat saja.'], 403);
+        }
+
         $request->validate([
             'contacts' => 'required|array',
             'contacts.*.phone' => 'required|string',
@@ -487,6 +518,11 @@ class WhatsAppCloudController extends Controller
      */
     public function sendTestMessage(Request $request)
     {
+        // IMPERSONATION GUARD: Block mutating actions during impersonation
+        if (auth()->user()->isImpersonating()) {
+            return response()->json(['success' => false, 'message' => 'Aksi tidak diizinkan dalam mode lihat saja.'], 403);
+        }
+
         $request->validate([
             'phone_number' => 'required|string',
             'template_id' => 'required|exists:whatsapp_templates,id',

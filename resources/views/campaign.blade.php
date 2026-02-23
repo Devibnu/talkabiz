@@ -255,8 +255,23 @@
 @endphp
 
 <div class="container-fluid py-4">
+    {{-- Impersonation View-Only Banner --}}
+    @if($__isImpersonating ?? false)
+    <div class="alert alert-info border-0 shadow-sm mb-4" style="background: linear-gradient(310deg, #e8f4fd 0%, #f0e8fd 100%); border-left: 4px solid #5e72e4 !important;">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-eye me-3 text-primary" style="font-size: 1.25rem;"></i>
+            <div>
+                <strong class="text-dark">Mode Lihat Saja</strong>
+                <p class="text-sm text-secondary mb-0">Anda sedang melihat halaman campaign milik <strong>{{ $__impersonationMeta['client_name'] ?? 'Klien' }}</strong>. Aksi pembuatan campaign dinonaktifkan.</p>
+            </div>
+        </div>
+    </div>
+    @endif
+
     {{-- Upgrade Nudge (non-intrusive) --}}
-    @include('components.upgrade-nudge', ['quotaInfo' => $quotaInfo])
+    @if(!($__isImpersonating ?? false))
+        @include('components.upgrade-nudge', ['quotaInfo' => $quotaInfo])
+    @endif
     
     {{-- Page Header --}}
     <div class="page-header-row">
@@ -265,8 +280,10 @@
             <p class="page-subtitle">Kelola campaign WhatsApp Anda</p>
         </div>
         
-        {{-- Subscription Gate → SaldoGuard Protection untuk Buat Campaign --}}
-        @if($subscriptionIsActive ?? false)
+        @if($__isImpersonating ?? false)
+            {{-- Impersonation: No action buttons --}}
+        @elseif($subscriptionIsActive ?? false)
+            {{-- Subscription Gate → SaldoGuard Protection untuk Buat Campaign --}}
             @include('components.saldo-guard', [
                 'requiredMessages' => 10,
                 'actionText' => 'membuat campaign',
@@ -298,10 +315,18 @@
                             <i class="ni ni-send"></i>
                         </div>
                         <h5 class="empty-state-title">Belum ada campaign</h5>
-                        <p class="empty-state-subtitle">Buat campaign WhatsApp pertama Anda untuk menjangkau pelanggan</p>
+                        <p class="empty-state-subtitle">
+                            @if($__isImpersonating ?? false)
+                                Klien ini belum memiliki campaign WhatsApp
+                            @else
+                                Buat campaign WhatsApp pertama Anda untuk menjangkau pelanggan
+                            @endif
+                        </p>
                         
-                        {{-- Subscription Gate → SaldoGuard Protection untuk Empty State Button --}}
-                        @if($subscriptionIsActive ?? false)
+                        @if($__isImpersonating ?? false)
+                            {{-- Impersonation: No action buttons --}}
+                        @elseif($subscriptionIsActive ?? false)
+                            {{-- Subscription Gate → SaldoGuard Protection untuk Empty State Button --}}
                             @include('components.saldo-guard', [
                                 'requiredMessages' => 10,
                                 'actionText' => 'membuat campaign',
@@ -374,7 +399,8 @@
     </div>
 </div>
 
-{{-- Create Campaign Modal --}}
+{{-- Create Campaign Modal (only for non-impersonation) --}}
+@if(!($__isImpersonating ?? false))
 <div class="modal fade" id="createCampaignModal" tabindex="-1" aria-labelledby="createCampaignModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content" style="border-radius: 1rem; border: none;">
@@ -439,6 +465,7 @@
         </div>
     </div>
 </div>
+@endif
 @endsection
 
 @push('dashboard')

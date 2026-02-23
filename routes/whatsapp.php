@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware(['auth', 'share.subscription.status', 'subscription.active'])->prefix('whatsapp')->group(function () {
+Route::middleware(['auth', 'impersonate.client', 'share.subscription.status', 'subscription.active'])->prefix('whatsapp')->group(function () {
     
     // ==================== CONNECTION ====================
     // Main WhatsApp page - show connection status

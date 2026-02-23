@@ -4,6 +4,19 @@
 
 @section('content')
 <div class="container-fluid py-4">
+    {{-- Impersonation View-Only Banner --}}
+    @if($__isImpersonating ?? false)
+    <div class="alert alert-info border-0 shadow-sm mb-4" style="background: linear-gradient(310deg, #e8f4fd 0%, #f0e8fd 100%); border-left: 4px solid #5e72e4 !important;">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-eye me-3 text-primary" style="font-size: 1.25rem;"></i>
+            <div>
+                <strong class="text-dark">Mode Lihat Saja</strong>
+                <p class="text-sm text-secondary mb-0">Anda sedang melihat halaman WhatsApp milik <strong>{{ $__impersonationMeta['client_name'] ?? 'Klien' }}</strong>. Aksi koneksi & pengaturan dinonaktifkan.</p>
+            </div>
+        </div>
+    </div>
+    @endif
+
     {{-- Header --}}
     <div class="row mb-4">
         <div class="col-12">
@@ -12,7 +25,7 @@
                     <h4 class="mb-1">WhatsApp Business Cloud API</h4>
                     <p class="text-sm text-muted mb-0">Kelola koneksi WhatsApp Business resmi via Gupshup</p>
                 </div>
-                @if($connection && $connection->isConnected())
+                @if($connection && $connection->isConnected() && !($__isImpersonating ?? false))
                 <a href="{{ route('whatsapp.campaigns.index') }}" class="btn btn-primary">
                     <i class="fas fa-paper-plane me-2"></i>WA Blast
                 </a>
@@ -45,11 +58,17 @@
                             </div>
                             <h5>Belum Terhubung</h5>
                             <p class="text-sm text-muted mb-4">
-                                Hubungkan WhatsApp Business Anda untuk mulai mengirim pesan template dan broadcast.
+                                @if($__isImpersonating ?? false)
+                                    Klien ini belum menghubungkan WhatsApp Business.
+                                @else
+                                    Hubungkan WhatsApp Business Anda untuk mulai mengirim pesan template dan broadcast.
+                                @endif
                             </p>
+                            @if(!($__isImpersonating ?? false))
                             <button type="button" class="btn btn-success btn-lg" data-bs-toggle="modal" data-bs-target="#connectModal">
                                 <i class="fab fa-whatsapp me-2"></i>Hubungkan WhatsApp Business (Resmi)
                             </button>
+                            @endif
                         </div>
                     @else
                         {{-- Connection Status --}}
@@ -100,14 +119,16 @@
                         <hr class="horizontal dark my-3">
 
                         <div class="d-flex justify-content-between">
-                            @if($connection->isConnected())
+                            @if($connection->isConnected() && !($__isImpersonating ?? false))
                             <button type="button" class="btn btn-outline-primary btn-sm" id="btnSyncTemplates">
                                 <i class="fas fa-sync me-1"></i>Sync Templates
                             </button>
                             @endif
+                            @if(!($__isImpersonating ?? false))
                             <button type="button" class="btn btn-outline-danger btn-sm" id="btnDisconnect">
                                 <i class="fas fa-unlink me-1"></i>Putuskan
                             </button>
+                            @endif
                         </div>
                     @endif
                 </div>
@@ -182,9 +203,11 @@
                         <h6 class="mb-0">Template Pesan</h6>
                         <p class="text-xs text-muted mb-0">Template yang disetujui untuk broadcast</p>
                     </div>
+                    @if(!($__isImpersonating ?? false))
                     <button type="button" class="btn btn-sm btn-outline-primary" id="btnSyncTemplates2">
                         <i class="fas fa-sync me-1"></i>Sync
                     </button>
+                    @endif
                 </div>
                 <div class="card-body px-0 pb-0">
                     @if($templates->count() > 0)
@@ -226,7 +249,7 @@
                                         @endif
                                     </td>
                                     <td class="align-middle">
-                                        @if($template->isApproved())
+                                        @if($template->isApproved() && !($__isImpersonating ?? false))
                                         <a href="{{ route('whatsapp.campaigns.create', ['template' => $template->id]) }}" 
                                            class="btn btn-link text-primary mb-0" title="Buat Kampanye">
                                             <i class="fas fa-paper-plane"></i>
@@ -309,6 +332,7 @@
 </div>
 
 {{-- Connect Modal (SaaS Flow - NO API Key from user) --}}
+@if(!($__isImpersonating ?? false))
 <div class="modal fade" id="connectModal" tabindex="-1" aria-labelledby="connectModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -380,6 +404,7 @@
         </div>
     </div>
 </div>
+@endif
 @endsection
 
 @push('scripts')
