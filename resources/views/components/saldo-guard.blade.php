@@ -11,18 +11,32 @@ Usage: @include('components.saldo-guard', ['action' => 'send-campaign', 'estimat
     $messageRateService = app(\App\Services\MessageRateService::class);
     $pricePerMessage = $messageRateService->getRate('utility');
     
-    // Required props with defaults
-    $action = $action ?? 'unknown-action';
-    $estimatedCost = $estimatedCost ?? 0;
+    // Accept both legacy (button*) and new (cta*) prop names
+    $action = $actionText ?? $action ?? 'unknown-action';
     $buttonId = $buttonId ?? 'saldo-guard-btn';
-    $buttonText = $buttonText ?? 'Lanjutkan';
-    $buttonClass = $buttonClass ?? 'btn btn-primary';
+    $buttonText = $ctaText ?? $buttonText ?? 'Lanjutkan';
+    $buttonClass = $ctaClass ?? $buttonClass ?? 'btn btn-primary';
+    $buttonIcon = $ctaIcon ?? null;
+    $extraAttributes = $ctaAttributes ?? '';
     $redirectAfter = $redirectAfter ?? '';
+    
+    // Calculate estimated cost — accept either direct estimatedCost or requiredMessages × rate
+    if (isset($requiredMessages) && $requiredMessages > 0) {
+        $estimatedCost = $requiredMessages * $pricePerMessage;
+    } else {
+        $estimatedCost = $estimatedCost ?? 0;
+    }
     
     // Calculate balance status
     $currentBalance = $userWallet ? $userWallet->saldo_tersedia : 0;
     $isBalanceSufficient = $currentBalance >= $estimatedCost;
     $shortage = $isBalanceSufficient ? 0 : ($estimatedCost - $currentBalance);
+    
+    // Owner/admin always passes saldo guard (they don't have wallets)
+    $isOwnerRole = in_array($user->role ?? '', ['super_admin', 'superadmin', 'owner'], true);
+    if ($isOwnerRole) {
+        $isBalanceSufficient = true;
+    }
     
     // Generate unique IDs for this component instance
     $guardId = 'saldo-guard-' . Str::random(8);
@@ -34,9 +48,9 @@ Usage: @include('components.saldo-guard', ['action' => 'send-campaign', 'estimat
     @if($isBalanceSufficient)
         {{-- Balance sufficient - show normal button --}}
         <button type="button" 
-                id="{{ $buttonId }}" 
                 class="{{ $buttonClass }}"
-                onclick="{{ $onClickAction ?? '' }}">
+                {!! $extraAttributes !!}>
+            @if($buttonIcon)<i class="{{ $buttonIcon }} me-1"></i>@endif
             {{ $buttonText }}
         </button>
     @else
