@@ -51,12 +51,17 @@ class CampaignGuardMiddleware
         // =============================
         // When owner is impersonating a client, allow campaign page access
         // so the owner can VIEW the client's campaign state.
-        // Subscription is still validated, but onboarding/WA/quota checks
-        // are relaxed since the owner is just viewing, not sending.
         if ($user->isImpersonating()) {
-            // Owner is viewing client's campaign page — allow through
-            // regardless of client's subscription/onboarding/WA status.
-            // The views show the correct state (empty campaigns, etc.).
+            return $next($request);
+        }
+
+        // =============================
+        // 0b. Owner/Admin bypass (CLIENT VIEW mode)
+        // =============================
+        // Owner/super_admin visiting campaign page directly (not impersonating).
+        // They have no klien_id/subscription themselves, but should still
+        // be able to view the page layout in CLIENT VIEW.
+        if (in_array($user->role, ['super_admin', 'superadmin', 'owner'], true)) {
             return $next($request);
         }
 

@@ -161,7 +161,7 @@
                                 </div>
                                 <div>
                                     <p class="text-xs text-muted mb-0">Kontak Opt-in</p>
-                                    <h5 class="font-weight-bolder mb-0">{{ \App\Models\WhatsappContact::where('klien_id', $klien->id)->optedIn()->count() }}</h5>
+                                    <h5 class="font-weight-bolder mb-0">{{ $klien ? \App\Models\WhatsappContact::where('klien_id', $klien->id)->optedIn()->count() : 0 }}</h5>
                                 </div>
                             </div>
                         </div>
@@ -172,7 +172,7 @@
                                 </div>
                                 <div>
                                     <p class="text-xs text-muted mb-0">Kampanye</p>
-                                    <h5 class="font-weight-bolder mb-0">{{ \App\Models\WhatsappCampaign::where('klien_id', $klien->id)->count() }}</h5>
+                                    <h5 class="font-weight-bolder mb-0">{{ $klien ? \App\Models\WhatsappCampaign::where('klien_id', $klien->id)->count() : 0 }}</h5>
                                 </div>
                             </div>
                         </div>
@@ -183,7 +183,7 @@
                                 </div>
                                 <div>
                                     <p class="text-xs text-muted mb-0">Pesan Terkirim</p>
-                                    <h5 class="font-weight-bolder mb-0">{{ \App\Models\WhatsappMessageLog::where('klien_id', $klien->id)->outbound()->count() }}</h5>
+                                    <h5 class="font-weight-bolder mb-0">{{ $klien ? \App\Models\WhatsappMessageLog::where('klien_id', $klien->id)->outbound()->count() : 0 }}</h5>
                                 </div>
                             </div>
                         </div>
@@ -365,7 +365,7 @@
                             <span class="input-group-text"><i class="fas fa-building"></i></span>
                             <input type="text" name="business_name" class="form-control" required 
                                    placeholder="Contoh: Toko Berkah Jaya"
-                                   value="{{ $klien->nama_perusahaan ?? '' }}"
+                                   value="{{ $klien?->nama_perusahaan ?? '' }}"
                                    minlength="3" maxlength="100">
                         </div>
                         <small class="text-muted">Nama yang akan tampil di WhatsApp Business</small>
@@ -379,7 +379,7 @@
                             <input type="text" name="phone_number" class="form-control" required 
                                    placeholder="628123456789"
                                    pattern="62[0-9]{9,12}"
-                                   value="{{ $klien->no_whatsapp ?? '' }}">
+                                   value="{{ $klien?->no_whatsapp ?? '' }}">
                         </div>
                         <small class="text-muted">Format: 62 + nomor (tanpa + atau 0). Contoh: 628123456789</small>
                     </div>

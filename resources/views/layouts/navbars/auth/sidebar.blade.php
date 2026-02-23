@@ -46,7 +46,8 @@
             {{-- Visible to all authenticated roles including impersonating owners --}}
             @php
                 $isImpersonating = auth()->user()->isImpersonating();
-                $canAccessCampaign = $isImpersonating || (auth()->user()->klien?->wa_terhubung ?? false);
+                $isOwnerRole = in_array(auth()->user()->role, ['super_admin', 'superadmin', 'owner']);
+                $canAccessCampaign = $isOwnerRole || $isImpersonating || (auth()->user()->klien?->wa_terhubung ?? false);
             @endphp
             <li class="nav-item">
                 <a class="nav-link {{ Request::is('campaign*') ? 'active' : '' }}" 
@@ -88,7 +89,7 @@
             @if(in_array(auth()->user()->role ?? '', ['super_admin', 'owner', 'admin', 'umkm']))
             {{-- WhatsApp Connection --}}
             @php
-                $waConnected = $isImpersonating || (auth()->user()->klien?->wa_terhubung ?? false);
+                $waConnected = $isOwnerRole || $isImpersonating || (auth()->user()->klien?->wa_terhubung ?? false);
             @endphp
             <li class="nav-item">
                 <a class="nav-link {{ Request::is('whatsapp*') ? 'active' : '' }}" href="{{ url('whatsapp') }}">

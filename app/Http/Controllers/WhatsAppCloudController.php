@@ -20,9 +20,18 @@ class WhatsAppCloudController extends Controller
      */
     public function index()
     {
-        $klien = auth()->user()->klien;
+        $user = auth()->user();
+        $klien = $user->klien;
         
         if (!$klien) {
+            // Owner/admin in CLIENT VIEW mode — show empty state
+            if (in_array($user->role, ['super_admin', 'superadmin', 'owner'], true)) {
+                $connection = null;
+                $templates = collect();
+                $klien = null;
+                return view('whatsapp.cloud-index', compact('connection', 'templates', 'klien'));
+            }
+            
             return redirect()->route('dashboard')
                 ->with('error', 'Anda harus memiliki profil klien untuk menggunakan WhatsApp.');
         }
