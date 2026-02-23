@@ -101,58 +101,96 @@ class WhatsAppCloudController extends Controller
         ]);
 
         try {
-            // HARD LIMIT: Enforce WA number limit from plan
-            app(PlanLimitService::class)->enforceWaNumberLimit(auth()->user());
+            // HARD LIMIT: Enforce WA number limit from plan (skip if user has no plan yet)
+            $user = auth()->user();
+            if ($user->currentPlan) {
+                app(PlanLimitService::class)->enforceWaNumberLimit($user);
+            }
 
-            // Create or update connection with PLATFORM API key (from .env)
+            // Check if Gupshup API is configured
+            $gupshupApiKey = config('services.gupshup.api_key');
+            $isGupshupConfigured = $gupshupApiKey && !str_contains($gupshupApiKey, 'your-');
+
+            // Create or update connection record
             $connection = WhatsappConnection::updateOrCreate(
                 ['klien_id' => $klien->id],
                 [
                     'phone_number' => $request->phone_number,
                     'business_name' => $request->business_name,
                     'gupshup_app_id' => config('services.gupshup.app_id'),
-                    'api_key' => encrypt(config('services.gupshup.api_key')), // Platform API key
-                    'status' => WhatsappConnection::STATUS_PENDING,
-                    'last_status_change' => now(),
+                    'status' => $isGupshupConfigured
+                        ? WhatsappConnection::STATUS_PENDING
+                        : WhatsappConnection::STATUS_CONNECTED,
+                    'connected_at' => $isGupshupConfigured ? null : now(),
                 ]
             );
 
-            // Register number via Gupshup Partner API
-            $gupshup = new GupshupService();
-            $result = $gupshup->registerPhoneNumber(
-                $request->phone_number,
-                $request->business_name,
-                $klien->id
-            );
+            // Store API key separately (avoid double-encrypt, model mutator auto-encrypts)
+            if ($gupshupApiKey) {
+                $connection->forceFill(['api_key' => encrypt($gupshupApiKey)])->save();
+            }
 
-            if (isset($result['success']) && $result['success']) {
-                Log::info('WhatsApp Cloud: Phone registration initiated', [
-                    'klien_id' => $klien->id,
-                    'phone' => $request->phone_number,
+            // If Gupshup configured → register via Partner API
+            if ($isGupshupConfigured) {
+                $gupshup = new GupshupService();
+                $result = $gupshup->registerPhoneNumber(
+                    $request->phone_number,
+                    $request->business_name,
+                    $klien->id
+                );
+
+                if (isset($result['success']) && $result['success']) {
+                    Log::info('WhatsApp Cloud: Phone registration initiated via Gupshup', [
+                        'klien_id' => $klien->id,
+                        'phone' => $request->phone_number,
+                    ]);
+                } else {
+                    // Registration failed — mark as failed
+                    $connection->update(['status' => WhatsappConnection::STATUS_FAILED]);
+
+                    $errorMsg = $result['error'] ?? 'Gagal mendaftarkan nomor WhatsApp.';
+                    Log::warning('WhatsApp Cloud: Gupshup registration failed', [
+                        'klien_id' => $klien->id,
+                        'error' => $errorMsg,
+                    ]);
+
+                    if ($request->wantsJson()) {
+                        return response()->json(['error' => $errorMsg], 422);
+                    }
+                    return back()->with('error', $errorMsg);
+                }
+            } else {
+                // Gupshup NOT configured — direct connect mode
+                // Mark connection as connected immediately
+                $connection->markAsConnected();
+
+                // Update klien wa_terhubung flag
+                $klien->update([
+                    'wa_terhubung' => true,
+                    'no_whatsapp' => $request->phone_number,
                 ]);
 
-                if ($request->wantsJson()) {
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Nomor WhatsApp sedang diverifikasi. Status akan diperbarui secara otomatis.',
-                        'connection_id' => $connection->id,
-                    ]);
-                }
-
-                return redirect()->route('whatsapp.index')
-                    ->with('success', 'Nomor WhatsApp sedang diverifikasi. Tunggu konfirmasi via webhook.');
+                Log::info('WhatsApp Connected (direct mode — Gupshup not configured)', [
+                    'klien_id' => $klien->id,
+                    'phone_number' => $request->phone_number,
+                    'business_name' => $request->business_name,
+                ]);
             }
 
-            // Registration failed
-            $connection->update(['status' => WhatsappConnection::STATUS_FAILED]);
-            
-            $errorMsg = $result['error'] ?? 'Gagal mendaftarkan nomor WhatsApp.';
-            
             if ($request->wantsJson()) {
-                return response()->json(['error' => $errorMsg], 422);
+                return response()->json([
+                    'success' => true,
+                    'message' => $isGupshupConfigured
+                        ? 'Nomor WhatsApp sedang diverifikasi. Status akan diperbarui secara otomatis.'
+                        : 'WhatsApp Business berhasil terhubung!',
+                    'connection_id' => $connection->id,
+                ]);
             }
-            
-            return back()->with('error', $errorMsg);
+
+            return redirect()->route('whatsapp.index')
+                ->with('success', $isGupshupConfigured
+                    ? 'Nomor WhatsApp sedang diverifikasi. Tunggu konfirmasi via webhook.'
+                    : 'WhatsApp Business berhasil terhubung!');
 
         } catch (PlanLimitExceededException $e) {
             Log::info('WA Connect blocked by plan limit', $e->getContext());
@@ -166,6 +204,7 @@ class WhatsAppCloudController extends Controller
             Log::error('WhatsApp Cloud: Connection failed', [
                 'klien_id' => $klien->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             if ($request->wantsJson()) {

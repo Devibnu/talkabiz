@@ -223,7 +223,28 @@
         <h6 class="font-weight-bolder mb-0">Quick Stats</h6>
       </div>
       <div class="card-body p-3">
+        @php
+            $klien = auth()->user()->klien;
+            $waConnection = $klien ? \App\Models\WhatsappConnection::where('klien_id', $klien->id)->first() : null;
+            $waConnected = $waConnection && $waConnection->isConnected();
+            $totalKontak = $klien ? \App\Models\WhatsappContact::where('klien_id', $klien->id)->count() : 0;
+            $templateAktif = $klien ? \App\Models\WhatsappTemplate::where('klien_id', $klien->id)->where('status', 'APPROVED')->count() : 0;
+        @endphp
         <ul class="list-group">
+          {{-- WhatsApp Connection Status --}}
+          <li class="list-group-item border-0 d-flex justify-content-between ps-0 border-radius-lg">
+            <div class="d-flex align-items-center">
+              <div class="icon icon-shape icon-sm bg-gradient-{{ $waConnected ? 'success' : 'secondary' }} shadow border-radius-md text-center me-2 d-flex align-items-center justify-content-center">
+                <i class="fab fa-whatsapp text-white text-xs opacity-10"></i>
+              </div>
+              <span class="text-sm">WhatsApp</span>
+            </div>
+            @if($waConnected)
+              <span class="badge bg-gradient-success">Terhubung</span>
+            @else
+              <a href="{{ url('whatsapp') }}" class="badge bg-gradient-secondary text-decoration-none">Belum Terhubung</a>
+            @endif
+          </li>
           <li class="list-group-item border-0 d-flex justify-content-between ps-0 border-radius-lg">
             <div class="d-flex align-items-center">
               <div class="icon icon-shape icon-sm bg-gradient-primary shadow border-radius-md text-center me-2 d-flex align-items-center justify-content-center">
@@ -231,7 +252,7 @@
               </div>
               <span class="text-sm">Total Kontak</span>
             </div>
-            <span class="text-dark font-weight-bold">0</span>
+            <span class="text-dark font-weight-bold">{{ number_format($totalKontak) }}</span>
           </li>
           <li class="list-group-item border-0 d-flex justify-content-between ps-0 border-radius-lg">
             <div class="d-flex align-items-center">
@@ -240,7 +261,7 @@
               </div>
               <span class="text-sm">Template Aktif</span>
             </div>
-            <span class="text-dark font-weight-bold">0</span>
+            <span class="text-dark font-weight-bold">{{ number_format($templateAktif) }}</span>
           </li>
           <li class="list-group-item border-0 d-flex justify-content-between ps-0 border-radius-lg">
             <div class="d-flex align-items-center">
