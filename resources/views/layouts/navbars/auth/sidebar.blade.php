@@ -45,7 +45,8 @@
             {{-- Campaign - Show lock if WA not connected --}}
             {{-- Visible to all authenticated roles including impersonating owners --}}
             @php
-                $canAccessCampaign = auth()->user()->klien?->wa_terhubung ?? false;
+                $isImpersonating = auth()->user()->isImpersonating();
+                $canAccessCampaign = $isImpersonating || (auth()->user()->klien?->wa_terhubung ?? false);
             @endphp
             <li class="nav-item">
                 <a class="nav-link {{ Request::is('campaign*') ? 'active' : '' }}" 
@@ -87,7 +88,7 @@
             @if(in_array(auth()->user()->role ?? '', ['super_admin', 'owner', 'admin', 'umkm']))
             {{-- WhatsApp Connection --}}
             @php
-                $waConnected = auth()->user()->klien?->wa_terhubung ?? false;
+                $waConnected = $isImpersonating || (auth()->user()->klien?->wa_terhubung ?? false);
             @endphp
             <li class="nav-item">
                 <a class="nav-link {{ Request::is('whatsapp*') ? 'active' : '' }}" href="{{ url('whatsapp') }}">

@@ -62,6 +62,13 @@ class EnsureActiveSubscription
             return redirect()->route('login');
         }
 
+        // IMPERSONATION BYPASS: Owner viewing client pages — allow through
+        // regardless of client's subscription status (view-only mode).
+        // The views themselves show the correct subscription state.
+        if ($user->isImpersonating()) {
+            return $next($request);
+        }
+
         // Use SubscriptionPolicy for validation (handles admin bypass internally)
         $result = $this->policy->validateSubscription($user);
 
