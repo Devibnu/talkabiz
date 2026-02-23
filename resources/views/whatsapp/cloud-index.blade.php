@@ -378,7 +378,9 @@
                             <span class="input-group-text"><i class="fab fa-whatsapp"></i></span>
                             <input type="text" name="phone_number" class="form-control" required 
                                    placeholder="628123456789"
-                                   pattern="62[0-9]{9,12}"
+                                   inputmode="numeric"
+                                   pattern="62[0-9]{9,13}"
+                                   title="Gunakan format 62xxxxxxxxxx tanpa spasi atau +"
                                    value="{{ $klien?->no_whatsapp ?? '' }}">
                         </div>
                         <small class="text-muted">Format: 62 + nomor (tanpa + atau 0). Contoh: 628123456789</small>

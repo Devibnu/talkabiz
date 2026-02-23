@@ -92,7 +92,7 @@ class WhatsAppCloudController extends Controller
 
         // Validate input - HANYA nomor WA dan nama bisnis (NO API key)
         $request->validate([
-            'phone_number' => 'required|string|regex:/^62[0-9]{9,12}$/',
+            'phone_number' => 'required|string|regex:/^62[0-9]{9,13}$/',
             'business_name' => 'required|string|min:3|max:100',
         ], [
             'phone_number.required' => 'Nomor WhatsApp wajib diisi',
