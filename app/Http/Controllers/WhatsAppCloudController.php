@@ -113,14 +113,23 @@ class WhatsAppCloudController extends Controller
             return back()->with('error', 'Profil bisnis tidak ditemukan.');
         }
 
+        // Clean phone number: strip +, spaces, dashes; convert 08xx → 628xx
+        $rawPhone = preg_replace('/[\s\-\+]/', '', $request->input('phone_number', ''));
+        if (str_starts_with($rawPhone, '0')) {
+            $rawPhone = '62' . substr($rawPhone, 1);
+        }
+        $request->merge(['phone_number' => $rawPhone]);
+
         // Validate input - HANYA nomor WA dan nama bisnis (NO API key)
         $request->validate([
-            'phone_number' => 'required|string|regex:/^62[0-9]{9,13}$/',
+            'phone_number' => ['required', 'string', 'regex:/^62[0-9]{9,13}$/'],
             'business_name' => 'required|string|min:3|max:100',
         ], [
-            'phone_number.required' => 'Nomor WhatsApp wajib diisi',
-            'phone_number.regex' => 'Format nomor: 628xxxxxxxxxx',
-            'business_name.required' => 'Nama bisnis wajib diisi',
+            'phone_number.required' => 'Nomor WhatsApp wajib diisi.',
+            'phone_number.regex' => 'Format nomor harus 62xxxxxxxxxx (contoh: 628123456789).',
+            'business_name.required' => 'Nama bisnis wajib diisi.',
+            'business_name.min' => 'Nama bisnis minimal 3 karakter.',
+            'business_name.max' => 'Nama bisnis maksimal 100 karakter.',
         ]);
 
         try {

@@ -366,7 +366,18 @@
                         </div>
                     </div>
 
-                    {{-- Validation Error Container --}}
+                    {{-- Backend Validation Errors (Laravel) --}}
+                    @if($errors->any())
+                    <div class="alert alert-danger mb-3">
+                        <ul class="mb-0 ps-3">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                    @endif
+
+                    {{-- JS Validation Error Container --}}
                     <div id="connectFormErrors" class="alert alert-danger d-none mb-3">
                         <ul class="mb-0 ps-3" id="connectFormErrorList"></ul>
                     </div>
@@ -376,10 +387,9 @@
                         <label class="form-label">Nama Bisnis <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-building"></i></span>
-                            <input type="text" name="business_name" id="inputBusinessName" class="form-control" required 
+                            <input type="text" name="business_name" id="inputBusinessName" class="form-control"
                                    placeholder="Contoh: Toko Berkah Jaya"
-                                   value="{{ $klien?->nama_perusahaan ?? '' }}"
-                                   minlength="3" maxlength="100">
+                                   value="{{ $klien?->nama_perusahaan ?? '' }}">
                         </div>
                         <small class="text-muted">Nama yang akan tampil di WhatsApp Business</small>
                     </div>
@@ -389,7 +399,7 @@
                         <label class="form-label">Nomor WhatsApp <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fab fa-whatsapp"></i></span>
-                            <input type="text" name="phone_number" id="inputPhoneNumber" class="form-control" required 
+                            <input type="text" name="phone_number" id="inputPhoneNumber" class="form-control"
                                    placeholder="628123456789"
                                    inputmode="numeric"
                                    value="{{ $klien?->no_whatsapp ?? '' }}">
