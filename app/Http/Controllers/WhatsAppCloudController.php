@@ -22,6 +22,15 @@ class WhatsAppCloudController extends Controller
     {
         $user = auth()->user();
         $klien = $user->klien;
+
+        Log::info('[WhatsApp.index] Page accessed', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'role' => $user->role,
+            'klien_id' => $user->klien_id,
+            'has_klien' => (bool)$klien,
+            'is_impersonating' => $user->isImpersonating(),
+        ]);
         
         if (!$klien) {
             // Owner/admin in CLIENT VIEW mode — show empty state
@@ -31,6 +40,11 @@ class WhatsAppCloudController extends Controller
                 $klien = null;
                 return view('whatsapp.cloud-index', compact('connection', 'templates', 'klien'));
             }
+            
+            Log::warning('[WhatsApp.index] User has no klien, redirecting to dashboard', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+            ]);
             
             return redirect()->route('dashboard')
                 ->with('error', 'Anda harus memiliki profil klien untuk menggunakan WhatsApp.');
@@ -73,6 +87,15 @@ class WhatsAppCloudController extends Controller
      */
     public function connect(Request $request)
     {
+        Log::info('[WhatsApp.connect] POST request received', [
+            'user_id' => auth()->id(),
+            'email' => auth()->user()->email,
+            'role' => auth()->user()->role,
+            'klien_id' => auth()->user()->klien_id,
+            'input' => $request->only(['phone_number', 'business_name']),
+            'is_impersonating' => auth()->user()->isImpersonating(),
+        ]);
+
         // IMPERSONATION GUARD: Block mutating actions during impersonation
         if (auth()->user()->isImpersonating()) {
             if ($request->wantsJson()) {
