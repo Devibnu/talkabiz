@@ -350,7 +350,7 @@
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ route('whatsapp.connect') }}" method="POST" id="connectForm">
+            <form action="{{ route('whatsapp.connect') }}" method="POST" id="connectForm" novalidate>
                 @csrf
                 <div class="modal-body">
                     {{-- Info Box --}}
@@ -366,12 +366,17 @@
                         </div>
                     </div>
 
+                    {{-- Validation Error Container --}}
+                    <div id="connectFormErrors" class="alert alert-danger d-none mb-3">
+                        <ul class="mb-0 ps-3" id="connectFormErrorList"></ul>
+                    </div>
+
                     {{-- Nama Bisnis --}}
                     <div class="mb-4">
                         <label class="form-label">Nama Bisnis <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-building"></i></span>
-                            <input type="text" name="business_name" class="form-control" required 
+                            <input type="text" name="business_name" id="inputBusinessName" class="form-control" required 
                                    placeholder="Contoh: Toko Berkah Jaya"
                                    value="{{ $klien?->nama_perusahaan ?? '' }}"
                                    minlength="3" maxlength="100">
@@ -384,11 +389,9 @@
                         <label class="form-label">Nomor WhatsApp <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fab fa-whatsapp"></i></span>
-                            <input type="text" name="phone_number" class="form-control" required 
+                            <input type="text" name="phone_number" id="inputPhoneNumber" class="form-control" required 
                                    placeholder="628123456789"
                                    inputmode="numeric"
-                                   pattern="62[0-9]{9,13}"
-                                   title="Gunakan format 62xxxxxxxxxx tanpa spasi atau +"
                                    value="{{ $klien?->no_whatsapp ?? '' }}">
                         </div>
                         <small class="text-muted">Format: 62 + nomor (tanpa + atau 0). Contoh: 628123456789</small>
@@ -420,11 +423,71 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Connect Form Submit
+    // Connect Form Submit with custom validation (native validation hidden in modals)
     const connectForm = document.getElementById('connectForm');
     if (connectForm) {
-        connectForm.addEventListener('submit', function() {
+        connectForm.addEventListener('submit', function(e) {
+            console.log('[WA-Connect] Form submit triggered');
+            
+            const errorsDiv = document.getElementById('connectFormErrors');
+            const errorList = document.getElementById('connectFormErrorList');
             const btn = document.getElementById('btnSubmitConnect');
+            const businessName = document.getElementById('inputBusinessName');
+            const phoneNumber = document.getElementById('inputPhoneNumber');
+            
+            // Clear previous errors
+            errorList.innerHTML = '';
+            errorsDiv.classList.add('d-none');
+            businessName.classList.remove('is-invalid');
+            phoneNumber.classList.remove('is-invalid');
+            
+            const errors = [];
+            
+            // Validate business name
+            const name = (businessName.value || '').trim();
+            if (!name) {
+                errors.push('Nama Bisnis wajib diisi');
+                businessName.classList.add('is-invalid');
+            } else if (name.length < 3) {
+                errors.push('Nama Bisnis minimal 3 karakter');
+                businessName.classList.add('is-invalid');
+            } else if (name.length > 100) {
+                errors.push('Nama Bisnis maksimal 100 karakter');
+                businessName.classList.add('is-invalid');
+            }
+            
+            // Validate phone number
+            let phone = (phoneNumber.value || '').trim();
+            // Auto-fix common formats
+            phone = phone.replace(/[\s\-\+]/g, ''); // strip spaces, dashes, plus
+            if (phone.startsWith('0')) {
+                phone = '62' + phone.substring(1); // 08xx → 628xx
+            }
+            phoneNumber.value = phone; // update field with cleaned value
+            
+            if (!phone) {
+                errors.push('Nomor WhatsApp wajib diisi');
+                phoneNumber.classList.add('is-invalid');
+            } else if (!/^62[0-9]{9,13}$/.test(phone)) {
+                errors.push('Nomor WhatsApp harus format 62xxxxxxxxxx (contoh: 628123456789)');
+                phoneNumber.classList.add('is-invalid');
+            }
+            
+            if (errors.length > 0) {
+                e.preventDefault();
+                errors.forEach(function(err) {
+                    const li = document.createElement('li');
+                    li.textContent = err;
+                    errorList.appendChild(li);
+                });
+                errorsDiv.classList.remove('d-none');
+                errorsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                console.log('[WA-Connect] Validation failed:', errors);
+                return false;
+            }
+            
+            // Validation passed — disable button & show spinner
+            console.log('[WA-Connect] Validation passed, submitting form to', connectForm.action);
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Menghubungkan...';
         });
