@@ -54,50 +54,12 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    @if(!$connection)
-                        {{-- Not Connected --}}
-                        <div class="text-center py-4">
-                            <div class="icon icon-shape icon-xxl bg-gradient-secondary shadow-secondary text-center border-radius-xl mb-3">
-                                <i class="fab fa-whatsapp text-white" style="font-size: 3rem;"></i>
-                            </div>
-                            <h5>Belum Terhubung</h5>
-                            <p class="text-sm text-muted mb-4">
-                                @if($__isViewOnly)
-                                    @if($__isImpersonating ?? false)
-                                        Klien ini belum menghubungkan WhatsApp Business.
-                                    @else
-                                        Belum ada koneksi WhatsApp Business.
-                                    @endif
-                                @else
-                                    Hubungkan WhatsApp Business Anda untuk mulai mengirim pesan template dan broadcast.
-                                @endif
-                            </p>
-                            @if(!$__isViewOnly)
-                            <button type="button" class="btn btn-success btn-lg" data-bs-toggle="modal" data-bs-target="#connectModal">
-                                <i class="fab fa-whatsapp me-2"></i>Hubungkan WhatsApp Business (Resmi)
-                            </button>
-                            @endif
-                        </div>
-                    @else
-                        {{-- Connection Status --}}
+                    @if($connection && $connection->isConnected())
+                        {{-- Connected --}}
                         <div class="d-flex align-items-center mb-4">
-                            @if($connection->status === 'connected')
-                                <span class="badge bg-gradient-success me-2">
-                                    <i class="fas fa-check-circle me-1"></i>Terhubung
-                                </span>
-                            @elseif($connection->status === 'pending')
-                                <span class="badge bg-gradient-warning me-2">
-                                    <i class="fas fa-clock me-1"></i>Menunggu Verifikasi
-                                </span>
-                            @elseif($connection->status === 'restricted')
-                                <span class="badge bg-gradient-danger me-2">
-                                    <i class="fas fa-exclamation-circle me-1"></i>Dibatasi
-                                </span>
-                            @else
-                                <span class="badge bg-gradient-secondary me-2">
-                                    <i class="fas fa-times-circle me-1"></i>Terputus
-                                </span>
-                            @endif
+                            <span class="badge bg-gradient-success me-2">
+                                <i class="fas fa-check-circle me-1"></i>Terhubung
+                            </span>
                         </div>
 
                         @if($connection->business_name || $connection->phone_number)
@@ -127,14 +89,36 @@
                         <hr class="horizontal dark my-3">
 
                         <div class="d-flex justify-content-between">
-                            @if($connection->isConnected() && !$__isViewOnly)
+                            @if(!$__isViewOnly)
                             <button type="button" class="btn btn-outline-primary btn-sm" id="btnSyncTemplates">
                                 <i class="fas fa-sync me-1"></i>Sync Templates
                             </button>
-                            @endif
-                            @if(!$__isViewOnly)
                             <button type="button" class="btn btn-outline-danger btn-sm" id="btnDisconnect">
                                 <i class="fas fa-unlink me-1"></i>Putuskan
+                            </button>
+                            @endif
+                        </div>
+                    @else
+                        {{-- Not Connected / Disconnected --}}
+                        <div class="text-center py-4">
+                            <div class="icon icon-shape icon-xxl bg-gradient-secondary shadow-secondary text-center border-radius-xl mb-3">
+                                <i class="fab fa-whatsapp text-white" style="font-size: 3rem;"></i>
+                            </div>
+                            <h5>Belum Terhubung</h5>
+                            <p class="text-sm text-muted mb-4">
+                                @if($__isViewOnly)
+                                    @if($__isImpersonating ?? false)
+                                        Klien ini belum menghubungkan WhatsApp Business.
+                                    @else
+                                        Belum ada koneksi WhatsApp Business.
+                                    @endif
+                                @else
+                                    Hubungkan WhatsApp Business Anda untuk mulai mengirim pesan template dan broadcast.
+                                @endif
+                            </p>
+                            @if(!$__isViewOnly)
+                            <button type="button" class="btn btn-success btn-lg" data-bs-toggle="modal" data-bs-target="#connectModal">
+                                <i class="fab fa-whatsapp me-2"></i>Hubungkan WhatsApp Business (Resmi)
                             </button>
                             @endif
                         </div>
