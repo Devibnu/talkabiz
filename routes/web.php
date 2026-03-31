@@ -443,3 +443,29 @@ Route::post('/dev/midtrans/settle/{orderId}', function ($orderId) {
     ]);
 });
 
+// ── WhatsApp Cloud API Test ──────────────────────────────────
+Route::get('/test-wa', function () {
+    $token = env('WHATSAPP_TOKEN');
+
+    if (!$token) {
+        return response()->json(['error' => 'WHATSAPP_TOKEN not set in .env'], 500);
+    }
+
+    $response = Http::withToken($token)->post('https://graph.facebook.com/v22.0/1037036456161902/messages', [
+        'messaging_product' => 'whatsapp',
+        'to' => '6287823797629',
+        'type' => 'template',
+        'template' => [
+            'name' => 'hello_world',
+            'language' => [
+                'code' => 'en_US',
+            ],
+        ],
+    ]);
+
+    return response()->json([
+        'status' => $response->status(),
+        'body' => $response->json(),
+    ]);
+});
+
