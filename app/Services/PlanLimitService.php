@@ -38,6 +38,13 @@ use Carbon\Carbon;
  */
 class PlanLimitService
 {
+    protected SubscriptionPolicy $subscriptionPolicy;
+
+    public function __construct(SubscriptionPolicy $subscriptionPolicy)
+    {
+        $this->subscriptionPolicy = $subscriptionPolicy;
+    }
+
     // ==================== ERROR CODES ====================
     
     const ERROR_NO_PLAN = 'no_active_plan';
@@ -544,33 +551,23 @@ class PlanLimitService
      */
     private function validateUserPlan(User $user): array
     {
+        $subscriptionCheck = $this->subscriptionPolicy->validateSubscription($user);
+        if (!$subscriptionCheck['allowed']) {
+            return [
+                'valid' => false,
+                'code' => $subscriptionCheck['reason'] === SubscriptionPolicy::REASON_NO_SUBSCRIPTION
+                    ? self::ERROR_NO_PLAN
+                    : self::ERROR_PLAN_EXPIRED,
+                'message' => $subscriptionCheck['message'],
+            ];
+        }
+
         // FAILSAFE: User must have plan
         if (!$user->current_plan_id) {
             return [
                 'valid' => false,
                 'code' => self::ERROR_NO_PLAN,
                 'message' => 'Anda belum memiliki paket aktif. Silakan pilih paket.',
-            ];
-        }
-        
-        // FAILSAFE: Plan status must be active
-        if ($user->plan_status !== 'active') {
-            $msg = $user->plan_status === 'trial_selected'
-                ? 'Paket Anda belum aktif. Silakan selesaikan pembayaran terlebih dahulu.'
-                : 'Paket Anda sudah tidak aktif. Silakan perpanjang atau upgrade.';
-            return [
-                'valid' => false,
-                'code' => self::ERROR_PLAN_EXPIRED,
-                'message' => $msg,
-            ];
-        }
-        
-        // FAILSAFE: Check expiry
-        if ($user->plan_expires_at && $user->plan_expires_at->isPast()) {
-            return [
-                'valid' => false,
-                'code' => self::ERROR_PLAN_EXPIRED,
-                'message' => 'Paket Anda sudah berakhir. Silakan perpanjang.',
             ];
         }
         
