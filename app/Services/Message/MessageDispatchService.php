@@ -6,6 +6,7 @@ use App\Services\SaldoService;
 use App\Services\WalletService;
 use App\Services\AutoPricingService;
 use App\Services\LedgerService;
+use App\Services\WhatsAppProviderService;
 use App\Models\WaPricing;
 use App\Exceptions\InsufficientBalanceException;
 use App\Models\User;
@@ -36,17 +37,20 @@ class MessageDispatchService
     protected WalletService $walletService;
     protected AutoPricingService $pricingService;
     protected LedgerService $ledgerService;
+    protected WhatsAppProviderService $whatsAppProvider;
 
     public function __construct(
         SaldoService $saldoService,
         WalletService $walletService,
         AutoPricingService $pricingService,
-        LedgerService $ledgerService
+        LedgerService $ledgerService,
+        WhatsAppProviderService $whatsAppProvider
     ) {
         $this->saldoService = $saldoService;
         $this->walletService = $walletService;
         $this->pricingService = $pricingService;
         $this->ledgerService = $ledgerService;
+        $this->whatsAppProvider = $whatsAppProvider;
     }
 
     /**
@@ -366,22 +370,39 @@ class MessageDispatchService
     {
         $results = [];
         $recipients = $request->getUniqueRecipients();
+        $user = User::findOrFail($request->userId);
+        $klienId = $user->klien_id;
+        $templateId = $request->metadata['template_provider_id'] ?? null;
+        $templateParams = $request->metadata['template_params'] ?? [];
 
         foreach ($recipients as $index => $recipient) {
             try {
                 $phone = $recipient['phone'];
+                $providerResult = $templateId
+                    ? $this->whatsAppProvider->sendTemplateMessage(
+                        phone: $phone,
+                        templateId: $templateId,
+                        bodyParams: $templateParams,
+                        components: [],
+                        klienId: $klienId,
+                        penggunaId: $request->userId
+                    )
+                    : $this->whatsAppProvider->sendText(
+                        phone: $phone,
+                        message: $request->messageContent,
+                        klienId: $klienId,
+                        penggunaId: $request->userId
+                    );
 
-                // TODO: Implementasi WhatsApp API call disini
-                // $waResult = $this->whatsappGatewayService->sendMessage($phone, $request->messageContent);
-                
-                // Mock implementation for now
-                $isSuccess = $this->mockWhatsAppSend($phone, $request->messageContent);
+                $isSuccess = (bool) ($providerResult['sukses'] ?? false);
 
                 $results[] = [
                     'recipient' => $phone,
                     'status' => $isSuccess ? 'sent' : 'failed',
-                    'message_id' => $isSuccess ? 'wa_msg_' . uniqid() : null,
-                    'error' => $isSuccess ? null : 'Mock send failure',
+                    'message_id' => $providerResult['message_id'] ?? null,
+                    'error' => $isSuccess ? null : ($providerResult['error'] ?? 'provider_send_failed'),
+                    'error_message' => $providerResult['error_message'] ?? null,
+                    'response' => $providerResult['response'] ?? null,
                     'sent_at' => $isSuccess ? now()->toISOString() : null,
                 ];
 
@@ -390,22 +411,14 @@ class MessageDispatchService
                     'recipient' => $recipient['phone'] ?? 'unknown',
                     'status' => 'failed',
                     'message_id' => null,
-                    'error' => $e->getMessage(),
+                    'error' => 'dispatch_exception',
+                    'error_message' => $e->getMessage(),
                     'sent_at' => null,
                 ];
             }
         }
 
         return $results;
-    }
-
-    /**
-     * Mock WhatsApp sending (development only)
-     */
-    protected function mockWhatsAppSend(string $phone, string $message): bool
-    {
-        // Mock: 95% success rate
-        return mt_rand(1, 100) <= 95;
     }
 
     /**

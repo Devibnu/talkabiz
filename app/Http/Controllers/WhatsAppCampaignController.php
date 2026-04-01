@@ -6,6 +6,7 @@ use App\Models\WhatsappCampaign;
 use App\Models\WhatsappCampaignRecipient;
 use App\Models\WhatsappConnection;
 use App\Models\WhatsappContact;
+use App\Models\WhatsappMessageLog;
 use App\Models\WhatsappTemplate;
 use App\Jobs\ProcessWhatsappCampaign;
 use App\Services\RevenueGuardService;
@@ -441,6 +442,12 @@ class WhatsAppCampaignController extends Controller
             messageContent: $messageContent,
             campaignId: (string) $campaign->id,
             preAuthorized: $revenueGuardTxId !== null,
+            metadata: [
+                'template_provider_id' => $template->template_id,
+                'template_name' => $template->name,
+                'template_language' => $template->language,
+                'template_params' => array_values($campaign->template_variables ?? []),
+            ],
             revenueGuardTransactionId: $revenueGuardTxId,
         );
 
@@ -461,7 +468,7 @@ class WhatsAppCampaignController extends Controller
      */
     protected function buildMessageContent($template, array $variables = []): string
     {
-        $content = $template->content;
+        $content = $template->getBodyText() ?? $template->sample_text ?? $template->name;
 
         // Replace variables in template
         foreach ($variables as $key => $value) {
@@ -493,14 +500,48 @@ class WhatsAppCampaignController extends Controller
                 ->first();
 
             if ($recipient) {
-                $recipient->update([
-                    'status' => $sentResult['status'] === 'sent' 
-                        ? WhatsappCampaignRecipient::STATUS_SENT 
-                        : WhatsappCampaignRecipient::STATUS_FAILED,
-                    'whatsapp_message_id' => $sentResult['message_id'],
-                    'error' => $sentResult['error'],
-                    'sent_at' => $sentResult['sent_at']
-                ]);
+                if ($sentResult['status'] === 'sent') {
+                    $recipient->update([
+                        'status' => WhatsappCampaignRecipient::STATUS_SENT,
+                        'message_id' => $sentResult['message_id'],
+                        'sent_at' => $sentResult['sent_at'] ? \Carbon\Carbon::parse($sentResult['sent_at']) : now(),
+                        'failed_at' => null,
+                        'error_code' => null,
+                        'error_message' => null,
+                        'cost' => (float) ($campaign->actual_cost > 0 && $campaign->sent_count > 0 ? $campaign->actual_cost / max($campaign->sent_count, 1) : 0),
+                    ]);
+                } else {
+                    $recipient->update([
+                        'status' => WhatsappCampaignRecipient::STATUS_FAILED,
+                        'failed_at' => now(),
+                        'error_code' => $sentResult['error'] ?? null,
+                        'error_message' => $sentResult['error_message'] ?? $sentResult['error'] ?? null,
+                    ]);
+                }
+
+                WhatsappMessageLog::updateOrCreate(
+                    [
+                        'campaign_id' => $campaign->id,
+                        'phone_number' => $sentResult['recipient'],
+                        'direction' => WhatsappMessageLog::DIRECTION_OUTBOUND,
+                    ],
+                    [
+                        'klien_id' => $campaign->klien_id,
+                        'message_id' => $sentResult['message_id'] ?? null,
+                        'template_id' => $campaign->template?->template_id,
+                        'content' => $campaign->template?->getBodyText() ?? $campaign->template?->sample_text,
+                        'status' => $sentResult['status'] === 'sent'
+                            ? WhatsappMessageLog::STATUS_SENT
+                            : WhatsappMessageLog::STATUS_FAILED,
+                        'error_code' => $sentResult['error'] ?? null,
+                        'error_message' => $sentResult['error_message'] ?? $sentResult['error'] ?? null,
+                        'cost' => 0,
+                        'metadata' => [
+                            'provider_response' => $sentResult['response'] ?? null,
+                            'source' => 'campaign_dispatch',
+                        ],
+                    ]
+                );
             }
         }
     }

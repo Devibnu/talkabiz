@@ -144,6 +144,7 @@ class MessageDispatchRequest
         string $messageContent,
         string $campaignId,
         ?string $scheduledAt = null,
+        array $metadata = [],
         bool $preAuthorized = false,
         ?int $revenueGuardTransactionId = null
     ): self {
@@ -152,7 +153,7 @@ class MessageDispatchRequest
             recipients: $recipients,
             messageContent: $messageContent,
             messageType: 'campaign',
-            metadata: ['source' => 'campaign'],
+            metadata: array_merge(['source' => 'campaign'], $metadata),
             scheduledAt: $scheduledAt,
             campaignId: $campaignId,
             preAuthorized: $preAuthorized,
