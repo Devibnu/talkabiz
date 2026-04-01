@@ -698,10 +698,15 @@ class WhatsAppCloudController extends Controller
             }
 
             $result = $guardResult['dispatch_result'];
+            $messageId = $result['message_id']
+                ?? $result['messageId']
+                ?? $result['response']['messages'][0]['id']
+                ?? $result['response']['messageId']
+                ?? null;
 
             return response()->json([
                 'success' => true,
-                'message_id' => $result['messageId'] ?? null,
+                'message_id' => $messageId,
                 'message' => 'Pesan test berhasil dikirim.',
             ]);
 
