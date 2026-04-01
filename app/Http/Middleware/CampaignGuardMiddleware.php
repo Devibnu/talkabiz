@@ -6,7 +6,7 @@ use App\Exceptions\Subscription\NoActiveSubscriptionException;
 use App\Exceptions\Subscription\FeatureNotAllowedException;
 use App\Exceptions\Subscription\SubscriptionExpiredException;
 use App\Services\OnboardingService;
-use App\Services\SubscriptionGate;
+use App\Services\SubscriptionPolicy;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,12 +27,12 @@ use Symfony\Component\HttpFoundation\Response;
 class CampaignGuardMiddleware
 {
     protected OnboardingService $onboardingService;
-    protected SubscriptionGate $subscriptionGate;
+    protected SubscriptionPolicy $subscriptionPolicy;
 
-    public function __construct(OnboardingService $onboardingService, SubscriptionGate $subscriptionGate)
+    public function __construct(OnboardingService $onboardingService, SubscriptionPolicy $subscriptionPolicy)
     {
         $this->onboardingService = $onboardingService;
-        $this->subscriptionGate = $subscriptionGate;
+        $this->subscriptionPolicy = $subscriptionPolicy;
     }
 
     /**
@@ -68,18 +68,9 @@ class CampaignGuardMiddleware
         // =============================
         // 1. Check subscription enforcement
         // =============================
-        try {
-            // Check active subscription
-            $this->subscriptionGate->requireActiveSubscription($user);
-            
-            // Check broadcast feature
-            $this->subscriptionGate->requireFeature($user, 'broadcast');
-        } catch (NoActiveSubscriptionException $e) {
-            return $this->denyAccess($request, $e->getMessage(), 'no_subscription');
-        } catch (SubscriptionExpiredException $e) {
-            return $this->denyAccess($request, $e->getMessage(), 'subscription_expired');
-        } catch (FeatureNotAllowedException $e) {
-            return $this->denyAccess($request, $e->getMessage(), 'feature_not_allowed');
+        $featureCheck = $this->subscriptionPolicy->canAccessFeature($user, SubscriptionPolicy::FEATURE_BROADCAST);
+        if (!$featureCheck['allowed']) {
+            return $this->denyAccess($request, $featureCheck['message'], $featureCheck['reason'] ?? null);
         }
 
         // =============================

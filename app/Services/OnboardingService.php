@@ -6,6 +6,7 @@ use App\Models\DompetSaldo;
 use App\Models\Klien;
 use App\Models\Plan;
 use App\Models\User;
+use App\Models\WhatsappConnection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -282,6 +283,17 @@ class OnboardingService
         
         if (!$klien) {
             return false;
+        }
+
+        $activeConnection = WhatsappConnection::query()
+            ->where('klien_id', $klien->id)
+            ->where('status', WhatsappConnection::STATUS_CONNECTED)
+            ->whereNotNull('phone_number_id')
+            ->latest('id')
+            ->first();
+
+        if ($activeConnection) {
+            return true;
         }
 
         return $klien->wa_terhubung && !empty($klien->wa_phone_number_id);
