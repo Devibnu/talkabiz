@@ -57,16 +57,27 @@ class WhatsAppWebhookController extends Controller
 
         $payload = $request->all();
         $event = $payload['event'] ?? 'unknown';
-        $klienId = $payload['klien_id'] ?? null;
+        $connection = $this->resolveConnectionFromPayload($payload);
+        $klienId = $connection?->klien_id ?? ($payload['klien_id'] ?? null);
+
+        if ($connection) {
+            $payload['klien_id'] = $connection->klien_id;
+            $payload['_resolved_connection_id'] = $connection->id;
+        }
 
         Log::info('WhatsApp webhook received', [
             'event' => $event,
             'klien_id' => $klienId,
+            'connection_id' => $connection?->id,
+            'phone_number_id' => $this->extractPhoneNumberId($payload),
+            'waba_id' => $this->extractWabaId($payload),
             'status' => $payload['status'] ?? null,
         ]);
 
         if (!$klienId) {
-            return response()->json(['error' => 'klien_id required'], 400);
+            return response()->json([
+                'error' => 'Unable to resolve tenant. Provide phone_number_id, business_account_id/waba_id, or legacy klien_id.',
+            ], 400);
         }
 
         // Route to appropriate handler
@@ -95,8 +106,12 @@ class WhatsAppWebhookController extends Controller
             return response()->json(['received' => true]);
         }
 
+        $connection = isset($payload['_resolved_connection_id'])
+            ? WhatsappConnection::find($payload['_resolved_connection_id'])
+            : $this->resolveConnectionFromPayload($payload);
+
         // Find klien
-        $klien = Klien::find($klienId);
+        $klien = $connection?->klien ?: Klien::find($klienId);
         
         if (!$klien) {
             Log::error('WhatsApp webhook: klien not found', ['klien_id' => $klienId]);
@@ -105,19 +120,20 @@ class WhatsAppWebhookController extends Controller
 
         // Extract data from payload
         $phoneNumber = $payload['phone_number'] ?? null;
-        $phoneNumberId = $payload['phone_number_id'] ?? "wa_{$klienId}";
-        $businessAccountId = $payload['business_account_id'] ?? "ba_{$klienId}";
+        $phoneNumberId = $this->extractPhoneNumberId($payload) ?? "wa_{$klienId}";
+        $businessAccountId = $this->extractWabaId($payload) ?? "ba_{$klienId}";
         $accessToken = $payload['access_token'] ?? "session_{$klienId}_" . time();
         $sessionId = $payload['session_id'] ?? null;
 
         $connection = WhatsappConnection::updateOrCreate(
-            ['klien_id' => $klienId],
+            ['id' => $connection?->id],
             [
                 'provider' => 'meta_cloud',
-                'connection_name' => $payload['business_name'] ?? 'WhatsApp Utama',
-                'business_name' => $payload['business_name'] ?? null,
+                'klien_id' => $klienId,
+                'connection_name' => $payload['business_name'] ?? $connection?->connection_name ?? 'WhatsApp Utama',
+                'business_name' => $payload['business_name'] ?? $connection?->business_name,
                 'display_name' => $payload['display_name'] ?? null,
-                'phone_number' => $phoneNumber,
+                'phone_number' => $phoneNumber ?? $connection?->phone_number,
                 'phone_number_id' => $phoneNumberId,
                 'waba_id' => $businessAccountId,
                 'access_token' => $accessToken,
@@ -217,11 +233,13 @@ class WhatsAppWebhookController extends Controller
             'reason' => $reason,
         ]);
 
-        $klien = Klien::find($klienId);
+        $connection = isset($payload['_resolved_connection_id'])
+            ? WhatsappConnection::find($payload['_resolved_connection_id'])
+            : $this->resolveConnectionFromPayload($payload);
+
+        $klien = $connection?->klien ?: Klien::find($klienId);
         
         if ($klien) {
-            $connection = WhatsappConnection::where('klien_id', $klienId)->first();
-
             if ($connection) {
                 $connection->markAsDisconnected();
                 $connection->update([
@@ -276,7 +294,9 @@ class WhatsAppWebhookController extends Controller
         $klienId = $payload['klien_id'];
         $error = $payload['error'] ?? 'Unknown error';
 
-        $connection = WhatsappConnection::where('klien_id', $klienId)->first();
+        $connection = isset($payload['_resolved_connection_id'])
+            ? WhatsappConnection::find($payload['_resolved_connection_id'])
+            : $this->resolveConnectionFromPayload($payload);
 
         if ($connection) {
             $connection->markAsFailed($error);
@@ -352,5 +372,47 @@ class WhatsAppWebhookController extends Controller
             'wa_terakhir_sync' => $connection->webhook_last_update ?: now(),
             'no_whatsapp' => $connection->phone_number ?: $klien->no_whatsapp,
         ]);
+    }
+
+    protected function resolveConnectionFromPayload(array $payload): ?WhatsappConnection
+    {
+        $phoneNumberId = $this->extractPhoneNumberId($payload);
+        if ($phoneNumberId) {
+            $connection = WhatsappConnection::where('phone_number_id', $phoneNumberId)->first();
+            if ($connection) {
+                return $connection;
+            }
+        }
+
+        $wabaId = $this->extractWabaId($payload);
+        if ($wabaId) {
+            $connection = WhatsappConnection::where('waba_id', $wabaId)->first();
+            if ($connection) {
+                return $connection;
+            }
+        }
+
+        $klienId = $payload['klien_id'] ?? null;
+        if ($klienId) {
+            return WhatsappConnection::where('klien_id', $klienId)->first();
+        }
+
+        return null;
+    }
+
+    protected function extractPhoneNumberId(array $payload): ?string
+    {
+        return $payload['phone_number_id']
+            ?? $payload['metadata']['phone_number_id']
+            ?? null;
+    }
+
+    protected function extractWabaId(array $payload): ?string
+    {
+        return $payload['waba_id']
+            ?? $payload['business_account_id']
+            ?? $payload['metadata']['business_account_id']
+            ?? $payload['metadata']['waba_id']
+            ?? null;
     }
 }
