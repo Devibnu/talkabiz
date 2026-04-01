@@ -310,7 +310,7 @@ class MessageDispatchService
         // campaign.guard → EnsureActiveSubscription → WalletCostGuard
 
         // Cek status akun aktif
-        if (!$user->is_active) {
+        if ($user->getRawOriginal('is_active') === 0 || $user->getRawOriginal('is_active') === false) {
             throw new Exception('Akun tidak aktif, tidak bisa mengirim pesan');
         }
 
