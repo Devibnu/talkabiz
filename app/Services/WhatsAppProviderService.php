@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\WhatsappConnection;
+use App\Models\WhatsappTemplate;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Client\Response;
 use App\Models\LogAktivitas;
-use Carbon\Carbon;
 
 /**
  * WhatsAppProviderService
@@ -38,6 +40,7 @@ class WhatsAppProviderService
     protected string $apiKey;
     protected string $appName;
     protected string $sourceNumber;
+    protected string $metaGraphVersion;
 
     public function __construct()
     {
@@ -47,6 +50,7 @@ class WhatsAppProviderService
         $this->apiKey = $this->config['api_key'] ?? '';
         $this->appName = $this->config['app_name'] ?? '';
         $this->sourceNumber = $this->config['source_number'] ?? '';
+        $this->metaGraphVersion = env('WHATSAPP_GRAPH_VERSION', 'v22.0');
     }
 
     // ==================== SEND TEXT MESSAGE ====================
@@ -63,6 +67,11 @@ class WhatsAppProviderService
     public function sendText(string $phone, string $message, ?int $klienId = null, ?int $penggunaId = null): array
     {
         $phone = $this->normalizePhone($phone);
+
+        $connection = $this->resolveConnection($klienId);
+        if ($this->shouldUseMetaCloud($connection)) {
+            return $this->sendMetaText($connection, $phone, $message, $klienId, $penggunaId);
+        }
         
         $payload = [
             'channel' => 'whatsapp',
@@ -101,6 +110,11 @@ class WhatsAppProviderService
         ?int $penggunaId = null
     ): array {
         $phone = $this->normalizePhone($phone);
+
+        $connection = $this->resolveConnection($klienId);
+        if ($this->shouldUseMetaCloud($connection)) {
+            return $this->sendMetaTemplate($connection, $phone, $templateId, $params, [], $klienId, $penggunaId);
+        }
         
         // Format body params untuk Gupshup
         $bodyParams = [];
@@ -149,6 +163,11 @@ class WhatsAppProviderService
         ?int $penggunaId = null
     ): array {
         $phone = $this->normalizePhone($phone);
+
+        $connection = $this->resolveConnection($klienId);
+        if ($this->shouldUseMetaCloud($connection)) {
+            return $this->sendMetaTemplate($connection, $phone, $templateId, $bodyParams, $components, $klienId, $penggunaId);
+        }
 
         // Build template payload sesuai format Gupshup
         $templatePayload = [
@@ -252,6 +271,11 @@ class WhatsAppProviderService
     ): array {
         $phone = $this->normalizePhone($phone);
 
+        $connection = $this->resolveConnection($klienId);
+        if ($this->shouldUseMetaCloud($connection)) {
+            return $this->sendMetaMedia($connection, $phone, $mediaType, $mediaUrl, $caption, $filename, $klienId, $penggunaId);
+        }
+
         $messageContent = [
             'type' => $mediaType,
             'url' => $mediaUrl,
@@ -336,6 +360,242 @@ class WhatsAppProviderService
                 'error_message' => $e->getMessage(),
             ];
         }
+    }
+
+    protected function resolveConnection(?int $klienId): ?WhatsappConnection
+    {
+        if (!$klienId) {
+            return null;
+        }
+
+        return WhatsappConnection::where('klien_id', $klienId)
+            ->orderByRaw("CASE WHEN status = 'connected' THEN 0 ELSE 1 END")
+            ->latest('updated_at')
+            ->first();
+    }
+
+    protected function shouldUseMetaCloud(?WhatsappConnection $connection): bool
+    {
+        return $connection
+            && !empty($connection->phone_number_id)
+            && !empty($connection->access_token)
+            && !$connection->isTokenExpired();
+    }
+
+    protected function sendMetaText(
+        WhatsappConnection $connection,
+        string $phone,
+        string $message,
+        ?int $klienId,
+        ?int $penggunaId
+    ): array {
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $phone,
+            'type' => 'text',
+            'text' => [
+                'preview_url' => false,
+                'body' => $message,
+            ],
+        ];
+
+        return $this->sendMetaRequest($connection, $payload, $klienId, $penggunaId, [
+            'provider' => 'meta_cloud',
+            'connection_id' => $connection->id,
+            'type' => 'text',
+            'destination' => $phone,
+        ]);
+    }
+
+    protected function sendMetaTemplate(
+        WhatsappConnection $connection,
+        string $phone,
+        string $templateIdentifier,
+        array $bodyParams,
+        array $components,
+        ?int $klienId,
+        ?int $penggunaId
+    ): array {
+        $templateName = $this->resolveMetaTemplateName($templateIdentifier, $klienId);
+        $templateComponents = $this->formatComponentsForMeta($bodyParams, $components);
+
+        $templatePayload = [
+            'name' => $templateName,
+            'language' => [
+                'code' => $this->resolveTemplateLanguage($templateIdentifier, $klienId),
+            ],
+        ];
+
+        if (!empty($templateComponents)) {
+            $templatePayload['components'] = $templateComponents;
+        }
+
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $phone,
+            'type' => 'template',
+            'template' => $templatePayload,
+        ];
+
+        return $this->sendMetaRequest($connection, $payload, $klienId, $penggunaId, [
+            'provider' => 'meta_cloud',
+            'connection_id' => $connection->id,
+            'type' => 'template',
+            'template_id' => $templateIdentifier,
+            'template_name' => $templateName,
+            'destination' => $phone,
+        ]);
+    }
+
+    protected function sendMetaMedia(
+        WhatsappConnection $connection,
+        string $phone,
+        string $mediaType,
+        string $mediaUrl,
+        ?string $caption,
+        ?string $filename,
+        ?int $klienId,
+        ?int $penggunaId
+    ): array {
+        $mediaPayload = ['link' => $mediaUrl];
+
+        if ($caption && in_array($mediaType, ['image', 'video', 'document'], true)) {
+            $mediaPayload['caption'] = $caption;
+        }
+
+        if ($filename && $mediaType === 'document') {
+            $mediaPayload['filename'] = $filename;
+        }
+
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $phone,
+            'type' => $mediaType,
+            $mediaType => $mediaPayload,
+        ];
+
+        return $this->sendMetaRequest($connection, $payload, $klienId, $penggunaId, [
+            'provider' => 'meta_cloud',
+            'connection_id' => $connection->id,
+            'type' => $mediaType,
+            'destination' => $phone,
+            'media_url' => $mediaUrl,
+        ]);
+    }
+
+    protected function sendMetaRequest(
+        WhatsappConnection $connection,
+        array $payload,
+        ?int $klienId,
+        ?int $penggunaId,
+        array $logContext = []
+    ): array {
+        $url = sprintf(
+            'https://graph.facebook.com/%s/%s/messages',
+            $this->metaGraphVersion,
+            $connection->phone_number_id
+        );
+
+        $startTime = microtime(true);
+
+        try {
+            $response = Http::withToken($connection->getDecryptedAccessToken())
+                ->acceptJson()
+                ->timeout($this->config['timeout'] ?? 30)
+                ->connectTimeout($this->config['connect_timeout'] ?? 10)
+                ->post($url, $payload);
+
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+
+            return $this->handleMetaResponse($response, $connection, $klienId, $penggunaId, $logContext, $duration);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            $this->logError('Meta connection timeout', $e, $klienId, $penggunaId, $logContext);
+
+            return [
+                'sukses' => false,
+                'message_id' => null,
+                'error' => self::ERROR_TIMEOUT,
+                'error_message' => 'Connection timeout: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            $this->logError('Meta unexpected error', $e, $klienId, $penggunaId, $logContext);
+
+            return [
+                'sukses' => false,
+                'message_id' => null,
+                'error' => self::ERROR_API_ERROR,
+                'error_message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    protected function handleMetaResponse(
+        Response $response,
+        WhatsappConnection $connection,
+        ?int $klienId,
+        ?int $penggunaId,
+        array $logContext,
+        float $duration
+    ): array {
+        $body = $response->json();
+
+        if (config('whatsapp.logging.enabled')) {
+            Log::channel(config('whatsapp.logging.channel', 'stack'))->info('Meta WhatsApp API Response', [
+                'status_code' => $response->status(),
+                'body' => config('whatsapp.logging.log_response_body') ? $body : '[hidden]',
+                'duration_ms' => $duration,
+                'context' => $logContext,
+            ]);
+        }
+
+        if ($response->successful() && !empty($body['messages'][0]['id'])) {
+            $messageId = $body['messages'][0]['id'];
+
+            $connection->update([
+                'webhook_last_update' => now(),
+                'last_webhook_payload' => $body,
+                'last_error_code' => null,
+                'last_error_message' => null,
+                'status' => WhatsappConnection::STATUS_CONNECTED,
+            ]);
+
+            $this->logSuccess($klienId, $penggunaId, $logContext, $messageId);
+
+            return [
+                'sukses' => true,
+                'message_id' => $messageId,
+                'status' => self::STATUS_SENT,
+                'response' => $body,
+            ];
+        }
+
+        $error = $body['error'] ?? [];
+        $errorCode = (string) ($error['code'] ?? 'UNKNOWN');
+        $errorMessage = $error['message'] ?? 'Unknown Meta API error';
+        $mappedError = $this->mapMetaErrorCode($errorCode, $errorMessage);
+
+        if (in_array($errorCode, ['190', '104'], true)) {
+            $connection->markAsTokenExpired($errorMessage);
+        } else {
+            $connection->update([
+                'last_error_code' => $errorCode,
+                'last_error_message' => $errorMessage,
+                'webhook_last_update' => now(),
+            ]);
+        }
+
+        $this->logFailure($klienId, $penggunaId, $logContext, $mappedError, $errorMessage);
+
+        return [
+            'sukses' => false,
+            'message_id' => null,
+            'error' => $mappedError,
+            'error_message' => $errorMessage,
+            'response' => $body,
+        ];
     }
 
     /**
@@ -457,6 +717,118 @@ class WhatsAppProviderService
         }
 
         return self::ERROR_API_ERROR;
+    }
+
+    protected function mapMetaErrorCode(string $code, string $message): string
+    {
+        $errorMap = [
+            '100' => self::ERROR_API_ERROR,
+            '131026' => self::ERROR_INVALID_NUMBER,
+            '131047' => self::ERROR_RATE_LIMIT,
+            '190' => self::ERROR_API_ERROR,
+        ];
+
+        if (isset($errorMap[$code])) {
+            return $errorMap[$code];
+        }
+
+        return $this->mapErrorCode($code, $message);
+    }
+
+    protected function resolveMetaTemplateName(string $templateIdentifier, ?int $klienId): string
+    {
+        if (!$klienId) {
+            return $templateIdentifier;
+        }
+
+        $template = WhatsappTemplate::where('klien_id', $klienId)
+            ->where(function ($query) use ($templateIdentifier) {
+                $query->where('template_id', $templateIdentifier)
+                    ->orWhere('name', $templateIdentifier);
+            })
+            ->first();
+
+        return $template?->name ?? $templateIdentifier;
+    }
+
+    protected function resolveTemplateLanguage(string $templateIdentifier, ?int $klienId): string
+    {
+        if (!$klienId) {
+            return 'en_US';
+        }
+
+        $template = WhatsappTemplate::where('klien_id', $klienId)
+            ->where(function ($query) use ($templateIdentifier) {
+                $query->where('template_id', $templateIdentifier)
+                    ->orWhere('name', $templateIdentifier);
+            })
+            ->first();
+
+        return $template?->language ?: 'en_US';
+    }
+
+    protected function formatComponentsForMeta(array $bodyParams, array $components): array
+    {
+        if (!empty($components)) {
+            return array_values(array_filter(array_map(function (array $component) {
+                $type = strtolower($component['type'] ?? '');
+                $parameters = $component['parameters'] ?? [];
+
+                if (empty($type) || empty($parameters)) {
+                    return null;
+                }
+
+                return [
+                    'type' => $type,
+                    'parameters' => array_values(array_map(function (array $parameter) {
+                        $normalized = ['type' => $parameter['type'] ?? 'text'];
+
+                        if (isset($parameter['text'])) {
+                            $normalized['text'] = (string) $parameter['text'];
+                        }
+
+                        if (isset($parameter['image'])) {
+                            $normalized['image'] = $parameter['image'];
+                        }
+
+                        if (isset($parameter['video'])) {
+                            $normalized['video'] = $parameter['video'];
+                        }
+
+                        if (isset($parameter['document'])) {
+                            $normalized['document'] = $parameter['document'];
+                        }
+
+                        if (isset($parameter['payload'])) {
+                            $normalized['payload'] = $parameter['payload'];
+                        }
+
+                        return $normalized;
+                    }, $parameters)),
+                ];
+            }, $components)));
+        }
+
+        if (empty($bodyParams)) {
+            return [];
+        }
+
+        return [[
+            'type' => 'body',
+            'parameters' => array_values(array_map(function ($param) {
+                if (is_array($param) && ($param['type'] ?? null) === 'text') {
+                    return [
+                        'type' => 'text',
+                        'text' => (string) ($param['text'] ?? ''),
+                    ];
+                }
+
+                return [
+                    'type' => 'text',
+                    'text' => (string) $param,
+                ];
+            }, $bodyParams)),
+        ]];
     }
 
     // ==================== LOGGING ====================
