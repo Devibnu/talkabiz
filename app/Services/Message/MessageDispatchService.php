@@ -4,10 +4,10 @@ namespace App\Services\Message;
 
 use App\Services\SaldoService;
 use App\Services\WalletService;
-use App\Services\AutoPricingService;
+use App\Services\MessageRateService;
+use App\Services\PricingService;
 use App\Services\WalletCacheService;
 use App\Services\WhatsAppProviderService;
-use App\Models\WaPricing;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Exceptions\InsufficientBalanceException;
@@ -37,19 +37,22 @@ class MessageDispatchService
 {
     protected SaldoService $saldoService;
     protected WalletService $walletService;
-    protected AutoPricingService $pricingService;
+    protected MessageRateService $messageRateService;
+    protected PricingService $pricingService;
     protected WalletCacheService $walletCacheService;
     protected WhatsAppProviderService $whatsAppProvider;
 
     public function __construct(
         SaldoService $saldoService,
         WalletService $walletService,
-        AutoPricingService $pricingService,
+        MessageRateService $messageRateService,
+        PricingService $pricingService,
         WalletCacheService $walletCacheService,
         WhatsAppProviderService $whatsAppProvider
     ) {
         $this->saldoService = $saldoService;
         $this->walletService = $walletService;
+        $this->messageRateService = $messageRateService;
         $this->pricingService = $pricingService;
         $this->walletCacheService = $walletCacheService;
         $this->whatsAppProvider = $whatsAppProvider;
@@ -74,7 +77,7 @@ class MessageDispatchService
         $this->validateUserCanSendMessage($user);
 
         // Hitung biaya total
-        $pricePerMessage = $this->getPricePerMessage();
+        $pricePerMessage = $this->getPricePerMessage($request, $user);
         $recipientCount = count($request->getUniqueRecipients());
         $totalCost = $recipientCount * $pricePerMessage;
 
@@ -284,7 +287,7 @@ class MessageDispatchService
     public function estimateCost(int $userId, int $recipientCount): array
     {
         $user = User::findOrFail($userId);
-        $pricePerMessage = $this->getPricePerMessage();
+        $pricePerMessage = $this->getPricePerMessageForCategory($user, 'campaign');
         $totalCost = $recipientCount * $pricePerMessage;
 
         $currentBalance = $this->getCurrentWalletBalance($userId);
@@ -329,25 +332,30 @@ class MessageDispatchService
     /**
      * Ambil harga per pesan dari SSOT (DATABASE-DRIVEN, NO HARDCODE!)
      */
-    protected function getPricePerMessage(): int
+    protected function getPricePerMessage(MessageDispatchRequest $request, User $user): int
     {
-        try {
-            // Try AutoPricingService (SSOT database)
-            $pricing = $this->pricingService->getUserPriceInfo();
-            return (int) $pricing['price_per_message'];
-        } catch (Exception $e) {
-            // Fallback ke WaPricing model (DATABASE-DRIVEN!)
-            $defaultPrice = WaPricing::getPriceForCategory('conversation');
-            
-            if (!$defaultPrice) {
-                throw new \RuntimeException(
-                    'Message pricing tidak ditemukan di database. ' .
-                    'Silakan hubungi administrator untuk setup pricing.'
-                );
-            }
-            
-            return $defaultPrice;
+        $category = $this->resolveBillingCategory($request);
+
+        return $this->getPricePerMessageForCategory($user, $category);
+    }
+
+    protected function getPricePerMessageForCategory(User $user, string $category): int
+    {
+        $baseRate = $this->messageRateService->getRate($category);
+
+        return $this->pricingService->calculateFinalCost($baseRate, $user);
+    }
+
+    protected function resolveBillingCategory(MessageDispatchRequest $request): string
+    {
+        if (!empty($request->metadata['billing_category'])) {
+            return (string) $request->metadata['billing_category'];
         }
+
+        return match ($request->messageType) {
+            'campaign', 'broadcast' => 'campaign',
+            default => 'utility',
+        };
     }
 
     /**
