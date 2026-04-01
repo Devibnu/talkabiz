@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Klien;
+use App\Models\WhatsappConnection;
 use App\Services\WhatsAppConnectionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -109,15 +110,31 @@ class WhatsAppWebhookController extends Controller
         $accessToken = $payload['access_token'] ?? "session_{$klienId}_" . time();
         $sessionId = $payload['session_id'] ?? null;
 
-        // Update klien - MARK AS CONNECTED!
-        $klien->update([
-            'wa_phone_number_id' => $phoneNumberId,
-            'wa_business_account_id' => $businessAccountId,
-            'wa_access_token' => encrypt($accessToken),
-            'wa_terhubung' => true,
-            'wa_terakhir_sync' => now(),
-            'no_whatsapp' => $phoneNumber ?? $klien->no_whatsapp,
-        ]);
+        $connection = WhatsappConnection::updateOrCreate(
+            ['klien_id' => $klienId],
+            [
+                'provider' => 'meta_cloud',
+                'connection_name' => $payload['business_name'] ?? 'WhatsApp Utama',
+                'business_name' => $payload['business_name'] ?? null,
+                'display_name' => $payload['display_name'] ?? null,
+                'phone_number' => $phoneNumber,
+                'phone_number_id' => $phoneNumberId,
+                'waba_id' => $businessAccountId,
+                'access_token' => $accessToken,
+                'token_type' => 'webhook_session',
+                'status' => WhatsappConnection::STATUS_CONNECTED,
+                'verification_status' => 'verified',
+                'connected_at' => now(),
+                'disconnected_at' => null,
+                'failed_at' => null,
+                'last_error_code' => null,
+                'last_error_message' => null,
+                'webhook_last_update' => now(),
+                'last_webhook_payload' => $payload,
+            ]
+        );
+
+        $this->syncLegacyKlienState($klien, $connection);
 
         // Update cache for polling
         Cache::put("wa_connection_status:{$klienId}", [
@@ -203,6 +220,18 @@ class WhatsAppWebhookController extends Controller
         $klien = Klien::find($klienId);
         
         if ($klien) {
+            $connection = WhatsappConnection::where('klien_id', $klienId)->first();
+
+            if ($connection) {
+                $connection->markAsDisconnected();
+                $connection->update([
+                    'verification_status' => 'disconnected',
+                    'webhook_last_update' => now(),
+                    'last_webhook_payload' => $payload,
+                    'last_error_message' => $reason,
+                ]);
+            }
+
             $klien->update([
                 'wa_terhubung' => false,
                 'wa_terakhir_sync' => now(),
@@ -246,6 +275,16 @@ class WhatsAppWebhookController extends Controller
     {
         $klienId = $payload['klien_id'];
         $error = $payload['error'] ?? 'Unknown error';
+
+        $connection = WhatsappConnection::where('klien_id', $klienId)->first();
+
+        if ($connection) {
+            $connection->markAsFailed($error);
+            $connection->update([
+                'webhook_last_update' => now(),
+                'last_webhook_payload' => $payload,
+            ]);
+        }
 
         Log::error('WhatsApp auth failure', [
             'klien_id' => $klienId,
@@ -301,5 +340,17 @@ class WhatsAppWebhookController extends Controller
         }
 
         return $secret === $expectedSecret;
+    }
+
+    protected function syncLegacyKlienState(Klien $klien, WhatsappConnection $connection): void
+    {
+        $klien->update([
+            'wa_phone_number_id' => $connection->phone_number_id,
+            'wa_business_account_id' => $connection->waba_id,
+            'wa_access_token' => $connection->access_token,
+            'wa_terhubung' => $connection->isConnected(),
+            'wa_terakhir_sync' => $connection->webhook_last_update ?: now(),
+            'no_whatsapp' => $connection->phone_number ?: $klien->no_whatsapp,
+        ]);
     }
 }

@@ -142,24 +142,36 @@ class WhatsAppCloudController extends Controller
             // Check if Gupshup API is configured
             $gupshupApiKey = config('services.gupshup.api_key');
             $isGupshupConfigured = $gupshupApiKey && !str_contains($gupshupApiKey, 'your-');
+            $provider = $this->resolveConnectionProvider($isGupshupConfigured);
 
             // Create or update connection record
             $connection = WhatsappConnection::updateOrCreate(
                 ['klien_id' => $klien->id],
                 [
+                    'provider' => $provider,
+                    'connection_name' => $this->buildConnectionName($request->business_name),
                     'phone_number' => $request->phone_number,
                     'business_name' => $request->business_name,
+                    'connected_by_user_id' => $user->id,
+                    'verification_status' => $isGupshupConfigured ? 'pending' : 'verified',
                     'gupshup_app_id' => config('services.gupshup.app_id'),
+                    'meta_app_id' => $provider === 'meta_cloud' ? config('app.meta_app_id') : null,
                     'status' => $isGupshupConfigured
                         ? WhatsappConnection::STATUS_PENDING
                         : WhatsappConnection::STATUS_CONNECTED,
                     'connected_at' => $isGupshupConfigured ? null : now(),
+                    'disconnected_at' => null,
+                    'failed_at' => null,
+                    'error_reason' => null,
+                    'last_error_code' => null,
+                    'last_error_message' => null,
                 ]
             );
 
-            // Store API key separately (avoid double-encrypt, model mutator auto-encrypts)
+            // Store provider API key on connection (model mutator encrypts it)
             if ($gupshupApiKey) {
-                $connection->forceFill(['api_key' => encrypt($gupshupApiKey)])->save();
+                $connection->api_key = $gupshupApiKey;
+                $connection->save();
             }
 
             // If Gupshup configured → register via Partner API
@@ -172,15 +184,19 @@ class WhatsAppCloudController extends Controller
                 );
 
                 if (isset($result['success']) && $result['success']) {
+                    $connection->update([
+                        'webhook_last_update' => now(),
+                        'last_webhook_payload' => $result['data'] ?? null,
+                    ]);
+
                     Log::info('WhatsApp Cloud: Phone registration initiated via Gupshup', [
                         'klien_id' => $klien->id,
                         'phone' => $request->phone_number,
                     ]);
                 } else {
-                    // Registration failed — mark as failed
-                    $connection->update(['status' => WhatsappConnection::STATUS_FAILED]);
-
                     $errorMsg = $result['error'] ?? 'Gagal mendaftarkan nomor WhatsApp.';
+                    $connection->markAsFailed($errorMsg);
+
                     Log::warning('WhatsApp Cloud: Gupshup registration failed', [
                         'klien_id' => $klien->id,
                         'error' => $errorMsg,
@@ -195,12 +211,11 @@ class WhatsAppCloudController extends Controller
                 // Gupshup NOT configured — direct connect mode
                 // Mark connection as connected immediately
                 $connection->markAsConnected();
-
-                // Update klien wa_terhubung flag
-                $klien->update([
-                    'wa_terhubung' => true,
-                    'no_whatsapp' => $request->phone_number,
+                $connection->update([
+                    'webhook_last_update' => now(),
                 ]);
+
+                $this->syncLegacyKlienState($klien, $connection);
 
                 Log::info('WhatsApp Connected (direct mode — Gupshup not configured)', [
                     'klien_id' => $klien->id,
@@ -256,7 +271,13 @@ class WhatsAppCloudController extends Controller
         $appId = $request->get('app_id');
         $status = $request->get('status', 'success');
 
+        $connection = WhatsappConnection::where('klien_id', $klienId)->first();
+
         if ($status !== 'success') {
+            if ($connection) {
+                $connection->markAsFailed('Otorisasi provider gagal.');
+            }
+
             Log::warning('WhatsApp Cloud: Authorization failed', [
                 'klien_id' => $klienId,
                 'status' => $status,
@@ -266,13 +287,14 @@ class WhatsAppCloudController extends Controller
                 ->with('error', 'Otorisasi WhatsApp Business gagal. Silakan coba lagi.');
         }
 
-        // Update connection
-        $connection = WhatsappConnection::where('klien_id', $klienId)->first();
-        
         if ($connection) {
             $connection->update([
+                'provider' => $connection->provider ?: 'gupshup',
                 'gupshup_app_id' => $appId ?: $connection->gupshup_app_id,
                 'status' => WhatsappConnection::STATUS_PENDING,
+                'verification_status' => 'pending',
+                'webhook_last_update' => now(),
+                'last_webhook_payload' => $request->all(),
             ]);
         }
 
@@ -311,11 +333,15 @@ class WhatsAppCloudController extends Controller
         $connection = WhatsappConnection::updateOrCreate(
             ['klien_id' => $klien->id],
             [
+                'provider' => 'gupshup',
+                'connection_name' => $this->buildConnectionName($request->business_name),
                 'gupshup_app_id' => config('services.gupshup.app_id'),
                 'api_key' => $request->api_key,
                 'api_secret' => $request->api_secret,
                 'phone_number' => $request->phone_number,
                 'business_name' => $request->business_name,
+                'connected_by_user_id' => auth()->id(),
+                'verification_status' => 'pending',
                 'status' => WhatsappConnection::STATUS_PENDING,
             ]
         );
@@ -327,6 +353,11 @@ class WhatsAppCloudController extends Controller
             
             if (isset($health['success']) && $health['success']) {
                 $connection->markAsConnected();
+                $connection->update([
+                    'webhook_last_update' => now(),
+                    'verification_status' => 'verified',
+                ]);
+                $this->syncLegacyKlienState($klien, $connection);
                 
                 // Sync templates
                 $service->syncTemplates($klien->id);
@@ -379,6 +410,11 @@ class WhatsAppCloudController extends Controller
             }
 
             $connection->markAsDisconnected();
+            $connection->update([
+                'verification_status' => 'disconnected',
+                'webhook_last_update' => now(),
+            ]);
+            $this->clearLegacyKlienState($klien);
             
             Log::info('WhatsApp Cloud: Disconnected', [
                 'klien_id' => $klien->id,
@@ -693,5 +729,40 @@ class WhatsAppCloudController extends Controller
         $callbackUrl = route('whatsapp.callback');
         
         return "{$baseUrl}?app_id={$appId}&redirect_uri=" . urlencode($callbackUrl) . "&state={$klienId}";
+    }
+
+    protected function resolveConnectionProvider(bool $isGupshupConfigured): string
+    {
+        return $isGupshupConfigured ? 'gupshup' : 'meta_cloud';
+    }
+
+    protected function buildConnectionName(string $businessName): string
+    {
+        $businessName = trim($businessName);
+
+        return $businessName !== '' ? $businessName : 'WhatsApp Utama';
+    }
+
+    protected function syncLegacyKlienState($klien, WhatsappConnection $connection): void
+    {
+        $klien->update([
+            'no_whatsapp' => $connection->phone_number ?: $klien->no_whatsapp,
+            'wa_phone_number_id' => $connection->phone_number_id ?: $klien->wa_phone_number_id,
+            'wa_business_account_id' => $connection->waba_id ?: $klien->wa_business_account_id,
+            'wa_access_token' => $connection->access_token ?: $klien->wa_access_token,
+            'wa_terhubung' => $connection->isConnected(),
+            'wa_terakhir_sync' => $connection->webhook_last_update ?: $connection->connected_at ?: $klien->wa_terakhir_sync,
+        ]);
+    }
+
+    protected function clearLegacyKlienState($klien): void
+    {
+        $klien->update([
+            'wa_phone_number_id' => null,
+            'wa_business_account_id' => null,
+            'wa_access_token' => null,
+            'wa_terhubung' => false,
+            'wa_terakhir_sync' => now(),
+        ]);
     }
 }
