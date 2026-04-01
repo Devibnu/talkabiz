@@ -5,9 +5,11 @@ namespace App\Services\Message;
 use App\Services\SaldoService;
 use App\Services\WalletService;
 use App\Services\AutoPricingService;
-use App\Services\LedgerService;
+use App\Services\WalletCacheService;
 use App\Services\WhatsAppProviderService;
 use App\Models\WaPricing;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use App\Exceptions\InsufficientBalanceException;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -36,27 +38,29 @@ class MessageDispatchService
     protected SaldoService $saldoService;
     protected WalletService $walletService;
     protected AutoPricingService $pricingService;
-    protected LedgerService $ledgerService;
+    protected WalletCacheService $walletCacheService;
     protected WhatsAppProviderService $whatsAppProvider;
 
     public function __construct(
         SaldoService $saldoService,
         WalletService $walletService,
         AutoPricingService $pricingService,
-        LedgerService $ledgerService,
+        WalletCacheService $walletCacheService,
         WhatsAppProviderService $whatsAppProvider
     ) {
         $this->saldoService = $saldoService;
         $this->walletService = $walletService;
         $this->pricingService = $pricingService;
-        $this->ledgerService = $ledgerService;
+        $this->walletCacheService = $walletCacheService;
         $this->whatsAppProvider = $whatsAppProvider;
     }
 
     /**
-     * Dispatch pesan dengan proteksi saldo ketat via LEDGER
+     * Dispatch pesan dengan proteksi saldo ketat via Wallet + WalletTransaction
      * 
-     * UPDATED: Menggunakan LedgerService untuk atomic saldo operations
+     * Saldo runtime harus konsisten dengan RevenueGuardService.
+     * Karena itu direct dispatch path juga membaca dan memotong saldo dari Wallet,
+     * lalu menulis audit trail ke WalletTransaction.
      * 
      * @param MessageDispatchRequest $request
      * @return MessageDispatchResult
@@ -82,7 +86,7 @@ class MessageDispatchService
             return $this->dispatchPreAuthorized($request, $user, $totalCost, $pricePerMessage, $recipientCount);
         }
 
-        Log::info('Message Dispatch Started (LEDGER)', [
+        Log::info('Message Dispatch Started (WALLET)', [
             'user_id' => $user->id,
             'recipient_count' => $recipientCount,
             'price_per_message' => $pricePerMessage,
@@ -90,24 +94,22 @@ class MessageDispatchService
             'context' => $request->getContext()
         ]);
 
-        // HARD STOP: Use LedgerService for atomic debit with balance check
+        // Direct dispatch path must use the same saldo source as RevenueGuard.
         return DB::transaction(function () use ($request, $user, $totalCost, $pricePerMessage, $recipientCount) {
             
             $transactionCode = $this->generateTransactionCode();
-            $ledgerEntry = null;
+            $walletTransaction = null;
+            $refundTransaction = null;
 
             try {
-                // STEP 1: Atomic saldo deduction via LEDGER
-                $ledgerEntry = $this->ledgerService->createMessageDebit(
-                    userId: $user->id,
-                    amount: $totalCost,
+                // STEP 1: Atomic saldo deduction via Wallet
+                $walletTransaction = $this->createWalletUsageEntry(
+                    user: $user,
+                    request: $request,
+                    totalCost: $totalCost,
+                    pricePerMessage: $pricePerMessage,
+                    recipientCount: $recipientCount,
                     transactionCode: $transactionCode,
-                    messageCount: $recipientCount,
-                    metadata: array_merge($request->getContext(), [
-                        'recipient_count' => $recipientCount,
-                        'price_per_message' => $pricePerMessage,
-                        'dispatched_at' => now()->toISOString()
-                    ])
                 );
 
                 // STEP 2: Kirim pesan aktual
@@ -122,23 +124,24 @@ class MessageDispatchService
                 $refundAmount = $totalCost - $actualCost;
 
                 if ($refundAmount > 0 && $failedCount > 0) {
-                    // Create refund entry via LedgerService
-                    $this->ledgerService->createRefundEntry(
-                        userId: $user->id,
+                    // Partial refund writes back to the same wallet source of truth.
+                    $refundTransaction = $this->createWalletRefundEntry(
+                        user: $user,
+                        originalTransaction: $walletTransaction,
                         amount: $refundAmount,
-                        originalTransactionCode: $transactionCode,
                         reason: "Partial refund for {$failedCount} failed messages",
                         metadata: [
                             'failed_count' => $failedCount,
                             'success_count' => $successCount,
                             'refund_per_message' => $pricePerMessage,
+                            'transaction_code' => $transactionCode,
                             'refunded_at' => now()->toISOString()
                         ]
                     );
                 }
 
-                // STEP 5: Get final balance from ledger
-                $finalBalance = $this->ledgerService->getCurrentBalance($user->id);
+                // STEP 5: Get final balance from wallet
+                $finalBalance = $this->getCurrentWalletBalance($user->id);
 
                 // STEP 6: Create comprehensive result
                 $result = new MessageDispatchResult(
@@ -150,7 +153,8 @@ class MessageDispatchService
                     transactionCode: $transactionCode,
                     sentResults: $sentResults,
                     metadata: array_merge($request->getContext(), [
-                        'ledger_entry_id' => $ledgerEntry->ledger_id,
+                        'wallet_transaction_id' => $walletTransaction->id,
+                        'refund_transaction_id' => $refundTransaction?->id,
                         'original_cost' => $totalCost,
                         'refund_amount' => $refundAmount
                     ])
@@ -161,26 +165,28 @@ class MessageDispatchService
                 return $result;
 
             } catch (Exception $e) {
-                // ROLLBACK: Refund semua saldo jika ada error dan ledger entry sudah dibuat
-                if ($ledgerEntry) {
+                // Roll back wallet debit through a refund entry if send fails after deduction.
+                if ($walletTransaction) {
                     try {
-                        $this->ledgerService->createRefundEntry(
-                            userId: $user->id,
+                        $refundTransaction = $this->createWalletRefundEntry(
+                            user: $user,
+                            originalTransaction: $walletTransaction,
                             amount: $totalCost,
-                            originalTransactionCode: $transactionCode,
                             reason: "Full refund - dispatch failed: " . $e->getMessage(),
                             metadata: [
                                 'error_type' => get_class($e),
                                 'error_message' => $e->getMessage(),
                                 'rollback_reason' => 'dispatch_failure',
                                 'original_cost' => $totalCost,
+                                'transaction_code' => $transactionCode,
                                 'refunded_at' => now()->toISOString()
                             ]
                         );
                     } catch (Exception $refundError) {
                         Log::error('CRITICAL: Failed to refund after dispatch error', [
                             'transaction_code' => $transactionCode,
-                            'ledger_entry_id' => $ledgerEntry->ledger_id,
+                            'wallet_transaction_id' => $walletTransaction->id,
+                            'refund_transaction_id' => $refundTransaction?->id,
                             'original_error' => $e->getMessage(),
                             'refund_error' => $refundError->getMessage(),
                             'user_id' => $user->id
@@ -188,11 +194,11 @@ class MessageDispatchService
                     }
                 }
 
-                Log::error('Message Dispatch Failed (LEDGER)', [
+                Log::error('Message Dispatch Failed (WALLET)', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                     'context' => $request->getContext(),
-                    'ledger_entry_id' => $ledgerEntry?->ledger_id ?? null
+                    'wallet_transaction_id' => $walletTransaction?->id ?? null
                 ]);
 
                 throw $e;
@@ -239,7 +245,7 @@ class MessageDispatchService
                 totalSent: $successCount,
                 totalFailed: $failedCount,
                 totalCost: $actualCost,
-                balanceAfter: 0, // Caller harus query Wallet untuk balance terkini
+                balanceAfter: $this->getCurrentWalletBalance($user->id),
                 transactionCode: $transactionCode,
                 sentResults: $sentResults,
                 metadata: array_merge($request->getContext(), [
@@ -269,7 +275,7 @@ class MessageDispatchService
     }
 
     /**
-     * Estimasi biaya tanpa eksekusi (Updated untuk LEDGER)
+    * Estimasi biaya tanpa eksekusi menggunakan saldo Wallet yang sama dengan RevenueGuard.
      * 
      * @param int $userId
      * @param int $recipientCount
@@ -281,9 +287,8 @@ class MessageDispatchService
         $pricePerMessage = $this->getPricePerMessage();
         $totalCost = $recipientCount * $pricePerMessage;
 
-        // Get saldo from LEDGER (bukan dari DompetSaldo)
-        $currentBalance = $this->ledgerService->getCurrentBalance($userId);
-        $sufficient = $this->ledgerService->hasSufficientBalance($userId, $totalCost);
+        $currentBalance = $this->getCurrentWalletBalance($userId);
+        $sufficient = $currentBalance >= $totalCost;
         $shortage = $sufficient ? 0 : ($totalCost - $currentBalance);
 
         return [
@@ -295,7 +300,7 @@ class MessageDispatchService
             'current_balance' => $currentBalance,
             'shortage' => $shortage,
             'balance_after' => max(0, $currentBalance - $totalCost),
-            'source' => 'ledger' // Indicate this comes from ledger, not old DompetSaldo
+            'source' => 'wallet'
         ];
     }
 
@@ -427,6 +432,158 @@ class MessageDispatchService
     protected function countSuccessfulSends(array $results): int
     {
         return count(array_filter($results, fn($result) => $result['status'] === 'sent'));
+    }
+
+    protected function createWalletUsageEntry(
+        User $user,
+        MessageDispatchRequest $request,
+        int $totalCost,
+        int $pricePerMessage,
+        int $recipientCount,
+        string $transactionCode
+    ): WalletTransaction {
+        $wallet = Wallet::lockForUpdate()
+            ->where('user_id', $user->id)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$wallet) {
+            throw new \RuntimeException("Wallet tidak ditemukan atau tidak aktif untuk user ID {$user->id}.");
+        }
+
+        if ((float) $wallet->balance < $totalCost) {
+            throw new InsufficientBalanceException((int) $wallet->balance, $totalCost);
+        }
+
+        $balanceBefore = (float) $wallet->balance;
+        $reference = $this->resolveWalletReference($request, $transactionCode);
+
+        $wallet->balance -= $totalCost;
+        $wallet->total_spent += $totalCost;
+        $wallet->last_transaction_at = now();
+        $wallet->save();
+
+        $this->clearWalletCache($user->id);
+
+        if ((float) $wallet->balance < 0) {
+            throw new \RuntimeException('Saldo menjadi negatif setelah potongan. Transaksi dibatalkan.');
+        }
+
+        return WalletTransaction::create([
+            'wallet_id' => $wallet->id,
+            'user_id' => $user->id,
+            'type' => WalletTransaction::TYPE_USAGE,
+            'amount' => -$totalCost,
+            'balance_before' => $balanceBefore,
+            'balance_after' => (float) $wallet->balance,
+            'currency' => $wallet->currency ?? 'IDR',
+            'description' => ucfirst(str_replace('_', ' ', $reference['type'])) . " — {$recipientCount} pesan ({$request->messageType})",
+            'reference_type' => $reference['type'],
+            'reference_id' => $reference['id'],
+            'status' => WalletTransaction::STATUS_COMPLETED,
+            'processed_at' => now(),
+            'metadata' => array_merge($request->getContext(), [
+                'source' => 'message_dispatch_direct',
+                'transaction_code' => $transactionCode,
+                'recipient_count' => $recipientCount,
+                'price_per_message' => $pricePerMessage,
+                'original_cost' => $totalCost,
+            ]),
+            'idempotency_key' => 'dispatch_' . $transactionCode,
+        ]);
+    }
+
+    protected function createWalletRefundEntry(
+        User $user,
+        WalletTransaction $originalTransaction,
+        int $amount,
+        string $reason,
+        array $metadata = []
+    ): ?WalletTransaction {
+        if ($amount <= 0) {
+            return null;
+        }
+
+        $idempotencyKey = sprintf('%s_refund_%s', $originalTransaction->idempotency_key ?? ('wallet_tx_' . $originalTransaction->id), $amount);
+        $existingRefund = WalletTransaction::where('idempotency_key', $idempotencyKey)->first();
+
+        if ($existingRefund) {
+            return $existingRefund;
+        }
+
+        $wallet = Wallet::lockForUpdate()
+            ->where('user_id', $user->id)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$wallet) {
+            throw new \RuntimeException("Wallet tidak ditemukan atau tidak aktif untuk user ID {$user->id}.");
+        }
+
+        $balanceBefore = (float) $wallet->balance;
+        $wallet->balance += $amount;
+        $wallet->total_spent = max(0, (float) $wallet->total_spent - $amount);
+        $wallet->last_transaction_at = now();
+        $wallet->save();
+
+        $this->clearWalletCache($user->id);
+
+        return WalletTransaction::create([
+            'wallet_id' => $wallet->id,
+            'user_id' => $user->id,
+            'type' => WalletTransaction::TYPE_REFUND,
+            'amount' => $amount,
+            'balance_before' => $balanceBefore,
+            'balance_after' => (float) $wallet->balance,
+            'currency' => $wallet->currency ?? 'IDR',
+            'description' => $reason,
+            'reference_type' => $originalTransaction->reference_type,
+            'reference_id' => $originalTransaction->reference_id,
+            'status' => WalletTransaction::STATUS_COMPLETED,
+            'processed_at' => now(),
+            'metadata' => array_merge([
+                'source' => 'message_dispatch_refund',
+                'original_transaction_id' => $originalTransaction->id,
+                'original_idempotency_key' => $originalTransaction->idempotency_key,
+            ], $metadata),
+            'idempotency_key' => $idempotencyKey,
+        ]);
+    }
+
+    protected function getCurrentWalletBalance(int $userId): float
+    {
+        return (float) Wallet::where('user_id', $userId)
+            ->where('is_active', true)
+            ->value('balance');
+    }
+
+    protected function resolveWalletReference(MessageDispatchRequest $request, string $fallbackId): array
+    {
+        if ($request->campaignId) {
+            return ['type' => 'wa_campaign', 'id' => (string) $request->campaignId];
+        }
+
+        if ($request->broadcastId) {
+            return ['type' => 'wa_blast', 'id' => (string) $request->broadcastId];
+        }
+
+        if ($request->flowId) {
+            return ['type' => 'wa_flow', 'id' => (string) $request->flowId];
+        }
+
+        return ['type' => 'message_dispatch', 'id' => $fallbackId];
+    }
+
+    protected function clearWalletCache(int $userId): void
+    {
+        try {
+            $this->walletCacheService->clear($userId);
+        } catch (Exception $e) {
+            Log::warning('Wallet cache clear failed in MessageDispatchService', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
