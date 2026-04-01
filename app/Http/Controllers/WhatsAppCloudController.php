@@ -8,6 +8,7 @@ use App\Models\WhatsappContact;
 use App\Services\GupshupService;
 use App\Services\RevenueGuardService;
 use App\Services\PlanLimitService;
+use App\Services\WhatsAppProviderService;
 use App\Exceptions\Subscription\PlanLimitExceededException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -674,13 +675,16 @@ class WhatsAppCloudController extends Controller
                 category: 'utility',
                 referenceType: 'test_message',
                 referenceId: $sendRef,
-                dispatchCallable: function ($transaction) use ($connection, $request, $template, $klien) {
-                    $service = GupshupService::forConnection($connection);
+                dispatchCallable: function ($transaction) use ($request, $template, $klien) {
+                    $service = app(WhatsAppProviderService::class);
+
                     return $service->sendTemplateMessage(
-                        destination: $request->phone_number,
+                        phone: $request->phone_number,
                         templateId: $template->template_id,
-                        params: $request->params ?? [],
-                        klienId: $klien->id
+                        bodyParams: $request->params ?? [],
+                        components: [],
+                        klienId: $klien->id,
+                        penggunaId: auth()->id()
                     );
                 },
                 costPreview: $request->attributes->get('revenue_guard', []),
