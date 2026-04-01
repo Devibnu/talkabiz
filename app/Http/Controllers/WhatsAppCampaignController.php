@@ -8,6 +8,7 @@ use App\Models\WhatsappConnection;
 use App\Models\WhatsappContact;
 use App\Models\WhatsappMessageLog;
 use App\Models\WhatsappTemplate;
+use App\Models\User;
 use App\Jobs\ProcessWhatsappCampaign;
 use App\Services\RevenueGuardService;
 use App\Services\Message\MessageDispatchService;
@@ -408,6 +409,8 @@ class WhatsAppCampaignController extends Controller
      */
     protected function executeDirectCampaign(WhatsappCampaign $campaign, ?int $revenueGuardTxId = null): \App\Services\Message\MessageDispatchResult
     {
+        $dispatchUserId = $this->resolveCampaignUserId($campaign);
+
         // Get recipients
         $recipients = $campaign->recipients()
             ->with('contact')
@@ -437,7 +440,7 @@ class WhatsAppCampaignController extends Controller
 
         // Create dispatch request
         $dispatchRequest = MessageDispatchRequest::fromCampaign(
-            userId: $campaign->klien->user_id,
+            userId: $dispatchUserId,
             recipients: $recipients,
             messageContent: $messageContent,
             campaignId: (string) $campaign->id,
@@ -544,6 +547,20 @@ class WhatsAppCampaignController extends Controller
                 );
             }
         }
+    }
+
+    protected function resolveCampaignUserId(WhatsappCampaign $campaign): int
+    {
+        $campaign->loadMissing('klien.user');
+
+        $dispatchUser = $campaign->klien?->user
+            ?? User::where('klien_id', $campaign->klien_id)->orderBy('id')->first();
+
+        if (!$dispatchUser) {
+            throw new \RuntimeException('User utama klien tidak ditemukan untuk kampanye ini.');
+        }
+
+        return (int) $dispatchUser->id;
     }
 
     /**
