@@ -382,11 +382,23 @@
                 <div class="card-body pt-2">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="text-xs text-secondary">Bulanan</span>
-                        <span class="text-sm font-weight-bold">{{ number_format($quotaInfo['monthly']['remaining'], 0, ',', '.') }} / {{ is_numeric($quotaInfo['monthly']['limit']) ? number_format($quotaInfo['monthly']['limit'], 0, ',', '.') : $quotaInfo['monthly']['limit'] }}</span>
+                        <span class="text-sm font-weight-bold">
+                            @if($quotaInfo['monthly']['remaining'] >= PHP_INT_MAX)
+                                Unlimited
+                            @else
+                                {{ number_format($quotaInfo['monthly']['remaining'], 0, ',', '.') }} / {{ is_numeric($quotaInfo['monthly']['limit']) ? number_format($quotaInfo['monthly']['limit'], 0, ',', '.') : $quotaInfo['monthly']['limit'] }}
+                            @endif
+                        </span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="text-xs text-secondary">Harian</span>
-                        <span class="text-sm font-weight-bold">{{ number_format($quotaInfo['daily']['remaining'], 0, ',', '.') }} / {{ is_numeric($quotaInfo['daily']['limit']) ? number_format($quotaInfo['daily']['limit'], 0, ',', '.') : $quotaInfo['daily']['limit'] }}</span>
+                        <span class="text-sm font-weight-bold">
+                            @if($quotaInfo['daily']['remaining'] >= PHP_INT_MAX)
+                                Unlimited
+                            @else
+                                {{ number_format($quotaInfo['daily']['remaining'], 0, ',', '.') }} / {{ is_numeric($quotaInfo['daily']['limit']) ? number_format($quotaInfo['daily']['limit'], 0, ',', '.') : $quotaInfo['daily']['limit'] }}
+                            @endif
+                        </span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="text-xs text-secondary">Campaign Aktif</span>
