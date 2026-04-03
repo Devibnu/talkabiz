@@ -142,15 +142,16 @@
     color: #fff;
 }
 
-/* Campaign Table Placeholder */
+/* Campaign Table */
 .campaign-table-container {
-    display: none;
+    overflow-x: auto;
 }
 
 .campaign-table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
+    table-layout: fixed;
 }
 
 .campaign-table thead th {
@@ -162,22 +163,47 @@
     color: #8392ab;
     background: #f8f9fa;
     border-bottom: 1px solid #e9ecef;
+    white-space: nowrap;
 }
 
 .campaign-table thead th:first-child {
     border-radius: 0.5rem 0 0 0;
+    width: 30%;
+}
+
+.campaign-table thead th:nth-child(2) {
+    width: 15%;
+}
+
+.campaign-table thead th:nth-child(3) {
+    width: 14%;
+}
+
+.campaign-table thead th:nth-child(4),
+.campaign-table thead th:nth-child(5) {
+    width: 10%;
+    text-align: center;
 }
 
 .campaign-table thead th:last-child {
     border-radius: 0 0.5rem 0 0;
+    width: 21%;
 }
 
 .campaign-table tbody td {
-    padding: 1rem;
+    padding: 0.875rem 1rem;
     font-size: 0.875rem;
     color: #344767;
     border-bottom: 1px solid #e9ecef;
     vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.campaign-table tbody td:nth-child(4),
+.campaign-table tbody td:nth-child(5) {
+    text-align: center;
 }
 
 .campaign-table tbody tr:last-child td {
@@ -209,13 +235,25 @@
     color: #92400e;
 }
 
-.campaign-status.sent {
+.campaign-status.sent,
+.campaign-status.completed {
     background: linear-gradient(310deg, #17ad37 0%, #98ec2d 100%);
     color: #fff;
 }
 
-.campaign-status.failed {
+.campaign-status.running {
+    background: linear-gradient(310deg, #2152ff 0%, #21d4fd 100%);
+    color: #fff;
+}
+
+.campaign-status.failed,
+.campaign-status.cancelled {
     background: linear-gradient(310deg, #ea0606 0%, #f87171 100%);
+    color: #fff;
+}
+
+.campaign-status.paused {
+    background: linear-gradient(310deg, #627594 0%, #a8b8d8 100%);
     color: #fff;
 }
 
@@ -325,7 +363,7 @@
                 <div class="campaign-card-body">
                     @if(($campaigns ?? collect())->count() > 0)
                     {{-- Campaign Table --}}
-                    <div class="campaign-table-container" style="display: block;">
+                    <div class="campaign-table-container">
                         <table class="campaign-table">
                             <thead>
                                 <tr>
@@ -340,8 +378,8 @@
                             <tbody>
                                 @foreach($campaigns as $campaign)
                                 <tr>
-                                    <td><strong>{{ $campaign->name }}</strong></td>
-                                    <td>{{ $campaign->template->name ?? '-' }}</td>
+                                    <td title="{{ $campaign->name }}"><strong>{{ $campaign->name }}</strong></td>
+                                    <td title="{{ $campaign->template->name ?? '-' }}">{{ $campaign->template->name ?? '-' }}</td>
                                     <td>
                                         <span class="campaign-status {{ $campaign->status }}">
                                             {{ ucfirst($campaign->status) }}
