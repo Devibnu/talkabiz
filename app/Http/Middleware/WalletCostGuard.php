@@ -236,6 +236,10 @@ class WalletCostGuard
             return max(1, $campaign->recipients()->pending()->count());
         }
 
+        if ($routeName === 'whatsapp.campaigns.retry-failed') {
+            return max(1, $campaign->recipients()->failed()->count());
+        }
+
         if (($campaign->total_recipients ?? 0) > 0) {
             return (int) $campaign->total_recipients;
         }

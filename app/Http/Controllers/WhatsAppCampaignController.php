@@ -486,16 +486,6 @@ class WhatsAppCampaignController extends Controller
      */
     protected function updateCampaignFromResult(WhatsappCampaign $campaign, \App\Services\Message\MessageDispatchResult $result): void
     {
-        // Update campaign statistics
-        $campaign->update([
-            'status' => $result->success ? WhatsappCampaign::STATUS_COMPLETED : WhatsappCampaign::STATUS_FAILED,
-            'sent_count' => $result->totalSent,
-            'failed_count' => $result->totalFailed,
-            'actual_cost' => $result->totalCost,
-            'completed_at' => now(),
-            'last_error' => $result->success ? null : 'Partial or complete failure'
-        ]);
-
         // Update recipient statuses
         foreach ($result->sentResults as $sentResult) {
             $recipient = WhatsappCampaignRecipient::where('campaign_id', $campaign->id)
@@ -547,6 +537,34 @@ class WhatsAppCampaignController extends Controller
                 );
             }
         }
+
+        $campaign->refresh();
+
+        $sentCount = $campaign->recipients()
+            ->whereIn('status', [
+                WhatsappCampaignRecipient::STATUS_SENT,
+                WhatsappCampaignRecipient::STATUS_DELIVERED,
+                WhatsappCampaignRecipient::STATUS_READ,
+            ])
+            ->count();
+        $failedCount = $campaign->recipients()->failed()->count();
+        $pendingCount = $campaign->recipients()->pending()->count();
+        $deliveredCount = $campaign->recipients()->where('status', WhatsappCampaignRecipient::STATUS_DELIVERED)->count();
+        $readCount = $campaign->recipients()->where('status', WhatsappCampaignRecipient::STATUS_READ)->count();
+        $actualCost = (float) $campaign->recipients()->sum('cost');
+
+        $campaign->update([
+            'status' => $pendingCount > 0
+                ? WhatsappCampaign::STATUS_RUNNING
+                : WhatsappCampaign::STATUS_COMPLETED,
+            'sent_count' => $sentCount,
+            'failed_count' => $failedCount,
+            'delivered_count' => $deliveredCount,
+            'read_count' => $readCount,
+            'actual_cost' => $actualCost,
+            'completed_at' => $pendingCount > 0 ? null : now(),
+            'last_error' => $failedCount > 0 ? 'Partial or complete failure' : null,
+        ]);
     }
 
     protected function resolveCampaignUserId(WhatsappCampaign $campaign): int
@@ -616,9 +634,7 @@ class WhatsAppCampaignController extends Controller
                     referenceType: 'wa_campaign_resume',
                     referenceId: $campaign->id,
                     dispatchCallable: function ($transaction) use ($campaign) {
-                        $campaign->resume();
-                        ProcessWhatsappCampaign::dispatch($campaign);
-                        return ['dispatched' => true, 'remaining' => $campaign->recipients()->pending()->count()];
+                        return $this->executeDirectCampaign($campaign, $transaction->id);
                     },
                     costPreview: request()->attributes->get('revenue_guard', []),
                 );
@@ -626,10 +642,9 @@ class WhatsAppCampaignController extends Controller
                 if ($guardResult['duplicate'] ?? false) {
                     return back()->with('info', $guardResult['message']);
                 }
+                $result = $guardResult['dispatch_result'];
             } else {
-                // No remaining recipients, just resume
-                $campaign->resume();
-                ProcessWhatsappCampaign::dispatch($campaign);
+                return back()->with('info', 'Tidak ada penerima tertunda untuk dilanjutkan.');
             }
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
@@ -638,9 +653,15 @@ class WhatsAppCampaignController extends Controller
         Log::info('WA Campaign resumed via chargeAndExecute', [
             'campaign_id' => $campaign->id,
             'remaining_recipients' => $remainingRecipients ?? 0,
+            'sent' => $result->totalSent ?? 0,
+            'failed' => $result->totalFailed ?? 0,
         ]);
 
-        return back()->with('success', 'Kampanye dilanjutkan.');
+        $message = $result->isPartialSuccess()
+            ? "Kampanye dilanjutkan. Berhasil: {$result->totalSent}, Gagal: {$result->totalFailed}"
+            : "Kampanye berhasil dilanjutkan ke {$result->totalSent} penerima";
+
+        return back()->with('success', $message);
     }
 
     /**
@@ -780,15 +801,19 @@ class WhatsAppCampaignController extends Controller
                             'failed_at' => null,
                         ]);
 
-                    if ($resetCount > 0) {
-                        $campaign->decrement('failed_count', $resetCount);
-                        $campaign->status = WhatsappCampaign::STATUS_RUNNING;
-                        $campaign->save();
-
-                        ProcessWhatsappCampaign::dispatch($campaign);
+                    if ($resetCount <= 0) {
+                        return [
+                            'reset_count' => 0,
+                            'dispatch_result' => null,
+                        ];
                     }
 
-                    return ['reset_count' => $resetCount];
+                    $dispatchResult = $this->executeDirectCampaign($campaign, $transaction->id);
+
+                    return [
+                        'reset_count' => $resetCount,
+                        'dispatch_result' => $dispatchResult,
+                    ];
                 },
                 costPreview: request()->attributes->get('revenue_guard', []),
             );
@@ -798,6 +823,7 @@ class WhatsAppCampaignController extends Controller
             }
 
             $resetCount = $guardResult['dispatch_result']['reset_count'] ?? 0;
+            $result = $guardResult['dispatch_result']['dispatch_result'] ?? null;
 
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
@@ -809,6 +835,14 @@ class WhatsAppCampaignController extends Controller
             'revenue_guard_tx' => $guardResult['transaction']?->id ?? null,
         ]);
 
-        return back()->with('success', "{$resetCount} penerima akan dicoba ulang.");
+        if ($result) {
+            $message = $result->isPartialSuccess()
+                ? "Retry selesai. Berhasil: {$result->totalSent}, Gagal: {$result->totalFailed}"
+                : "Retry berhasil untuk {$result->totalSent} penerima.";
+
+            return back()->with('success', $message);
+        }
+
+        return back()->with('info', 'Tidak ada penerima yang dicoba ulang.');
     }
 }
