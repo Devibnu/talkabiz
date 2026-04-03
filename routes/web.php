@@ -126,15 +126,61 @@ Route::middleware(['client.access'])->group(function () {
 		Route::middleware(['campaign.guard', 'subscription.active'])->group(function () {
 			Route::get('campaign', function () {
 				$user = auth()->user();
-				$templates = \App\Models\TemplatePesan::where('klien_id', $user->klien_id)
-					->where('status', \App\Models\TemplatePesan::STATUS_DISETUJUI)
-					->orderBy('nama_tampilan')
+				$templates = \App\Models\WhatsappTemplate::where('klien_id', $user->klien_id)
+					->where('status', 'approved')
+					->orderBy('name')
 					->get();
 				$kontaks = \App\Models\Kontak::where('klien_id', $user->klien_id)->get();
 				$tags = $kontaks->pluck('tags')->flatten()->filter()->unique()->values();
 				$quotaInfo = app(\App\Services\PlanLimitService::class)->getQuotaInfo($user);
-				return view('campaign', compact('templates', 'kontaks', 'tags', 'quotaInfo'));
+				$campaigns = \App\Models\WhatsappCampaign::where('klien_id', $user->klien_id)
+					->with('template')
+					->latest()
+					->get();
+				return view('campaign', compact('templates', 'kontaks', 'tags', 'quotaInfo', 'campaigns'));
 			})->name('campaign');
+
+			Route::post('campaign', function (\Illuminate\Http\Request $request) {
+				$user = auth()->user();
+				$request->validate([
+					'name' => 'required|string|max:255',
+					'template_id' => 'required|exists:whatsapp_templates,id',
+					'audience' => 'required|string',
+					'schedule_type' => 'required|in:now,later',
+					'scheduled_at' => 'nullable|date|after:now',
+				]);
+
+				// Count recipients based on audience selection
+				$kontakQuery = \App\Models\Kontak::where('klien_id', $user->klien_id);
+				$audienceFilter = [];
+				if ($request->audience !== 'all' && str_starts_with($request->audience, 'tag:')) {
+					$tag = substr($request->audience, 4);
+					$kontakQuery->whereJsonContains('tags', $tag);
+					$audienceFilter = ['tags' => [$tag]];
+				}
+				$totalRecipients = $kontakQuery->count();
+
+				if ($totalRecipients === 0) {
+					return back()->with('error', 'Tidak ada kontak yang ditemukan untuk audience ini.');
+				}
+
+				$status = ($request->schedule_type === 'later' && $request->scheduled_at)
+					? 'scheduled' : 'draft';
+
+				$campaign = \App\Models\WhatsappCampaign::create([
+					'klien_id' => $user->klien_id,
+					'template_id' => $request->template_id,
+					'name' => $request->name,
+					'status' => $status,
+					'audience_filter' => $audienceFilter,
+					'scheduled_at' => $request->scheduled_at,
+					'total_recipients' => $totalRecipients,
+					'estimated_cost' => $totalRecipients * 350,
+					'rate_limit_per_second' => 10,
+				]);
+
+				return redirect()->route('campaign')->with('success', "Campaign \"{$campaign->name}\" berhasil dibuat dengan {$totalRecipients} penerima.");
+			})->name('campaign.store');
 			
 			/*
 			|----------------------------------------------------------------------

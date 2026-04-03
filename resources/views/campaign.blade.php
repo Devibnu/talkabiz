@@ -255,6 +255,20 @@
 @endphp
 
 <div class="container-fluid py-4">
+    {{-- Flash Messages --}}
+    @if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm" role="alert">
+        <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    @endif
+    @if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm" role="alert">
+        <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    @endif
+
     {{-- Impersonation View-Only Banner --}}
     @if($__isImpersonating ?? false)
     <div class="alert alert-info border-0 shadow-sm mb-4" style="background: linear-gradient(310deg, #e8f4fd 0%, #f0e8fd 100%); border-left: 4px solid #5e72e4 !important;">
@@ -309,6 +323,39 @@
                     <h6 class="campaign-card-title">Daftar Campaign</h6>
                 </div>
                 <div class="campaign-card-body">
+                    @if(($campaigns ?? collect())->count() > 0)
+                    {{-- Campaign Table --}}
+                    <div class="campaign-table-container" style="display: block;">
+                        <table class="campaign-table">
+                            <thead>
+                                <tr>
+                                    <th>Nama Campaign</th>
+                                    <th>Template</th>
+                                    <th>Status</th>
+                                    <th>Penerima</th>
+                                    <th>Terkirim</th>
+                                    <th>Dibuat</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($campaigns as $campaign)
+                                <tr>
+                                    <td><strong>{{ $campaign->name }}</strong></td>
+                                    <td>{{ $campaign->template->name ?? '-' }}</td>
+                                    <td>
+                                        <span class="campaign-status {{ $campaign->status }}">
+                                            {{ ucfirst($campaign->status) }}
+                                        </span>
+                                    </td>
+                                    <td>{{ number_format($campaign->total_recipients, 0, ',', '.') }}</td>
+                                    <td>{{ number_format($campaign->sent_count, 0, ',', '.') }}</td>
+                                    <td>{{ $campaign->created_at->format('d M Y H:i') }}</td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    @else
                     {{-- Empty State --}}
                     <div class="empty-state-container" id="campaignEmptyState">
                         <div class="empty-state-icon">
@@ -346,27 +393,9 @@
                             </div>
                         @endif
                     </div>
-
-                    {{-- Table Placeholder (hidden by default) --}}
-                    <div class="campaign-table-container" id="campaignTableContainer">
-                        <table class="campaign-table">
-                            <thead>
-                                <tr>
-                                    <th>Nama Campaign</th>
-                                    <th>Status</th>
-                            <th>Jadwal</th>
-                            <th>Penerima</th>
-                            <th>Terkirim</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="campaignTableBody">
-                        {{-- Data akan dimuat via backend --}}
-                    </tbody>
-                </table>
+                    @endif
+                </div>
             </div>
-        </div>
-    </div>
         </div>
         
         {{-- Sidebar: Delivery Tips --}}
@@ -421,29 +450,30 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" style="padding: 1.5rem;">
-                <form id="createCampaignForm">
+                <form id="createCampaignForm" action="{{ route('campaign.store') }}" method="POST">
+                    @csrf
                     {{-- Nama Campaign --}}
                     <div class="mb-3">
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Nama Campaign</label>
-                        <input type="text" class="form-control" placeholder="Contoh: Promo Akhir Tahun 2026" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
+                        <input type="text" name="name" class="form-control" placeholder="Contoh: Promo Akhir Tahun 2026" required style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
                     </div>
 
                     {{-- Template Pesan --}}
                     <div class="mb-3">
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Template Pesan</label>
-                        <select class="form-select" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
+                        <select name="template_id" class="form-select" required style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
                             <option value="">Pilih template pesan...</option>
                             @foreach($templates ?? [] as $tpl)
-                                <option value="{{ $tpl->id }}">{{ $tpl->nama_tampilan ?? $tpl->nama_template }}</option>
+                                <option value="{{ $tpl->id }}">{{ $tpl->name }} ({{ $tpl->category ?? 'utility' }})</option>
                             @endforeach
                         </select>
-                        <small class="text-muted" style="font-size: 0.75rem;">Belum ada template? <a href="{{ route('template') }}" style="color: #5e72e4;">Buat template baru</a></small>
+                        <small class="text-muted" style="font-size: 0.75rem;">Template harus disetujui Meta/Gupshup terlebih dahulu</small>
                     </div>
 
                     {{-- Target Audience --}}
                     <div class="mb-3">
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Target Audience</label>
-                        <select class="form-select" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
+                        <select name="audience" class="form-select" required style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
                             <option value="">Pilih target...</option>
                             <option value="all">Semua Kontak ({{ count($kontaks ?? []) }})</option>
                             @foreach($tags ?? [] as $tag)
@@ -458,11 +488,11 @@
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Jadwal Kirim</label>
                         <div class="d-flex gap-3">
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="scheduleType" id="scheduleNow" value="now" checked>
-                                <label class="form-check-label" for="scheduleNow" style="font-size: 0.875rem;">Kirim Sekarang</label>
+                                <input class="form-check-input" type="radio" name="schedule_type" id="scheduleNow" value="now" checked>
+                                <label class="form-check-label" for="scheduleNow" style="font-size: 0.875rem;">Simpan Draft</label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="scheduleType" id="scheduleLater" value="later">
+                                <input class="form-check-input" type="radio" name="schedule_type" id="scheduleLater" value="later">
                                 <label class="form-check-label" for="scheduleLater" style="font-size: 0.875rem;">Jadwalkan</label>
                             </div>
                         </div>
@@ -470,13 +500,14 @@
 
                     {{-- Datetime Picker (hidden by default) --}}
                     <div class="mb-3" id="scheduleDatetimeContainer" style="display: none;">
-                        <input type="datetime-local" class="form-control" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
+                        <input type="datetime-local" name="scheduled_at" class="form-control" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
                     </div>
+            </div>
                 </form>
             </div>
             <div class="modal-footer" style="border-top: 1px solid #e9ecef; padding: 1rem 1.5rem;">
                 <button type="button" class="btn" data-bs-dismiss="modal" style="background: #f8f9fa; color: #67748e; border: 1px solid #e9ecef; border-radius: 0.5rem; padding: 0.625rem 1.25rem; font-weight: 600;">Batal</button>
-                <button type="button" class="btn-soft-primary" disabled title="Fitur akan segera hadir">
+                <button type="submit" form="createCampaignForm" class="btn-soft-primary">
                     <i class="ni ni-send"></i>
                     <span>Buat Campaign</span>
                 </button>
