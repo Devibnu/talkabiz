@@ -206,7 +206,9 @@ Route::middleware(['client.access'])->group(function () {
 		// Kontak Routes (CRUD)
 		Route::get('kontak', [KontakController::class, 'index'])->name('kontak');
 		Route::post('kontak', [KontakController::class, 'store'])->name('kontak.store');
+		Route::put('kontak/{id}', [KontakController::class, 'update'])->name('kontak.update');
 		Route::post('kontak/import', [KontakController::class, 'import'])->name('kontak.import');
+		Route::get('kontak/template-csv', [KontakController::class, 'downloadTemplate'])->name('kontak.template');
 		Route::delete('kontak/{id}', [KontakController::class, 'destroy'])->name('kontak.destroy');
 		Route::get('api/kontak', [KontakController::class, 'list'])->name('kontak.list');
 

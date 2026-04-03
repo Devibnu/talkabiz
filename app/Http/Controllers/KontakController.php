@@ -159,6 +159,74 @@ class KontakController extends Controller
     }
 
     /**
+     * Update kontak
+     */
+    public function update(Request $request, $id)
+    {
+        $kontak = Kontak::where('id', $id)
+            ->where('klien_id', Auth::user()->klien_id)
+            ->firstOrFail();
+
+        $validator = Validator::make($request->all(), [
+            'nama' => 'required|string|max:255',
+            'no_telepon' => 'required|string|max:20',
+            'email' => 'nullable|email|max:255',
+            'tags' => 'nullable|string',
+            'catatan' => 'nullable|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+            }
+            return back()->withErrors($validator)->withInput();
+        }
+
+        $tags = null;
+        if ($request->tags) {
+            $tags = array_map('trim', explode(',', $request->tags));
+        }
+
+        $kontak->update([
+            'nama' => $request->nama,
+            'no_telepon' => $request->no_telepon,
+            'email' => $request->email,
+            'tags' => $tags,
+            'catatan' => $request->catatan,
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => 'Kontak berhasil diperbarui', 'data' => $kontak]);
+        }
+
+        return redirect()->route('kontak')->with('success', 'Kontak berhasil diperbarui');
+    }
+
+    /**
+     * Download CSV template for import
+     */
+    public function downloadTemplate()
+    {
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="template_import_kontak.csv"',
+        ];
+
+        $callback = function () {
+            $handle = fopen('php://output', 'w');
+            // UTF-8 BOM for Excel compatibility
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['nama', 'no_telepon', 'email', 'tags']);
+            fputcsv($handle, ['John Doe', '6281234567890', 'john@example.com', 'customer,vip']);
+            fputcsv($handle, ['Jane Smith', '6289876543210', 'jane@example.com', 'prospect']);
+            fputcsv($handle, ['Ahmad Budi', '6285551234567', '', 'customer']);
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
      * Delete kontak
      */
     public function destroy($id)

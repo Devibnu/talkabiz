@@ -110,9 +110,17 @@
                                     <span class="badge badge-sm bg-gradient-secondary">{{ ucfirst($kontak->source) }}</span>
                                 </td>
                                 <td>
-                                    <button class="btn btn-link text-danger p-0" onclick="hapusKontak({{ $kontak->id }})" title="Hapus">
-                                        <i class="ni ni-fat-remove text-lg"></i>
-                                    </button>
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-link text-info p-0 me-2" onclick="viewKontak({{ json_encode($kontak) }})" title="Lihat Detail">
+                                            <i class="fas fa-eye text-sm"></i>
+                                        </button>
+                                        <button class="btn btn-link text-warning p-0 me-2" onclick="editKontak({{ json_encode($kontak) }})" title="Edit">
+                                            <i class="fas fa-pencil-alt text-sm"></i>
+                                        </button>
+                                        <button class="btn btn-link text-danger p-0" onclick="hapusKontak({{ $kontak->id }})" title="Hapus">
+                                            <i class="ni ni-fat-remove text-lg"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             @endforeach
@@ -194,6 +202,11 @@
                         Baris pertama = header (diabaikan)
                     </div>
                     <div class="mb-3">
+                        <a href="{{ route('kontak.template') }}" class="btn btn-outline-success btn-sm mb-3">
+                            <i class="fas fa-download me-1"></i>Download Template CSV
+                        </a>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Pilih File CSV</label>
                         <input type="file" class="form-control" name="file" accept=".csv,.txt" required>
                     </div>
@@ -207,7 +220,105 @@
     </div>
 </div>
 
+<!-- Modal View Kontak -->
+<div class="modal fade" id="viewKontakModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detail Kontak</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-borderless">
+                    <tr><th class="text-sm text-secondary" style="width:35%">Nama</th><td id="viewNama" class="font-weight-bold"></td></tr>
+                    <tr><th class="text-sm text-secondary">No. Telepon</th><td id="viewTelepon"></td></tr>
+                    <tr><th class="text-sm text-secondary">Email</th><td id="viewEmail"></td></tr>
+                    <tr><th class="text-sm text-secondary">Tags</th><td id="viewTags"></td></tr>
+                    <tr><th class="text-sm text-secondary">Sumber</th><td id="viewSource"></td></tr>
+                    <tr><th class="text-sm text-secondary">Catatan</th><td id="viewCatatan"></td></tr>
+                    <tr><th class="text-sm text-secondary">Dibuat</th><td id="viewCreated"></td></tr>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Edit Kontak -->
+<div class="modal fade" id="editKontakModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formEditKontak" method="POST">
+                @csrf
+                @method('PUT')
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Kontak</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nama <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nama" id="editNama" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">No. Telepon <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="no_telepon" id="editTelepon" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" id="editEmail">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tags</label>
+                        <input type="text" class="form-control" name="tags" id="editTags" placeholder="vip, customer, prospect">
+                        <small class="text-muted">Pisahkan dengan koma</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Catatan</label>
+                        <textarea class="form-control" name="catatan" id="editCatatan" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn bg-gradient-primary">Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
+function viewKontak(kontak) {
+    document.getElementById('viewNama').textContent = kontak.nama;
+    document.getElementById('viewTelepon').textContent = kontak.no_telepon;
+    document.getElementById('viewEmail').textContent = kontak.email || '-';
+    document.getElementById('viewSource').textContent = (kontak.source || 'manual').toUpperCase();
+    document.getElementById('viewCatatan').textContent = kontak.catatan || '-';
+    document.getElementById('viewCreated').textContent = kontak.created_at ? new Date(kontak.created_at).toLocaleDateString('id-ID', {day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
+
+    const tagsEl = document.getElementById('viewTags');
+    if (kontak.tags && kontak.tags.length > 0) {
+        tagsEl.innerHTML = kontak.tags.map(t => '<span class="tag-badge">' + t + '</span>').join(' ');
+    } else {
+        tagsEl.textContent = '-';
+    }
+
+    new bootstrap.Modal(document.getElementById('viewKontakModal')).show();
+}
+
+function editKontak(kontak) {
+    document.getElementById('editNama').value = kontak.nama;
+    document.getElementById('editTelepon').value = kontak.no_telepon;
+    document.getElementById('editEmail').value = kontak.email || '';
+    document.getElementById('editTags').value = kontak.tags ? kontak.tags.join(', ') : '';
+    document.getElementById('editCatatan').value = kontak.catatan || '';
+    document.getElementById('formEditKontak').action = '/kontak/' + kontak.id;
+
+    new bootstrap.Modal(document.getElementById('editKontakModal')).show();
+}
+
 function hapusKontak(id) {
     if (confirm('Yakin ingin menghapus kontak ini?')) {
         fetch(`/kontak/${id}`, {
