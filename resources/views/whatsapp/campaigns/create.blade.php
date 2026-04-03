@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.user_type.auth')
 
 @section('title', 'Buat Kampanye WA Blast')
 
