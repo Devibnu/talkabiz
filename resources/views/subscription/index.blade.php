@@ -622,7 +622,9 @@
 @endsection
 
 @push('scripts')
-<script src="{{ config('midtrans.snap_url') }}" data-client-key="{{ config('midtrans.client_key') }}"></script>
+@if($midtransSnapUrl && $midtransClientKey)
+<script src="{{ $midtransSnapUrl }}" data-client-key="{{ $midtransClientKey }}"></script>
+@endif
 <script>
 /**
  * FAST PAYMENT PATH — Phase 4.1
@@ -680,12 +682,24 @@ async function fastCheckout(planCode) {
 
         // Success: got snap_token
         const snapToken = data.snap_token || data.data?.snap_token;
+        const redirectUrl = data.redirect_url || data.data?.redirect_url;
         const transactionCode = data.transaction_code || data.data?.transaction_code;
 
         if (data.success && snapToken) {
             // Dev warning
             if (data.dev_warning || data.data?.dev_warning) {
                 console.info('[DEV]', data.dev_warning || data.data.dev_warning);
+            }
+
+            if (!window.snap || typeof window.snap.pay !== 'function') {
+                if (redirectUrl) {
+                    window.location.href = redirectUrl;
+                    return;
+                }
+
+                showToast('danger', 'Popup pembayaran belum siap. Silakan refresh halaman atau hubungi admin.');
+                resetButton(btn, originalHtml);
+                return;
             }
 
             // Open Midtrans Snap popup langsung

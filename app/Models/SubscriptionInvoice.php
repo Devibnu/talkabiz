@@ -173,12 +173,34 @@ class SubscriptionInvoice extends Model
         if ($idempotencyKey) {
             $existing = self::where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
+                $existing->loadMissing('planTransaction');
+
+                $linkedTransactionProcessable = $existing->planTransaction?->canBeProcessed() ?? false;
+                $canReuseExisting = $existing->status === self::STATUS_PENDING && $linkedTransactionProcessable;
+
+                if (!$canReuseExisting) {
+                    $existing->update([
+                        'status' => $existing->status === self::STATUS_PENDING ? self::STATUS_EXPIRED : $existing->status,
+                        'notes' => trim((string) $existing->notes . "\n[checkout] stale invoice released for fresh renewal"),
+                        'idempotency_key' => $idempotencyKey . '_old_inv_' . $existing->id,
+                    ]);
+                }
+
+                if ($canReuseExisting) {
+                    \Illuminate\Support\Facades\Log::info('Returning existing invoice (idempotent)', [
+                        'invoice_number' => $existing->invoice_number,
+                        'idempotency_key' => $idempotencyKey,
+                        'status' => $existing->status,
+                    ]);
+                    return $existing;
+                }
+
                 \Illuminate\Support\Facades\Log::info('Returning existing invoice (idempotent)', [
                     'invoice_number' => $existing->invoice_number,
                     'idempotency_key' => $idempotencyKey,
                     'status' => $existing->status,
+                    'released' => true,
                 ]);
-                return $existing;
             }
         }
 

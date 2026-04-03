@@ -163,25 +163,60 @@ class PlanActivationService
             }
 
             // ============================================================
-            // 6c. Expire stale transactions with same idempotency key
-            //     If old transaction with this key exists but is
-            //     failed/expired/cancelled → free the key for reuse.
+            // 6c. Free stale invoices with the same stable idempotency key.
+            //     Pending invoices linked to terminal transactions must not
+            //     block a new renewal checkout.
             // ============================================================
-            $staleTransaction = PlanTransaction::where('idempotency_key', $stableIdempotencyKey)
+            $reusableInvoices = SubscriptionInvoice::where('idempotency_key', $stableIdempotencyKey)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($reusableInvoices as $invoice) {
+                $invoice->loadMissing('planTransaction');
+
+                $linkedTransactionProcessable = $invoice->planTransaction?->canBeProcessed() ?? false;
+                $shouldReleaseInvoice = $invoice->status !== SubscriptionInvoice::STATUS_PENDING
+                    || !$linkedTransactionProcessable;
+
+                if (!$shouldReleaseInvoice) {
+                    continue;
+                }
+
+                $invoice->update([
+                    'status' => $invoice->status === SubscriptionInvoice::STATUS_PENDING
+                        ? SubscriptionInvoice::STATUS_EXPIRED
+                        : $invoice->status,
+                    'notes' => trim((string) $invoice->notes . "\n[checkout] stale invoice released for renewal"),
+                    'idempotency_key' => $stableIdempotencyKey . '_old_inv_' . $invoice->id,
+                ]);
+
+                Log::info('Freed stale subscription invoice for renewal reuse', [
+                    'invoice_id' => $invoice->id,
+                    'old_key' => $stableIdempotencyKey,
+                ]);
+            }
+
+            // ============================================================
+            // 6d. Free terminal transactions with the same stable key.
+            //     Historical success/expired/cancelled rows must not block
+            //     a fresh renewal purchase for the same user + plan.
+            // ============================================================
+            $reusableTransactions = PlanTransaction::where('idempotency_key', $stableIdempotencyKey)
                 ->whereNotIn('status', [
                     PlanTransaction::STATUS_PENDING,
                     PlanTransaction::STATUS_WAITING_PAYMENT,
-                    PlanTransaction::STATUS_SUCCESS,
                 ])
-                ->first();
+                ->lockForUpdate()
+                ->get();
 
-            if ($staleTransaction) {
-                // Append timestamp to free the key
+            foreach ($reusableTransactions as $staleTransaction) {
                 $staleTransaction->update([
                     'idempotency_key' => $stableIdempotencyKey . '_old_' . $staleTransaction->id,
                 ]);
-                Log::info('Freed stale idempotency key for reuse', [
+
+                Log::info('Freed terminal transaction idempotency key for renewal reuse', [
                     'old_transaction_id' => $staleTransaction->id,
+                    'old_status' => $staleTransaction->status,
                     'key' => $stableIdempotencyKey,
                 ]);
             }

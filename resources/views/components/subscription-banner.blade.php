@@ -11,6 +11,11 @@
     Does NOT hardcode status strings — uses boolean from isActive()
 --}}
 
+@php
+    $isOnSubscriptionPage = request()->routeIs('subscription.index');
+    $subscriptionPlanCode = auth()->user()?->currentPlan?->code;
+@endphp
+
 @if(!($subscriptionIsActive ?? false) && !in_array(auth()->user()->role ?? '', ['super_admin', 'superadmin', 'owner']))
     {{-- FORCE ACTIVATION GATE BANNER --}}
     @if(isset($subscriptionPlanStatus) && $subscriptionPlanStatus === 'expired')
@@ -25,9 +30,19 @@
                     <span class="text-sm d-block d-md-inline ms-md-1">Fitur pengiriman pesan tidak tersedia. Perpanjang sekarang untuk melanjutkan.</span>
                 </div>
             </div>
-            <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0">
-                <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
-            </a>
+            @if($isOnSubscriptionPage && $subscriptionPlanCode)
+                <button type="button" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0" onclick="fastCheckout('{{ $subscriptionPlanCode }}')">
+                    <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
+                </button>
+            @elseif($isOnSubscriptionPage)
+                <button type="button" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0" onclick="document.getElementById('available-plans')?.scrollIntoView({ behavior: 'smooth' });">
+                    <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
+                </button>
+            @else
+                <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0">
+                    <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
+                </a>
+            @endif
         </div>
     @else
         {{-- NOT ACTIVE BANNER (trial_selected / no plan) --}}
@@ -41,9 +56,19 @@
                     <span class="text-sm d-block d-md-inline ms-md-1">Silakan lakukan pembayaran untuk mulai menggunakan {{ $__brandName ?? 'Talkabiz' }}.</span>
                 </div>
             </div>
-            <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0">
-                <i class="fas fa-credit-card me-1"></i> Bayar Sekarang
-            </a>
+            @if($isOnSubscriptionPage && $subscriptionPlanCode)
+                <button type="button" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0" onclick="fastCheckout('{{ $subscriptionPlanCode }}')">
+                    <i class="fas fa-credit-card me-1"></i> Bayar Sekarang
+                </button>
+            @elseif($isOnSubscriptionPage)
+                <button type="button" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0" onclick="document.getElementById('available-plans')?.scrollIntoView({ behavior: 'smooth' });">
+                    <i class="fas fa-credit-card me-1"></i> Bayar Sekarang
+                </button>
+            @else
+                <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0">
+                    <i class="fas fa-credit-card me-1"></i> Bayar Sekarang
+                </a>
+            @endif
         </div>
     @endif
 
@@ -66,9 +91,19 @@
                 <span class="text-sm d-block d-md-inline ms-md-1">Paket berakhir {{ $graceDayLabel }}. Perpanjang sekarang agar layanan tidak terhenti.</span>
             </div>
         </div>
-        <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-{{ $graceUrgency }} ms-auto mb-0 flex-shrink-0">
-            <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
-        </a>
+        @if($isOnSubscriptionPage && $subscriptionPlanCode)
+            <button type="button" class="btn btn-sm btn-white text-{{ $graceUrgency }} ms-auto mb-0 flex-shrink-0" onclick="fastCheckout('{{ $subscriptionPlanCode }}')">
+                <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
+            </button>
+        @elseif($isOnSubscriptionPage)
+            <button type="button" class="btn btn-sm btn-white text-{{ $graceUrgency }} ms-auto mb-0 flex-shrink-0" onclick="document.getElementById('available-plans')?.scrollIntoView({ behavior: 'smooth' });">
+                <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
+            </button>
+        @else
+            <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-{{ $graceUrgency }} ms-auto mb-0 flex-shrink-0">
+                <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
+            </a>
+        @endif
     </div>
 
 @elseif(isset($subscriptionExpiresInDays) && $subscriptionExpiresInDays !== null && $subscriptionExpiresInDays <= 7 && $subscriptionExpiresInDays > 0)
@@ -89,8 +124,18 @@
                 <span class="text-sm d-block d-md-inline ms-md-1">Perpanjang untuk menghindari gangguan layanan.</span>
             </div>
         </div>
-        <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-{{ $urgency }} ms-auto mb-0 flex-shrink-0">
-            <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang
-        </a>
+        @if($isOnSubscriptionPage && $subscriptionPlanCode)
+            <button type="button" class="btn btn-sm btn-white text-{{ $urgency }} ms-auto mb-0 flex-shrink-0" onclick="fastCheckout('{{ $subscriptionPlanCode }}')">
+                <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang
+            </button>
+        @elseif($isOnSubscriptionPage)
+            <button type="button" class="btn btn-sm btn-white text-{{ $urgency }} ms-auto mb-0 flex-shrink-0" onclick="document.getElementById('available-plans')?.scrollIntoView({ behavior: 'smooth' });">
+                <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang
+            </button>
+        @else
+            <a href="{{ route('subscription.index') }}" class="btn btn-sm btn-white text-{{ $urgency }} ms-auto mb-0 flex-shrink-0">
+                <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang
+            </a>
+        @endif
     </div>
 @endif

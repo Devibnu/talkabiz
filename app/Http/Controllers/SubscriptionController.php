@@ -72,6 +72,12 @@ class SubscriptionController extends Controller
     {
         $user = Auth::user();
         $klien = $this->getKlienForUser($user);
+        $midtransClientKey = $this->gatewayService->isMidtransActive() ? $this->gatewayService->getClientKey() : null;
+        $midtransSnapUrl = $this->gatewayService->isMidtransActive()
+            ? ($this->gatewayService->isProduction()
+                ? 'https://app.midtrans.com/snap/snap.js'
+                : 'https://app.sandbox.midtrans.com/snap/snap.js')
+            : null;
 
         // COMPUTED status from DB (source of truth)
         $planStatus = $this->subscriptionService->getPlanStatus($user);
@@ -149,7 +155,9 @@ class SubscriptionController extends Controller
             'availablePlans',
             'pendingTransactions',
             'pendingByPlan',
-            'recentNotifications'
+            'recentNotifications',
+            'midtransClientKey',
+            'midtransSnapUrl'
         ));
     }
 
@@ -255,6 +263,7 @@ class SubscriptionController extends Controller
                 return response()->json([
                     'success' => true,
                     'snap_token' => $existingInvoice->snap_token,
+                    'redirect_url' => $existingInvoice->planTransaction?->pg_redirect_url,
                     'invoice_id' => $existingInvoice->id,
                     'invoice_number' => $existingInvoice->invoice_number,
                     'reused' => true,
@@ -313,6 +322,7 @@ class SubscriptionController extends Controller
                     return response()->json([
                         'success' => true,
                         'snap_token' => $snapToken,
+                        'redirect_url' => $existingPending->pg_redirect_url,
                         'invoice_id' => $linkedInvoice?->id,
                         'invoice_number' => $linkedInvoice?->invoice_number,
                         'transaction_code' => $existingPending->transaction_code,
@@ -415,6 +425,7 @@ class SubscriptionController extends Controller
             return response()->json([
                 'success' => true,
                 'snap_token' => $snapResult['snap_token'],
+                'redirect_url' => $snapResult['redirect_url'] ?? null,
                 'invoice_id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,
                 'transaction_code' => $transaction->transaction_code,
@@ -468,6 +479,8 @@ class SubscriptionController extends Controller
             }
 
             $message = match (true) {
+                $e instanceof \Illuminate\Database\UniqueConstraintViolationException
+                    => 'Transaksi sebelumnya masih tercatat. Silakan coba lagi beberapa saat.',
                 $e instanceof \TypeError
                     => 'Terjadi kesalahan internal. Silakan hubungi admin.',
                 str_contains($e->getMessage(), 'cURL') || str_contains($e->getMessage(), 'Connection')
