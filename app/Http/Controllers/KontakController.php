@@ -22,7 +22,8 @@ class KontakController extends Controller
      */
     public function index()
     {
-        $kontaks = Kontak::where('dibuat_oleh', Auth::id())
+        $klienId = Auth::user()->klien_id;
+        $kontaks = Kontak::where('klien_id', $klienId)
             ->orderBy('created_at', 'desc')
             ->get();
             
@@ -34,7 +35,8 @@ class KontakController extends Controller
      */
     public function list(Request $request)
     {
-        $kontaks = Kontak::where('dibuat_oleh', Auth::id())
+        $klienId = Auth::user()->klien_id;
+        $kontaks = Kontak::where('klien_id', $klienId)
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -83,8 +85,7 @@ class KontakController extends Controller
             'tags' => $tags,
             'catatan' => $request->catatan,
             'source' => Kontak::SOURCE_MANUAL,
-            'dibuat_oleh' => Auth::id(),
-            'klien_id' => Auth::user()->klien_id ?? null,
+            'klien_id' => Auth::user()->klien_id,
         ]);
 
         if ($request->wantsJson()) {
@@ -138,8 +139,7 @@ class KontakController extends Controller
                             'email' => $row[2] ?? null,
                             'tags' => isset($row[3]) ? array_map('trim', explode(',', $row[3])) : null,
                             'source' => Kontak::SOURCE_IMPORT,
-                            'dibuat_oleh' => Auth::id(),
-                            'klien_id' => Auth::user()->klien_id ?? null,
+                            'klien_id' => Auth::user()->klien_id,
                         ]);
                         $imported++;
                     }
@@ -164,7 +164,7 @@ class KontakController extends Controller
     public function destroy($id)
     {
         $kontak = Kontak::where('id', $id)
-            ->where('dibuat_oleh', Auth::id())
+            ->where('klien_id', Auth::user()->klien_id)
             ->firstOrFail();
 
         $kontak->delete();
