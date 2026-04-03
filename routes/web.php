@@ -125,7 +125,13 @@ Route::middleware(['client.access'])->group(function () {
 		// Campaign Routes - GUARDED by onboarding + subscription
 		Route::middleware(['campaign.guard', 'subscription.active'])->group(function () {
 			Route::get('campaign', function () {
-				return view('campaign');
+				$user = auth()->user();
+				$templates = \App\Models\TemplatePesan::where('klien_id', $user->klien_id)
+					->where('status', \App\Models\TemplatePesan::STATUS_DISETUJUI)
+					->orderBy('nama_tampilan')
+					->get();
+				$quotaInfo = app(\App\Services\PlanLimitService::class)->getQuotaInfo($user);
+				return view('campaign', compact('templates', 'quotaInfo'));
 			})->name('campaign');
 			
 			/*

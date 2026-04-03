@@ -433,6 +433,9 @@
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Template Pesan</label>
                         <select class="form-select" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
                             <option value="">Pilih template pesan...</option>
+                            @foreach($templates ?? [] as $tpl)
+                                <option value="{{ $tpl->id }}">{{ $tpl->nama_tampilan ?? $tpl->nama_template }}</option>
+                            @endforeach
                         </select>
                         <small class="text-muted" style="font-size: 0.75rem;">Belum ada template? <a href="{{ route('template') }}" style="color: #5e72e4;">Buat template baru</a></small>
                     </div>
@@ -442,6 +445,9 @@
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Target Audience</label>
                         <select class="form-select" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
                             <option value="">Pilih grup kontak...</option>
+                            @foreach($kontakGroups ?? [] as $group)
+                                <option value="{{ $group->id }}">{{ $group->nama }} ({{ $group->kontaks_count ?? 0 }})</option>
+                            @endforeach
                         </select>
                         <small class="text-muted" style="font-size: 0.75rem;">Belum ada kontak? <a href="{{ route('kontak') }}" style="color: #5e72e4;">Import kontak</a></small>
                     </div>
