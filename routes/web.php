@@ -130,8 +130,10 @@ Route::middleware(['client.access'])->group(function () {
 					->where('status', \App\Models\TemplatePesan::STATUS_DISETUJUI)
 					->orderBy('nama_tampilan')
 					->get();
+				$kontaks = \App\Models\Kontak::where('klien_id', $user->klien_id)->get();
+				$tags = $kontaks->pluck('tags')->flatten()->filter()->unique()->values();
 				$quotaInfo = app(\App\Services\PlanLimitService::class)->getQuotaInfo($user);
-				return view('campaign', compact('templates', 'quotaInfo'));
+				return view('campaign', compact('templates', 'kontaks', 'tags', 'quotaInfo'));
 			})->name('campaign');
 			
 			/*

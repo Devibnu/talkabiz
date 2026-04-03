@@ -444,9 +444,10 @@
                     <div class="mb-3">
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Target Audience</label>
                         <select class="form-select" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
-                            <option value="">Pilih grup kontak...</option>
-                            @foreach($kontakGroups ?? [] as $group)
-                                <option value="{{ $group->id }}">{{ $group->nama }} ({{ $group->kontaks_count ?? 0 }})</option>
+                            <option value="">Pilih target...</option>
+                            <option value="all">Semua Kontak ({{ count($kontaks ?? []) }})</option>
+                            @foreach($tags ?? [] as $tag)
+                                <option value="tag:{{ $tag }}">Tag: {{ $tag }} ({{ ($kontaks ?? collect())->filter(fn($k) => in_array($tag, $k->tags ?? []))->count() }})</option>
                             @endforeach
                         </select>
                         <small class="text-muted" style="font-size: 0.75rem;">Belum ada kontak? <a href="{{ route('kontak') }}" style="color: #5e72e4;">Import kontak</a></small>
