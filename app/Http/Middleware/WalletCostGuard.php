@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\RevenueGuardLog;
 use App\Models\Wallet;
+use App\Models\WhatsappCampaign;
 use App\Services\MessageRateService;
 use App\Services\PricingService;
 use App\Services\WalletService;
@@ -183,6 +184,11 @@ class WalletCostGuard
             return (int) $request->input('recipient_count');
         }
 
+        $campaignMessageCount = $this->getCampaignMessageCount($request);
+        if ($campaignMessageCount > 0) {
+            return $campaignMessageCount;
+        }
+
         if ($request->has('message_count') && (int) $request->input('message_count') > 0) {
             return (int) $request->input('message_count');
         }
@@ -201,6 +207,40 @@ class WalletCostGuard
 
         // Default: 1 message (inbox single send)
         return 1;
+    }
+
+    protected function getCampaignMessageCount(Request $request): int
+    {
+        $campaignParameter = $request->route('campaign');
+
+        if ($campaignParameter instanceof WhatsappCampaign) {
+            return $this->resolveCampaignRecipientCount($campaignParameter, $request);
+        }
+
+        if (is_numeric($campaignParameter)) {
+            $campaign = WhatsappCampaign::find((int) $campaignParameter);
+
+            if ($campaign) {
+                return $this->resolveCampaignRecipientCount($campaign, $request);
+            }
+        }
+
+        return 0;
+    }
+
+    protected function resolveCampaignRecipientCount(WhatsappCampaign $campaign, Request $request): int
+    {
+        $routeName = (string) $request->route()?->getName();
+
+        if ($routeName === 'whatsapp.campaigns.resume') {
+            return max(1, $campaign->recipients()->pending()->count());
+        }
+
+        if (($campaign->total_recipients ?? 0) > 0) {
+            return (int) $campaign->total_recipients;
+        }
+
+        return max(1, $campaign->recipients()->pending()->count());
     }
 
     /**
