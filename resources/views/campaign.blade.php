@@ -151,11 +151,11 @@
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    table-layout: fixed;
+    min-width: 650px;
 }
 
 .campaign-table thead th {
-    padding: 0.875rem 1rem;
+    padding: 0.75rem 0.75rem;
     font-size: 0.6875rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -168,34 +168,22 @@
 
 .campaign-table thead th:first-child {
     border-radius: 0.5rem 0 0 0;
-    width: 30%;
-}
-
-.campaign-table thead th:nth-child(2) {
-    width: 15%;
-}
-
-.campaign-table thead th:nth-child(3) {
-    width: 14%;
-}
-
-.campaign-table thead th:nth-child(4),
-.campaign-table thead th:nth-child(5) {
-    width: 10%;
-    text-align: center;
 }
 
 .campaign-table thead th:last-child {
     border-radius: 0 0.5rem 0 0;
-    width: 21%;
 }
 
 .campaign-table tbody td {
-    padding: 0.875rem 1rem;
-    font-size: 0.875rem;
+    padding: 0.75rem 0.75rem;
+    font-size: 0.8125rem;
     color: #344767;
     border-bottom: 1px solid #e9ecef;
     vertical-align: middle;
+}
+
+.campaign-table tbody td:first-child {
+    max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
