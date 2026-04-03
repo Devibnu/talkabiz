@@ -543,12 +543,16 @@ class WhatsAppProviderService
         $body = $response->json();
 
         if (config('whatsapp.logging.enabled')) {
-            Log::channel(config('whatsapp.logging.channel', 'stack'))->info('Meta WhatsApp API Response', [
-                'status_code' => $response->status(),
-                'body' => config('whatsapp.logging.log_response_body') ? $body : '[hidden]',
-                'duration_ms' => $duration,
-                'context' => $logContext,
-            ]);
+            try {
+                Log::channel(config('whatsapp.logging.channel', 'stack'))->info('Meta WhatsApp API Response', [
+                    'status_code' => $response->status(),
+                    'body' => config('whatsapp.logging.log_response_body') ? $body : '[hidden]',
+                    'duration_ms' => $duration,
+                    'context' => $logContext,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Failed to write WhatsApp channel log', ['error' => $e->getMessage()]);
+            }
         }
 
         if ($response->successful() && !empty($body['messages'][0]['id'])) {
