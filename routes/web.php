@@ -237,6 +237,7 @@ Route::middleware(['client.access'])->group(function () {
 				// Resolve template content
 				$templateName = null;
 				$templateLang = 'id';
+				$templateProviderId = null;
 				$messageBody = null;
 
 				if ($campaign->template_id) {
@@ -244,18 +245,15 @@ Route::middleware(['client.access'])->group(function () {
 					if ($waTemplate) {
 						$templateName = $waTemplate->name;
 						$templateLang = $waTemplate->language ?? 'id';
+						$templateProviderId = $waTemplate->template_id ?? $waTemplate->name;
 						$messageBody = $waTemplate->getBodyText() ?? $waTemplate->sample_text ?? $waTemplate->name;
 					}
 				} elseif ($campaign->template_pesan_id) {
-					$tp = \App\Models\TemplatePesan::find($campaign->template_pesan_id);
-					if ($tp) {
-						$messageBody = $tp->body;
-						$templateName = $tp->nama_template;
-					}
+					return back()->with('error', 'Template Pesan internal belum bisa dikirim via WhatsApp. Buat campaign baru dengan template WhatsApp yang sudah disetujui Meta (contoh: hello_world).');
 				}
 
-				if (!$messageBody) {
-					return back()->with('error', 'Template tidak ditemukan atau kosong.');
+				if (!$templateProviderId) {
+					return back()->with('error', 'Template WhatsApp tidak ditemukan. Campaign harus menggunakan template yang sudah disetujui Meta.');
 				}
 
 				// Get recipients from Kontak based on audience_filter
@@ -284,14 +282,13 @@ Route::middleware(['client.access'])->group(function () {
 						'name' => $k->nama,
 					])->toArray();
 
-					$metadata = ['campaign_id' => $campaign->id];
-					if ($templateName && $campaign->template_id) {
-						$waTemplate = \App\Models\WhatsappTemplate::find($campaign->template_id);
-						$metadata['template_provider_id'] = $waTemplate->template_id ?? null;
-						$metadata['template_name'] = $templateName;
-						$metadata['template_language'] = $templateLang;
-						$metadata['template_params'] = [];
-					}
+				$metadata = [
+						'campaign_id' => $campaign->id,
+						'template_provider_id' => $templateProviderId,
+						'template_name' => $templateName,
+						'template_language' => $templateLang,
+						'template_params' => [],
+					];
 
 					$request = \App\Services\Message\MessageDispatchRequest::fromCampaign(
 						userId: $user->id,

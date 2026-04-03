@@ -512,14 +512,14 @@
 
                     {{-- Template Pesan --}}
                     <div class="mb-3">
-                        <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Template Pesan</label>
+                        <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Template WhatsApp</label>
                         <select name="template_ref" class="form-select" required style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
-                            <option value="">Pilih template pesan...</option>
+                            <option value="">Pilih template WhatsApp...</option>
                             @foreach($templates ?? [] as $tpl)
                                 <option value="{{ $tpl->id }}">{{ $tpl->label }} ({{ strtoupper($tpl->category) }}) — {{ $tpl->source }}</option>
                             @endforeach
                         </select>
-                        <small class="text-muted" style="font-size: 0.75rem;">Buat template di <a href="{{ route('template') }}" style="color: #5e72e4;">Template Pesan</a></small>
+                        <small class="text-muted" style="font-size: 0.75rem;">Hanya template WhatsApp API yang sudah disetujui Meta yang bisa dikirim. <a href="{{ route('template') }}" style="color: #5e72e4;">Kelola Template</a></small>
                     </div>
 
                     {{-- Target Audience --}}
