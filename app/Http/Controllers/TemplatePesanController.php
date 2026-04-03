@@ -22,7 +22,8 @@ class TemplatePesanController extends Controller
      */
     public function index()
     {
-        $templates = TemplatePesan::where('dibuat_oleh', Auth::id())
+        $klienId = Auth::user()->klien_id;
+        $templates = TemplatePesan::where('klien_id', $klienId)
             ->orderBy('created_at', 'desc')
             ->get();
         
@@ -37,7 +38,8 @@ class TemplatePesanController extends Controller
      */
     public function list(Request $request)
     {
-        $templates = TemplatePesan::where('dibuat_oleh', Auth::id())
+        $klienId = Auth::user()->klien_id;
+        $templates = TemplatePesan::where('klien_id', $klienId)
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -73,12 +75,12 @@ class TemplatePesanController extends Controller
         }
 
         $template = TemplatePesan::create([
-            'nama' => $request->nama,
+            'nama_template' => $request->nama,
+            'nama_tampilan' => $request->nama,
             'kategori' => $request->kategori,
-            'isi_body' => $request->konten,
+            'body' => $request->konten,
             'status' => TemplatePesan::STATUS_DRAFT,
-            'dibuat_oleh' => Auth::id(),
-            'klien_id' => Auth::user()->klien_id ?? null,
+            'klien_id' => Auth::user()->klien_id,
         ]);
 
         if ($request->wantsJson()) {
@@ -98,7 +100,7 @@ class TemplatePesanController extends Controller
     public function update(Request $request, $id)
     {
         $template = TemplatePesan::where('id', $id)
-            ->where('dibuat_oleh', Auth::id())
+            ->where('klien_id', Auth::user()->klien_id)
             ->firstOrFail();
 
         $validator = Validator::make($request->all(), [
@@ -118,9 +120,10 @@ class TemplatePesanController extends Controller
         }
 
         $template->update([
-            'nama' => $request->nama,
+            'nama_template' => $request->nama,
+            'nama_tampilan' => $request->nama,
             'kategori' => $request->kategori,
-            'isi_body' => $request->konten,
+            'body' => $request->konten,
         ]);
 
         if ($request->wantsJson()) {
@@ -140,7 +143,7 @@ class TemplatePesanController extends Controller
     public function destroy($id)
     {
         $template = TemplatePesan::where('id', $id)
-            ->where('dibuat_oleh', Auth::id())
+            ->where('klien_id', Auth::user()->klien_id)
             ->firstOrFail();
 
         $template->delete();
