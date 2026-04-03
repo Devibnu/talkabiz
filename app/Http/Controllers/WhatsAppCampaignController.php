@@ -450,6 +450,11 @@ class WhatsAppCampaignController extends Controller
      */
     protected function updateCampaignFromResult(WhatsappCampaign $campaign, \App\Services\Message\MessageDispatchResult $result): void
     {
+        $successfulSendCount = max($result->totalSent, 1);
+        $successfulRecipientCost = $result->totalSent > 0
+            ? ((float) $result->totalCost / $successfulSendCount)
+            : 0.0;
+
         // Update recipient statuses
         foreach ($result->sentResults as $sentResult) {
             $recipient = WhatsappCampaignRecipient::where('campaign_id', $campaign->id)
@@ -465,7 +470,7 @@ class WhatsAppCampaignController extends Controller
                         'failed_at' => null,
                         'error_code' => null,
                         'error_message' => null,
-                        'cost' => (float) ($campaign->actual_cost > 0 && $campaign->sent_count > 0 ? $campaign->actual_cost / max($campaign->sent_count, 1) : 0),
+                        'cost' => $successfulRecipientCost,
                     ]);
                 } else {
                     $recipient->update([
@@ -492,7 +497,7 @@ class WhatsAppCampaignController extends Controller
                             : WhatsappMessageLog::STATUS_FAILED,
                         'error_code' => $sentResult['error'] ?? null,
                         'error_message' => $sentResult['error_message'] ?? $sentResult['error'] ?? null,
-                        'cost' => 0,
+                        'cost' => $sentResult['status'] === 'sent' ? $successfulRecipientCost : 0,
                         'metadata' => [
                             'provider_response' => $sentResult['response'] ?? null,
                             'source' => 'campaign_dispatch',
