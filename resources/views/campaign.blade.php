@@ -367,7 +367,7 @@
                                 @foreach($campaigns as $campaign)
                                 <tr>
                                     <td title="{{ $campaign->name }}"><strong>{{ $campaign->name }}</strong></td>
-                                    <td title="{{ $campaign->template->name ?? '-' }}">{{ $campaign->template->name ?? '-' }}</td>
+                                    <td title="{{ $campaign->template_name }}">{{ $campaign->template_name }}</td>
                                     <td>
                                         <span class="campaign-status {{ $campaign->status }}">
                                             {{ ucfirst($campaign->status) }}
@@ -487,13 +487,13 @@
                     {{-- Template Pesan --}}
                     <div class="mb-3">
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Template Pesan</label>
-                        <select name="template_id" class="form-select" required style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
+                        <select name="template_ref" class="form-select" required style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
                             <option value="">Pilih template pesan...</option>
                             @foreach($templates ?? [] as $tpl)
-                                <option value="{{ $tpl->id }}">{{ $tpl->name }} ({{ $tpl->category ?? 'utility' }})</option>
+                                <option value="{{ $tpl->id }}">{{ $tpl->label }} ({{ strtoupper($tpl->category) }}) — {{ $tpl->source }}</option>
                             @endforeach
                         </select>
-                        <small class="text-muted" style="font-size: 0.75rem;">Template harus disetujui Meta/Gupshup terlebih dahulu</small>
+                        <small class="text-muted" style="font-size: 0.75rem;">Buat template di <a href="{{ route('template') }}" style="color: #5e72e4;">Template Pesan</a></small>
                     </div>
 
                     {{-- Target Audience --}}

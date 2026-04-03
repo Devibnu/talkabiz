@@ -14,6 +14,7 @@ class WhatsappCampaign extends Model
     protected $fillable = [
         'klien_id',
         'template_id',
+        'template_pesan_id',
         'name',
         'description',
         'status',
@@ -65,11 +66,30 @@ class WhatsappCampaign extends Model
     }
 
     /**
-     * Get the template used by this campaign
+     * Get the WA template used by this campaign
      */
     public function template(): BelongsTo
     {
         return $this->belongsTo(WhatsappTemplate::class, 'template_id');
+    }
+
+    /**
+     * Get the TemplatePesan used by this campaign
+     */
+    public function templatePesan(): BelongsTo
+    {
+        return $this->belongsTo(TemplatePesan::class, 'template_pesan_id');
+    }
+
+    /**
+     * Get template name from whichever template system is used
+     */
+    public function getTemplateNameAttribute(): string
+    {
+        if ($this->template_pesan_id) {
+            return $this->templatePesan->nama_tampilan ?? $this->templatePesan->nama_template ?? '-';
+        }
+        return $this->template->name ?? '-';
     }
 
     /**

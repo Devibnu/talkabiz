@@ -126,15 +126,22 @@ Route::middleware(['client.access'])->group(function () {
 		Route::middleware(['campaign.guard', 'subscription.active'])->group(function () {
 			Route::get('campaign', function () {
 				$user = auth()->user();
-				$templates = \App\Models\WhatsappTemplate::where('klien_id', $user->klien_id)
+				$waTemplates = \App\Models\WhatsappTemplate::where('klien_id', $user->klien_id)
 					->where('status', 'approved')
 					->orderBy('name')
-					->get();
+					->get()
+					->map(fn($t) => (object)['id' => 'wa:' . $t->id, 'label' => $t->name, 'category' => $t->category ?? 'utility', 'source' => 'WhatsApp API']);
+				$pesanTemplates = \App\Models\TemplatePesan::where('klien_id', $user->klien_id)
+					->where('status', \App\Models\TemplatePesan::STATUS_DISETUJUI)
+					->orderBy('nama_tampilan')
+					->get()
+					->map(fn($t) => (object)['id' => 'tp:' . $t->id, 'label' => $t->nama_tampilan ?? $t->nama_template, 'category' => $t->kategori ?? 'marketing', 'source' => 'Template Pesan']);
+				$templates = $pesanTemplates->merge($waTemplates);
 				$kontaks = \App\Models\Kontak::where('klien_id', $user->klien_id)->get();
 				$tags = $kontaks->pluck('tags')->flatten()->filter()->unique()->values();
 				$quotaInfo = app(\App\Services\PlanLimitService::class)->getQuotaInfo($user);
 				$campaigns = \App\Models\WhatsappCampaign::where('klien_id', $user->klien_id)
-					->with('template')
+					->with(['template', 'templatePesan'])
 					->latest()
 					->get();
 				return view('campaign', compact('templates', 'kontaks', 'tags', 'quotaInfo', 'campaigns'));
@@ -144,11 +151,23 @@ Route::middleware(['client.access'])->group(function () {
 				$user = auth()->user();
 				$request->validate([
 					'name' => 'required|string|max:255',
-					'template_id' => 'required|exists:whatsapp_templates,id',
+					'template_ref' => 'required|string',
 					'audience' => 'required|string',
 					'schedule_type' => 'required|in:now,later',
 					'scheduled_at' => 'nullable|date|after:now',
 				]);
+
+				// Parse template reference (wa:ID or tp:ID)
+				$templateRef = $request->template_ref;
+				$templateId = null;
+				$templatePesanId = null;
+				if (str_starts_with($templateRef, 'wa:')) {
+					$templateId = (int) substr($templateRef, 3);
+				} elseif (str_starts_with($templateRef, 'tp:')) {
+					$templatePesanId = (int) substr($templateRef, 3);
+				} else {
+					return back()->with('error', 'Template tidak valid.');
+				}
 
 				// Count recipients based on audience selection
 				$kontakQuery = \App\Models\Kontak::where('klien_id', $user->klien_id);
@@ -169,7 +188,8 @@ Route::middleware(['client.access'])->group(function () {
 
 				$campaign = \App\Models\WhatsappCampaign::create([
 					'klien_id' => $user->klien_id,
-					'template_id' => $request->template_id,
+					'template_id' => $templateId,
+					'template_pesan_id' => $templatePesanId,
 					'name' => $request->name,
 					'status' => $status,
 					'audience_filter' => $audienceFilter,
