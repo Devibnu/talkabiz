@@ -11,6 +11,7 @@ use App\Services\SettingsService;
 use App\Services\TaxCacheService;
 use App\Services\WalletCacheService;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -46,6 +47,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        if (app()->runningInConsole() || app()->runningUnitTests()) {
+            $appUrl = config('app.url');
+
+            if (!empty($appUrl)) {
+                URL::forceRootUrl($appUrl);
+
+                $scheme = parse_url($appUrl, PHP_URL_SCHEME);
+                if (!empty($scheme)) {
+                    URL::forceScheme($scheme);
+                }
+            }
+        }
+
         // Register model observers
         \App\Models\PlanTransaction::observe(\App\Observers\PlanTransactionObserver::class);
 
