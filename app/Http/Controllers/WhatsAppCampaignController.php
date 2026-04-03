@@ -9,7 +9,6 @@ use App\Models\WhatsappContact;
 use App\Models\WhatsappMessageLog;
 use App\Models\WhatsappTemplate;
 use App\Models\User;
-use App\Jobs\ProcessWhatsappCampaign;
 use App\Services\RevenueGuardService;
 use App\Services\Message\MessageDispatchService;
 use App\Services\Message\MessageDispatchRequest;
@@ -366,41 +365,6 @@ class WhatsAppCampaignController extends Controller
 
             return back()->with('error', 'Gagal memulai kampanye: ' . $e->getMessage());
         }
-    }
-
-    /**
-     * Execute campaign directly via MessageDispatchService
-     * DEPRECATED: For legacy queue processing only
-     */
-    public function startLegacy(WhatsappCampaign $campaign)
-    {
-        // Old method preserved for backward compatibility
-        $klien = auth()->user()->klien;
-        
-        if ($campaign->klien_id !== $klien->id) {
-            abort(403);
-        }
-
-        if (!$campaign->canStart()) {
-            return back()->with('error', 'Kampanye tidak dapat dimulai dari status saat ini.');
-        }
-
-        $connection = WhatsappConnection::where('klien_id', $klien->id)->first();
-        
-        if (!$connection || !$connection->isConnected()) {
-            return back()->with('error', 'WhatsApp Business tidak terhubung.');
-        }
-
-        // WARNING: This bypasses saldo protection - use for testing only
-        $campaign->start();
-        ProcessWhatsappCampaign::dispatch($campaign);
-
-        Log::warning('WA Campaign started via LEGACY method (bypasses saldo protection)', [
-            'campaign_id' => $campaign->id,
-            'klien_id' => $klien->id,
-        ]);
-
-        return back()->with('warning', 'Kampanye dimulai dengan metode lama (tanpa proteksi saldo).');
     }
 
     /**
