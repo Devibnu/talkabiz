@@ -331,6 +331,12 @@ class PlanActivationService
                 ->first();
 
             if ($existingPlan) {
+                // Free the idempotency key so renewal of same plan doesn't hit duplicate constraint
+                if ($existingPlan->idempotency_key === $idempotencyKey) {
+                    $existingPlan->update([
+                        'idempotency_key' => $existingPlan->idempotency_key . '_old_' . $existingPlan->id,
+                    ]);
+                }
                 $existingPlan->markAsUpgraded();
             }
 
