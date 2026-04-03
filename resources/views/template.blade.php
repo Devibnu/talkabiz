@@ -442,15 +442,15 @@
                 @foreach($templates as $template)
                 <div class="template-item" data-template-id="{{ $template->id }}" data-kategori="{{ $template->kategori ?? 'other' }}">
                     {{-- Hidden full content for edit --}}
-                    <script type="text/template" class="template-full-content">{{ $template->isi_body ?? '' }}</script>
+                    <script type="text/template" class="template-full-content">{{ $template->body ?? '' }}</script>
                     {{-- Card Header --}}
                     <div class="template-item-header">
-                        <h6 class="template-item-name" title="{{ $template->nama }}">{{ $template->nama }}</h6>
+                        <h6 class="template-item-name" title="{{ $template->nama_tampilan ?? $template->nama_template }}">{{ $template->nama_tampilan ?? $template->nama_template }}</h6>
                         <span class="template-item-category">{{ $template->kategori ?? 'Umum' }}</span>
                     </div>
                     {{-- Card Body --}}
                     <div class="template-item-body">
-                        <p class="template-item-preview">{{ $template->isi_body ?? 'Tidak ada isi pesan' }}</p>
+                        <p class="template-item-preview">{{ $template->body ?? 'Tidak ada isi pesan' }}</p>
                     </div>
                     {{-- Card Footer --}}
                     <div class="template-item-footer">
