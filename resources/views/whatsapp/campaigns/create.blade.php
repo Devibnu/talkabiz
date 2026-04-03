@@ -87,32 +87,17 @@
                         <p class="text-xs text-muted mb-0">Hanya kontak yang sudah opt-in yang akan menerima pesan</p>
                     </div>
                     <div class="card-body">
-                        <div class="alert alert-info d-flex align-items-center">
-                            <i class="fas fa-users me-3" style="font-size: 1.5rem;"></i>
-                            <div>
-                                <strong>{{ $contactsCount }}</strong> kontak tersedia (opt-in)
-                            </div>
-                        </div>
-
-                        @if($tags->count() > 0)
                         <div class="mb-3">
-                            <label class="form-label">Filter berdasarkan Tag (Opsional)</label>
-                            <div class="row">
+                            <label class="form-label">Target Audience <span class="text-danger">*</span></label>
+                            <select name="audience" class="form-select" required>
+                                <option value="">Pilih target...</option>
+                                <option value="all">Semua Kontak ({{ $contactsCount }})</option>
                                 @foreach($tags as $tag)
-                                <div class="col-md-4 mb-2">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" 
-                                               name="audience_filter[tags][]" value="{{ $tag }}" id="tag_{{ $loop->index }}">
-                                        <label class="form-check-label" for="tag_{{ $loop->index }}">
-                                            {{ $tag }}
-                                        </label>
-                                    </div>
-                                </div>
+                                    <option value="tag:{{ $tag }}">Tag: {{ $tag }} ({{ ($kontaks ?? collect())->filter(fn($k) => in_array($tag, $k->tags ?? []))->count() }})</option>
                                 @endforeach
-                            </div>
-                            <small class="text-muted">Kosongkan untuk mengirim ke semua kontak opt-in</small>
+                            </select>
+                            <small class="text-muted">Belum ada kontak? <a href="{{ route('kontak') }}">Import kontak</a></small>
                         </div>
-                        @endif
                     </div>
                 </div>
             </div>

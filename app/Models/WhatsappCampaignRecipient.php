@@ -52,9 +52,17 @@ class WhatsappCampaignRecipient extends Model
     }
 
     /**
-     * Get the contact
+     * Get the contact (Kontak table)
      */
     public function contact(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Kontak::class, 'contact_id');
+    }
+
+    /**
+     * Get the WhatsApp contact (legacy)
+     */
+    public function whatsappContact(): BelongsTo
     {
         return $this->belongsTo(WhatsappContact::class, 'contact_id');
     }

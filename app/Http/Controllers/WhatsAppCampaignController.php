@@ -71,18 +71,12 @@ class WhatsAppCampaignController extends Controller
             ->approved()
             ->get();
 
-        $contactsCount = WhatsappContact::where('klien_id', $klien->id)
-            ->optedIn()
-            ->count();
+        $kontaks = \App\Models\Kontak::where('klien_id', $klien->id)->get();
+        $contactsCount = $kontaks->count();
 
-        $tags = WhatsappContact::where('klien_id', $klien->id)
-            ->whereNotNull('tags')
-            ->pluck('tags')
-            ->flatten()
-            ->unique()
-            ->values();
+        $tags = $kontaks->pluck('tags')->flatten()->filter()->unique()->values();
 
-        return view('whatsapp.campaigns.create', compact('templates', 'contactsCount', 'tags'));
+        return view('whatsapp.campaigns.create', compact('templates', 'contactsCount', 'tags', 'kontaks'));
     }
 
     /**
@@ -166,6 +160,7 @@ class WhatsAppCampaignController extends Controller
                 'required',
                 Rule::exists('whatsapp_templates', 'id')->where('klien_id', $klien->id),
             ],
+            'audience' => 'required|string',
             'audience_filter' => 'nullable|array',
             'audience_filter.tags' => 'nullable|array',
             'template_variables' => 'nullable|array',
@@ -173,20 +168,26 @@ class WhatsAppCampaignController extends Controller
             'rate_limit_per_second' => 'nullable|integer|min:1|max:50',
         ]);
 
-        // Build audience query to count recipients
-        $audienceQuery = WhatsappContact::where('klien_id', $klien->id)->optedIn();
+        // Build audience query using Kontak table
+        $audienceQuery = \App\Models\Kontak::where('klien_id', $klien->id);
         
         $filter = $request->get('audience_filter', []);
-        if (!empty($filter['tags'])) {
+        $audience = $request->get('audience', 'all');
+        
+        if ($audience !== 'all' && str_starts_with($audience, 'tag:')) {
+            $tag = substr($audience, 4);
+            $audienceQuery->whereJsonContains('tags', $tag);
+            $filter = ['tags' => [$tag]];
+        } elseif (!empty($filter['tags'])) {
             foreach ($filter['tags'] as $tag) {
-                $audienceQuery->withTag($tag);
+                $audienceQuery->whereJsonContains('tags', $tag);
             }
         }
         
         $totalRecipients = $audienceQuery->count();
 
         if ($totalRecipients === 0) {
-            return back()->with('error', 'Tidak ada kontak yang memenuhi kriteria. Pastikan kontak sudah opt-in.');
+            return back()->with('error', 'Tidak ada kontak yang ditemukan untuk audience ini.');
         }
 
         // HARD LIMIT: Enforce plan limits before creating campaign
@@ -222,13 +223,13 @@ class WhatsAppCampaignController extends Controller
             'rate_limit_per_second' => $request->rate_limit_per_second ?? WhatsappCampaign::DEFAULT_RATE_LIMIT,
         ]);
 
-        // Create recipient records
+        // Create recipient records from Kontak
         $recipients = $audienceQuery->get();
         foreach ($recipients as $contact) {
             WhatsappCampaignRecipient::create([
                 'campaign_id' => $campaign->id,
                 'contact_id' => $contact->id,
-                'phone_number' => $contact->phone_number,
+                'phone_number' => $contact->no_telepon,
                 'status' => WhatsappCampaignRecipient::STATUS_PENDING,
             ]);
         }
@@ -384,7 +385,7 @@ class WhatsAppCampaignController extends Controller
                 return [
                     'phone' => $recipient->phone_number,
                     'contact_id' => $recipient->contact_id,
-                    'name' => $recipient->contact?->name ?? 'Unknown'
+                    'name' => $recipient->contact?->nama ?? $recipient->contact?->name ?? 'Unknown'
                 ];
             })
             ->toArray();
