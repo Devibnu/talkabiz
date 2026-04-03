@@ -180,10 +180,10 @@
                                     </td>
                                     <td>
                                         <span class="badge badge-sm 
-                                            @if($log->status == 'success') bg-gradient-success
+                                            @if($log->processed && !$log->error_message) bg-gradient-success
                                             @else bg-gradient-danger
                                             @endif">
-                                            {{ $log->status }}
+                                            {{ $log->processed && !$log->error_message ? 'success' : 'failed' }}
                                         </span>
                                     </td>
                                     <td>
