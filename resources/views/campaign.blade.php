@@ -361,6 +361,7 @@
                                     <th>Penerima</th>
                                     <th>Terkirim</th>
                                     <th>Dibuat</th>
+                                    <th>Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -375,7 +376,32 @@
                                     </td>
                                     <td>{{ number_format($campaign->total_recipients, 0, ',', '.') }}</td>
                                     <td>{{ number_format($campaign->sent_count, 0, ',', '.') }}</td>
-                                    <td>{{ $campaign->created_at->format('d M Y H:i') }}</td>
+                                    <td style="white-space: nowrap;">{{ $campaign->created_at->format('d M Y H:i') }}</td>
+                                    <td>
+                                        <div class="d-flex gap-1">
+                                            @if(in_array($campaign->status, ['draft', 'scheduled']))
+                                                <form action="{{ route('campaign.send', $campaign->id) }}" method="POST" onsubmit="return confirm('Kirim campaign ini ke {{ $campaign->total_recipients }} penerima?')">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Kirim">
+                                                        <i class="fas fa-paper-plane"></i>
+                                                    </button>
+                                                </form>
+                                                <form action="{{ route('campaign.destroy', $campaign->id) }}" method="POST" onsubmit="return confirm('Hapus campaign ini?')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm py-1 px-2" title="Hapus">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            @elseif($campaign->status === 'running')
+                                                <span class="text-xs text-info"><i class="fas fa-spinner fa-spin me-1"></i>Mengirim...</span>
+                                            @elseif($campaign->status === 'completed')
+                                                <span class="text-xs text-success"><i class="fas fa-check me-1"></i>Selesai</span>
+                                            @elseif($campaign->status === 'cancelled')
+                                                <span class="text-xs text-secondary">Dibatalkan</span>
+                                            @endif
+                                        </div>
+                                    </td>
                                 </tr>
                                 @endforeach
                             </tbody>

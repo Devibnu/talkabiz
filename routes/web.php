@@ -214,6 +214,127 @@ Route::middleware(['client.access'])->group(function () {
 			*/
 			// Route::post('campaign/create', ...)->middleware(['subscription.active', 'plan.limit:campaign']);
 			// Route::post('campaign/send', ...)->middleware(['subscription.active', 'plan.limit:campaign', 'wallet.cost.guard:campaign']);
+
+			Route::post('campaign/{id}/send', function ($id) {
+				$user = auth()->user();
+				$campaign = \App\Models\WhatsappCampaign::where('id', $id)
+					->where('klien_id', $user->klien_id)
+					->firstOrFail();
+
+				if (!in_array($campaign->status, ['draft', 'scheduled'])) {
+					return back()->with('error', 'Campaign tidak bisa dikirim dari status ' . $campaign->status);
+				}
+
+				// Get WA connection
+				$connection = \App\Models\WhatsappConnection::where('klien_id', $user->klien_id)
+					->where('status', 'connected')
+					->first();
+
+				if (!$connection) {
+					return back()->with('error', 'WhatsApp belum terhubung. Silakan hubungkan di halaman Nomor WhatsApp.');
+				}
+
+				// Resolve template content
+				$templateName = null;
+				$templateLang = 'id';
+				$messageBody = null;
+
+				if ($campaign->template_id) {
+					$waTemplate = \App\Models\WhatsappTemplate::find($campaign->template_id);
+					if ($waTemplate) {
+						$templateName = $waTemplate->name;
+						$templateLang = $waTemplate->language ?? 'id';
+						$messageBody = $waTemplate->getBodyText() ?? $waTemplate->sample_text ?? $waTemplate->name;
+					}
+				} elseif ($campaign->template_pesan_id) {
+					$tp = \App\Models\TemplatePesan::find($campaign->template_pesan_id);
+					if ($tp) {
+						$messageBody = $tp->body;
+						$templateName = $tp->nama_template;
+					}
+				}
+
+				if (!$messageBody) {
+					return back()->with('error', 'Template tidak ditemukan atau kosong.');
+				}
+
+				// Get recipients from Kontak based on audience_filter
+				$kontakQuery = \App\Models\Kontak::where('klien_id', $user->klien_id);
+				$filter = $campaign->audience_filter ?? [];
+				if (!empty($filter['tags'])) {
+					foreach ($filter['tags'] as $tag) {
+						$kontakQuery->whereJsonContains('tags', $tag);
+					}
+				}
+				$recipients = $kontakQuery->get();
+
+				if ($recipients->isEmpty()) {
+					return back()->with('error', 'Tidak ada penerima yang ditemukan.');
+				}
+
+				// Mark as running
+				$campaign->update(['status' => 'running', 'started_at' => now()]);
+
+				// Dispatch using MessageDispatchService
+				try {
+					$dispatchService = app(\App\Services\Message\MessageDispatchService::class);
+
+					$recipientArray = $recipients->map(fn($k) => [
+						'phone' => $k->no_telepon,
+						'name' => $k->nama,
+					])->toArray();
+
+					$metadata = ['campaign_id' => $campaign->id];
+					if ($templateName && $campaign->template_id) {
+						$waTemplate = \App\Models\WhatsappTemplate::find($campaign->template_id);
+						$metadata['template_provider_id'] = $waTemplate->template_id ?? null;
+						$metadata['template_name'] = $templateName;
+						$metadata['template_language'] = $templateLang;
+						$metadata['template_params'] = [];
+					}
+
+					$request = \App\Services\Message\MessageDispatchRequest::fromCampaign(
+						userId: $user->id,
+						recipients: $recipientArray,
+						messageContent: $messageBody,
+						campaignId: (string) $campaign->id,
+						preAuthorized: false,
+						metadata: $metadata,
+					);
+
+					$result = $dispatchService->dispatch($request);
+
+					$campaign->update([
+						'sent_count' => $result->totalSent,
+						'failed_count' => $result->totalFailed,
+						'actual_cost' => $result->totalCost,
+						'completed_at' => now(),
+						'status' => $result->totalFailed === $result->totalSent + $result->totalFailed
+							? 'cancelled' : 'completed',
+					]);
+
+					$msg = $result->totalFailed > 0
+						? "Campaign selesai. Terkirim: {$result->totalSent}, Gagal: {$result->totalFailed}"
+						: "Campaign berhasil dikirim ke {$result->totalSent} penerima.";
+
+					return redirect()->route('campaign')->with('success', $msg);
+
+				} catch (\Exception $e) {
+					\Log::error('Campaign send failed', ['campaign' => $id, 'error' => $e->getMessage()]);
+					$campaign->update(['status' => 'draft', 'started_at' => null]);
+					return back()->with('error', 'Gagal mengirim: ' . $e->getMessage());
+				}
+			})->name('campaign.send');
+
+			Route::delete('campaign/{id}', function ($id) {
+				$user = auth()->user();
+				$campaign = \App\Models\WhatsappCampaign::where('id', $id)
+					->where('klien_id', $user->klien_id)
+					->whereIn('status', ['draft', 'scheduled', 'cancelled'])
+					->firstOrFail();
+				$campaign->delete();
+				return redirect()->route('campaign')->with('success', 'Campaign berhasil dihapus.');
+			})->name('campaign.destroy');
 		});
 
 		// Template Routes (CRUD)
