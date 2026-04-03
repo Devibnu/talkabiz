@@ -491,8 +491,13 @@ class WhatsAppCloudController extends Controller
         }
 
         try {
-            $service = GupshupService::forConnection($connection);
-            $result = $service->syncTemplates($klien->id);
+            // Use Meta Graph API directly when provider is meta_cloud
+            if ($connection->provider === 'meta_cloud' && $connection->waba_id && $connection->access_token) {
+                $result = $this->syncTemplatesFromMeta($connection, $klien->id);
+            } else {
+                $service = GupshupService::forConnection($connection);
+                $result = $service->syncTemplates($klien->id);
+            }
 
             return response()->json([
                 'success' => true,
@@ -510,6 +515,58 @@ class WhatsAppCloudController extends Controller
                 'error' => 'Gagal sinkronisasi template: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Sync templates directly from Meta Graph API
+     */
+    protected function syncTemplatesFromMeta(WhatsappConnection $connection, int $klienId): array
+    {
+        $graphVersion = env('WHATSAPP_GRAPH_VERSION', 'v22.0');
+        $url = "https://graph.facebook.com/{$graphVersion}/{$connection->waba_id}/message_templates";
+
+        $response = \Illuminate\Support\Facades\Http::withToken($connection->getDecryptedAccessToken())
+            ->acceptJson()
+            ->timeout(30)
+            ->get($url, ['limit' => 100]);
+
+        if (!$response->successful()) {
+            $error = $response->json('error.message', 'Unknown Meta API error');
+            throw new \Exception("Meta API error: {$error}");
+        }
+
+        $templates = $response->json('data', []);
+        $synced = 0;
+
+        foreach ($templates as $template) {
+            $bodyText = null;
+            $components = $template['components'] ?? [];
+            foreach ($components as $comp) {
+                if (($comp['type'] ?? '') === 'BODY') {
+                    $bodyText = $comp['text'] ?? null;
+                    break;
+                }
+            }
+
+            WhatsappTemplate::updateOrCreate(
+                [
+                    'klien_id' => $klienId,
+                    'template_id' => $template['name'],
+                ],
+                [
+                    'name' => $template['name'],
+                    'category' => $template['category'] ?? null,
+                    'language' => $template['language'] ?? 'id',
+                    'components' => json_encode($components),
+                    'sample_text' => $bodyText,
+                    'status' => strtolower($template['status'] ?? 'pending') === 'approved' ? 'approved' : strtolower($template['status'] ?? 'pending'),
+                    'rejection_reason' => $template['rejected_reason'] ?? null,
+                ]
+            );
+            $synced++;
+        }
+
+        return ['synced' => $synced];
     }
 
     /**
