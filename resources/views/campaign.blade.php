@@ -471,13 +471,13 @@
 <div class="modal fade" id="createCampaignModal" tabindex="-1" aria-labelledby="createCampaignModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content" style="border-radius: 1rem; border: none;">
-            <div class="modal-header" style="border-bottom: 1px solid #e9ecef; padding: 1.25rem 1.5rem;">
-                <h5 class="modal-title" id="createCampaignModalLabel" style="font-weight: 700; color: #344767;">Buat Campaign Baru</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" style="padding: 1.5rem;">
-                <form id="createCampaignForm" action="{{ route('campaign.store') }}" method="POST">
-                    @csrf
+            <form id="createCampaignForm" action="{{ route('campaign.store') }}" method="POST">
+                @csrf
+                <div class="modal-header" style="border-bottom: 1px solid #e9ecef; padding: 1.25rem 1.5rem;">
+                    <h5 class="modal-title" id="createCampaignModalLabel" style="font-weight: 700; color: #344767;">Buat Campaign Baru</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="padding: 1.5rem;">
                     {{-- Nama Campaign --}}
                     <div class="mb-3">
                         <label class="form-label" style="font-size: 0.875rem; font-weight: 600; color: #344767;">Nama Campaign</label>
@@ -528,16 +528,15 @@
                     <div class="mb-3" id="scheduleDatetimeContainer" style="display: none;">
                         <input type="datetime-local" name="scheduled_at" class="form-control" style="border-radius: 0.5rem; border: 1px solid #e9ecef; padding: 0.75rem 1rem;">
                     </div>
-            </div>
-                </form>
-            </div>
-            <div class="modal-footer" style="border-top: 1px solid #e9ecef; padding: 1rem 1.5rem;">
-                <button type="button" class="btn" data-bs-dismiss="modal" style="background: #f8f9fa; color: #67748e; border: 1px solid #e9ecef; border-radius: 0.5rem; padding: 0.625rem 1.25rem; font-weight: 600;">Batal</button>
-                <button type="submit" form="createCampaignForm" class="btn-soft-primary">
-                    <i class="ni ni-send"></i>
-                    <span>Buat Campaign</span>
-                </button>
-            </div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #e9ecef; padding: 1rem 1.5rem;">
+                    <button type="button" class="btn" data-bs-dismiss="modal" style="background: #f8f9fa; color: #67748e; border: 1px solid #e9ecef; border-radius: 0.5rem; padding: 0.625rem 1.25rem; font-weight: 600;">Batal</button>
+                    <button type="submit" class="btn-soft-primary">
+                        <i class="ni ni-send"></i>
+                        <span>Buat Campaign</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
