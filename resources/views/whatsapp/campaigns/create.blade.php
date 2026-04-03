@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += `
                     <div class="row mb-2">
                         <div class="col-4">
-                            <span class="text-sm">{{${i}}}</span>
+                            <span class="text-sm">@{{${i}}}</span>
                         </div>
                         <div class="col-8">
                             <select name="template_variables[${i-1}]" class="form-select form-select-sm">

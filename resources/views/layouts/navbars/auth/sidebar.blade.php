@@ -50,8 +50,8 @@
                 $canAccessCampaign = $isOwnerRole || $isImpersonating || (auth()->user()->klien?->wa_terhubung ?? false);
             @endphp
             <li class="nav-item">
-                <a class="nav-link {{ Request::is('campaign*') ? 'active' : '' }}" 
-                   href="{{ $canAccessCampaign ? url('campaign') : url('whatsapp') }}"
+                <a class="nav-link {{ Request::is('whatsapp/campaigns*') || Request::is('campaign*') ? 'active' : '' }}" 
+                   href="{{ $canAccessCampaign ? route('whatsapp.campaigns.index') : url('whatsapp') }}"
                    @if(!$canAccessCampaign) title="Hubungkan WhatsApp terlebih dahulu" @endif>
                     <div class="icon-wrapper">
                         <i class="ni ni-send"></i>
