@@ -1487,6 +1487,8 @@ const TalkabizInbox = {
         search: '',
         loading: false,
         sending: false,
+        hasInitializedList: false,
+        conversationSnapshot: new Map(),
         userId: {{ auth()->id() ?? 'null' }},
         subscriptionIsActive: {{ ($subscriptionIsActive ?? false) ? 'true' : 'false' }}
     },
@@ -1509,6 +1511,7 @@ const TalkabizInbox = {
         this.el.messagesContainer = document.getElementById('chatMessages');
         
         this.bindEvents();
+        this.prepareNotifications();
         this.loadConversations();
         
         // Auto refresh setiap 30 detik
@@ -1557,6 +1560,16 @@ const TalkabizInbox = {
             });
         }
     },
+
+    prepareNotifications() {
+        if (!('Notification' in window)) {
+            return;
+        }
+
+        if (Notification.permission === 'default') {
+            Notification.requestPermission().catch(() => {});
+        }
+    },
     
     // Get API headers
     getHeaders() {
@@ -1593,13 +1606,103 @@ const TalkabizInbox = {
             const data = await response.json();
             
             if (data.sukses) {
-                this.state.conversations = data.data.data || [];
+                const incomingConversations = data.data.data || [];
+                const previousSnapshot = this.state.conversationSnapshot;
+
+                this.state.conversations = incomingConversations;
+                this.state.conversationSnapshot = this.buildConversationSnapshot(incomingConversations);
+
+                if (this.state.hasInitializedList) {
+                    this.handleConversationUpdates(previousSnapshot, incomingConversations, silent);
+                } else {
+                    this.state.hasInitializedList = true;
+                    this.autoSelectInitialConversation(incomingConversations);
+                }
             }
         } catch (error) {
             console.error('Error loading conversations:', error);
         } finally {
             this.state.loading = false;
             this.renderConversationList();
+        }
+    },
+
+    buildConversationSnapshot(conversations) {
+        return new Map(conversations.map(conv => [String(conv.id), {
+            id: conv.id,
+            waktu_pesan_terakhir: conv.waktu_pesan_terakhir,
+            jumlah_belum_dibaca: Number(conv.jumlah_belum_dibaca || 0),
+            pengirim_terakhir: conv.pengirim_terakhir || null,
+            pesan_terakhir: conv.pesan_terakhir || ''
+        }]));
+    },
+
+    autoSelectInitialConversation(conversations) {
+        if (this.state.activeConversation || !Array.isArray(conversations) || conversations.length === 0) {
+            return;
+        }
+
+        this.selectConversation(conversations[0].id);
+    },
+
+    handleConversationUpdates(previousSnapshot, conversations, silent) {
+        if (!Array.isArray(conversations) || conversations.length === 0) {
+            return;
+        }
+
+        const newestIncoming = conversations.find(conv => {
+            const currentId = String(conv.id);
+            const previous = previousSnapshot.get(currentId);
+            const currentUnread = Number(conv.jumlah_belum_dibaca || 0);
+            const previousUnread = Number(previous?.jumlah_belum_dibaca || 0);
+            const updatedAtChanged = previous && previous.waktu_pesan_terakhir !== conv.waktu_pesan_terakhir;
+            const isInbound = (conv.pengirim_terakhir || '').toLowerCase() !== 'sales';
+
+            return isInbound && (!previous || currentUnread > previousUnread || updatedAtChanged);
+        });
+
+        if (!newestIncoming) {
+            if (this.state.activeConversation) {
+                const activeConversation = conversations.find(conv => conv.id == this.state.activeConversation.id);
+                const previousActive = activeConversation ? previousSnapshot.get(String(activeConversation.id)) : null;
+                const activeChanged = activeConversation && (
+                    !previousActive
+                    || previousActive.waktu_pesan_terakhir !== activeConversation.waktu_pesan_terakhir
+                    || Number(previousActive.jumlah_belum_dibaca || 0) !== Number(activeConversation.jumlah_belum_dibaca || 0)
+                );
+
+                if (activeChanged && silent) {
+                    this.selectConversation(this.state.activeConversation.id);
+                }
+            }
+            return;
+        }
+
+        this.notifyIncomingConversation(newestIncoming);
+
+        if (!this.state.activeConversation || this.state.activeConversation.id != newestIncoming.id || silent) {
+            this.selectConversation(newestIncoming.id);
+        }
+    },
+
+    notifyIncomingConversation(conv) {
+        const senderName = conv.nama_customer || conv.no_whatsapp || 'Kontak baru';
+        const preview = conv.pesan_terakhir || 'Ada pesan baru';
+
+        this.showToast(`Pesan baru dari ${senderName}`, 'info');
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+            const notification = new Notification(`Pesan baru dari ${senderName}`, {
+                body: preview,
+                tag: `inbox-${conv.id}`,
+                renotify: true,
+            });
+
+            notification.onclick = () => {
+                window.focus();
+                this.selectConversation(conv.id);
+                notification.close();
+            };
         }
     },
     
