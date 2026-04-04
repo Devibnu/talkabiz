@@ -386,6 +386,35 @@
     border-color: transparent;
 }
 
+.variable-tag-auto {
+    border-color: #2dce89;
+    color: #2dce89;
+}
+.variable-tag-auto:hover {
+    background: linear-gradient(310deg, #2dce89 0%, #26a96d 100%);
+    color: #fff;
+    border-color: transparent;
+}
+
+.variable-section-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.variable-info-box {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.75rem;
+    color: #166534;
+    margin-bottom: 0.5rem;
+}
+
 /* Modal Styles */
 .modal-soft .modal-content {
     border-radius: 1rem;
@@ -661,18 +690,32 @@
                     <div class="mb-3">
                         <label class="form-label-soft">Isi Pesan</label>
                         <textarea name="konten" id="createKonten" class="form-control form-control-soft textarea-soft" placeholder="Tulis isi pesan di sini..." required></textarea>
-                        <small class="text-muted">Klik tombol variabel di bawah untuk menyisipkan data pelanggan otomatis.</small>
+                        <small class="text-muted">Gunakan variabel di bawah agar pesan otomatis diisi data penerima.</small>
                     </div>
 
                     {{-- Variable Buttons --}}
                     <div class="variable-helper">
                         <div class="variable-helper-title">
                             <i class="ni ni-bulb-61 me-1" style="color: #fbcf33;"></i>
-                            Klik untuk sisipkan ke pesan:
+                            Sisipkan variabel ke pesan:
                         </div>
+
+                        <div class="variable-info-box">
+                            <i class="ni ni-check-bold me-1"></i>
+                            <strong>Otomatis</strong> = data diambil dari Kontak, beda tiap penerima<br>
+                            <i class="ni ni-tag me-1"></i>
+                            <strong>Teks Bebas</strong> = Anda isi nilainya saat buat kampanye, sama untuk semua penerima
+                        </div>
+
+                        <div class="variable-section-label text-success"><i class="ni ni-single-02 me-1"></i> Otomatis (dari data kontak):</div>
+                        <div class="variable-tags mb-2">
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('nama', 'createKonten')">+ Nama</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('telepon', 'createKonten')">+ No HP</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('email', 'createKonten')">+ Email</span>
+                        </div>
+
+                        <div class="variable-section-label text-primary"><i class="ni ni-ruler-pencil me-1"></i> Teks bebas (isi saat kirim kampanye):</div>
                         <div class="variable-tags">
-                            <span class="variable-tag" onclick="insertVariable('nama', 'createKonten')">+ Nama</span>
-                            <span class="variable-tag" onclick="insertVariable('telepon', 'createKonten')">+ No HP</span>
                             <span class="variable-tag" onclick="insertVariable('produk', 'createKonten')">+ Produk</span>
                             <span class="variable-tag" onclick="insertVariable('harga', 'createKonten')">+ Harga</span>
                             <span class="variable-tag" onclick="insertVariable('tanggal', 'createKonten')">+ Tanggal</span>
@@ -899,16 +942,17 @@ function updatePreview(textareaId, previewId, wrapId) {
     const wrap = document.getElementById(wrapId);
     
     if (text.trim()) {
-        // Replace variables with colored example values
+        // Auto variables (green) = from contact data, different per recipient
+        // Manual variables (blue) = filled when creating campaign, same for all
         let html = text
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\{\{nama\}\}/g, '<span style="color:#5e72e4;font-weight:600;">John</span>')
-            .replace(/\{\{telepon\}\}/g, '<span style="color:#5e72e4;font-weight:600;">081234567890</span>')
-            .replace(/\{\{email\}\}/g, '<span style="color:#5e72e4;font-weight:600;">john@email.com</span>')
-            .replace(/\{\{produk\}\}/g, '<span style="color:#5e72e4;font-weight:600;">Produk A</span>')
-            .replace(/\{\{harga\}\}/g, '<span style="color:#5e72e4;font-weight:600;">Rp 100.000</span>')
-            .replace(/\{\{tanggal\}\}/g, '<span style="color:#5e72e4;font-weight:600;">01 Jan 2026</span>')
-            .replace(/\{\{no_order\}\}/g, '<span style="color:#5e72e4;font-weight:600;">ORD-001</span>')
+            .replace(/\{\{nama\}\}/g, '<span style="background:#dcfce7;color:#166534;padding:1px 4px;border-radius:3px;font-weight:600;">Budi</span>')
+            .replace(/\{\{telepon\}\}/g, '<span style="background:#dcfce7;color:#166534;padding:1px 4px;border-radius:3px;font-weight:600;">081234567890</span>')
+            .replace(/\{\{email\}\}/g, '<span style="background:#dcfce7;color:#166534;padding:1px 4px;border-radius:3px;font-weight:600;">budi@email.com</span>')
+            .replace(/\{\{produk\}\}/g, '<span style="background:#e0e7ff;color:#3730a3;padding:1px 4px;border-radius:3px;font-weight:600;">isi saat kirim</span>')
+            .replace(/\{\{harga\}\}/g, '<span style="background:#e0e7ff;color:#3730a3;padding:1px 4px;border-radius:3px;font-weight:600;">isi saat kirim</span>')
+            .replace(/\{\{tanggal\}\}/g, '<span style="background:#e0e7ff;color:#3730a3;padding:1px 4px;border-radius:3px;font-weight:600;">isi saat kirim</span>')
+            .replace(/\{\{no_order\}\}/g, '<span style="background:#e0e7ff;color:#3730a3;padding:1px 4px;border-radius:3px;font-weight:600;">isi saat kirim</span>')
             .replace(/\n/g, '<br>');
         preview.innerHTML = html;
         wrap.style.display = 'block';
