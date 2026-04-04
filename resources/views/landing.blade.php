@@ -266,7 +266,7 @@
                     
                     @if($plan->is_self_serve)
                         <a href="{{ route('register', ['plan' => $plan->code]) }}" class="btn btn-primary pricing-cta">
-                            Mulai Sekarang — Gratis Setup
+                            Mulai Sekarang
                             <i class="fas fa-arrow-right"></i>
                         </a>
                     @else
