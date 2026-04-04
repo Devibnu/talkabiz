@@ -702,7 +702,7 @@
 
                         <div class="variable-info-box">
                             Variabel akan otomatis diganti saat pesan dikirim.<br>
-                            Contoh: <code>Halo {{nama}}</code> → <code>Halo Budi</code>, <code>Halo Siti</code>, dst.
+                            Contoh: <code>Halo @{{nama}}</code> → <code>Halo Budi</code>, <code>Halo Siti</code>, dst.
                         </div>
 
                         <div class="variable-tags">
