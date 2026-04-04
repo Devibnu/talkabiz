@@ -262,6 +262,22 @@
     box-shadow: 0 4px 7px -1px rgba(234, 6, 6, 0.4);
 }
 
+.btn-template-action.btn-submit-meta {
+    background: linear-gradient(310deg, #17ad37 0%, #98ec2d 100%);
+    color: #fff;
+}
+
+.btn-template-action.btn-submit-meta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 7px -1px rgba(23, 173, 55, 0.4);
+}
+
+.btn-template-action.btn-submit-meta:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
 /* Status Badges */
 .status-badge {
     display: inline-flex;
@@ -290,6 +306,43 @@
 .status-badge.status-draft {
     background: linear-gradient(310deg, #627594 0%, #8392ab 100%);
     color: #fff;
+}
+
+.status-badge.status-rejected {
+    background: linear-gradient(310deg, #ea0606 0%, #ff667c 100%);
+    color: #fff;
+}
+
+.info-banner {
+    background: linear-gradient(310deg, #7928ca 0%, #ff0080 100%);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+}
+
+.info-banner h6 {
+    color: #fff;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.info-banner p {
+    color: rgba(255,255,255,0.9);
+    font-size: 0.8125rem;
+    margin-bottom: 0;
+    line-height: 1.6;
+}
+
+.info-banner .steps {
+    margin-top: 0.75rem;
+    padding-left: 1.25rem;
+}
+
+.info-banner .steps li {
+    color: rgba(255,255,255,0.9);
+    font-size: 0.8125rem;
+    margin-bottom: 0.25rem;
 }
 
 /* Variable Helper */
@@ -421,10 +474,30 @@
         </button>
     </div>
 
+    {{-- Info Banner --}}
+    <div class="info-banner">
+        <h6><i class="fab fa-whatsapp me-2"></i>Cara Menggunakan Template untuk WA Blast</h6>
+        <p>Template yang dibuat di sini perlu di-submit ke Meta (WhatsApp) untuk review sebelum bisa digunakan di WA Blast.</p>
+        <ol class="steps">
+            <li>Buat template baru dengan tombol "Tambah Template"</li>
+            <li>Klik tombol <strong>"Submit ke WhatsApp"</strong> pada template yang sudah dibuat</li>
+            <li>Tunggu approval dari Meta (biasanya beberapa menit - beberapa jam)</li>
+            <li>Klik <strong>"Sync Templates"</strong> di halaman <a href="{{ route('whatsapp.index') }}" style="color: #fff; text-decoration: underline;">Nomor WhatsApp</a> untuk memperbarui status</li>
+            <li>Template yang sudah <span class="badge bg-success">Approved</span> akan otomatis muncul di halaman <a href="{{ route('whatsapp.campaigns.create') }}" style="color: #fff; text-decoration: underline;">Buat Kampanye WA Blast</a></li>
+        </ol>
+    </div>
+
     {{-- Alert --}}
     @if(session('success'))
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         {{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    @endif
+
+    @if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ session('error') }}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     @endif
@@ -455,13 +528,23 @@
                     {{-- Card Footer --}}
                     <div class="template-item-footer">
                         @if($template->status == 'disetujui')
-                            <span class="status-badge status-approved"><i class="ni ni-check-bold"></i> Approved</span>
+                            <span class="status-badge status-approved"><i class="ni ni-check-bold"></i> Approved Meta</span>
                         @elseif($template->status == 'diajukan')
-                            <span class="status-badge status-pending"><i class="ni ni-time-alarm"></i> Pending</span>
+                            <span class="status-badge status-pending"><i class="ni ni-time-alarm"></i> Menunggu Review Meta</span>
+                        @elseif($template->status == 'ditolak')
+                            <span class="status-badge status-rejected"><i class="ni ni-fat-remove"></i> Ditolak Meta</span>
                         @else
                             <span class="status-badge status-draft"><i class="ni ni-single-copy-04"></i> Draft</span>
                         @endif
                         <div class="template-item-actions">
+                            @if($template->status == 'draft' || $template->status == 'ditolak')
+                                <form action="{{ route('template.submit-meta', $template->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Submit template ini ke WhatsApp untuk di-review Meta?')">
+                                    @csrf
+                                    <button type="submit" class="btn-template-action btn-submit-meta" title="Submit ke WhatsApp untuk review">
+                                        <i class="fab fa-whatsapp"></i> Submit ke WA
+                                    </button>
+                                </form>
+                            @endif
                             <button class="btn-template-action btn-edit" onclick="editTemplate({{ $template->id }})">
                                 <i class="ni ni-ruler-pencil"></i> Edit
                             </button>
@@ -514,13 +597,18 @@
                         <select name="kategori" class="form-select form-select-soft" required>
                             <option value="">Pilih kategori...</option>
                             <option value="marketing">Marketing / Promosi</option>
-                            <option value="utility">Utility</option>
-                            <option value="authentication">Authentication</option>
-                            <option value="transactional">Transaksional</option>
-                            <option value="notification">Notifikasi</option>
-                            <option value="greeting">Sapaan / Ucapan</option>
-                            <option value="follow_up">Follow Up</option>
-                            <option value="other">Lainnya</option>
+                            <option value="utility">Utility (Notifikasi, Transaksi)</option>
+                            <option value="authentication">Authentication (OTP, Verifikasi)</option>
+                        </select>
+                        <small class="text-muted">Meta hanya menerima 3 kategori ini untuk template WhatsApp.</small>
+                    </div>
+
+                    {{-- Bahasa --}}
+                    <div class="mb-3">
+                        <label class="form-label-soft">Bahasa</label>
+                        <select name="bahasa" class="form-select form-select-soft" required>
+                            <option value="id">Indonesia</option>
+                            <option value="en_US">English (US)</option>
                         </select>
                     </div>
 
@@ -584,13 +672,8 @@ Pesanan Anda untuk @{{ produk }} sedang diproses." required></textarea>
                         <label class="form-label-soft">Kategori</label>
                         <select name="kategori" id="editKategori" class="form-select form-select-soft" required>
                             <option value="marketing">Marketing / Promosi</option>
-                            <option value="utility">Utility</option>
-                            <option value="authentication">Authentication</option>
-                            <option value="transactional">Transaksional</option>
-                            <option value="notification">Notifikasi</option>
-                            <option value="greeting">Sapaan / Ucapan</option>
-                            <option value="follow_up">Follow Up</option>
-                            <option value="other">Lainnya</option>
+                            <option value="utility">Utility (Notifikasi, Transaksi)</option>
+                            <option value="authentication">Authentication (OTP, Verifikasi)</option>
                         </select>
                     </div>
                     <div class="mb-3">

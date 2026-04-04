@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\WhatsappConnection;
 use App\Models\WhatsappTemplate;
 use App\Models\WhatsappContact;
+use App\Models\TemplatePesan;
 use App\Services\GupshupService;
 use App\Services\RevenueGuardService;
 use App\Services\PlanLimitService;
@@ -563,6 +564,31 @@ class WhatsAppCloudController extends Controller
                     'rejection_reason' => $template['rejected_reason'] ?? null,
                 ]
             );
+
+            // Also update TemplatePesan status if this template was submitted from Talkabiz
+            $metaStatus = strtolower($template['status'] ?? 'pending');
+            $templatePesan = TemplatePesan::where('klien_id', $klienId)
+                ->where('status', TemplatePesan::STATUS_DIAJUKAN)
+                ->where(function ($q) use ($template) {
+                    $q->where('provider_template_id', $template['id'] ?? '')
+                      ->orWhere(\Illuminate\Support\Facades\DB::raw("LOWER(REPLACE(REPLACE(nama_template, ' ', '_'), '-', '_'))"), $template['name']);
+                })
+                ->first();
+
+            if ($templatePesan) {
+                if ($metaStatus === 'approved') {
+                    $templatePesan->update([
+                        'status' => TemplatePesan::STATUS_DISETUJUI,
+                        'approved_at' => now(),
+                    ]);
+                } elseif ($metaStatus === 'rejected') {
+                    $templatePesan->update([
+                        'status' => TemplatePesan::STATUS_DITOLAK,
+                        'alasan_penolakan' => $template['rejected_reason'] ?? 'Ditolak oleh Meta',
+                    ]);
+                }
+            }
+
             $synced++;
         }
 

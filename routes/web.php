@@ -339,6 +339,7 @@ Route::middleware(['client.access'])->group(function () {
 		Route::post('template', [TemplatePesanController::class, 'store'])->name('template.store');
 		Route::put('template/{id}', [TemplatePesanController::class, 'update'])->name('template.update');
 		Route::delete('template/{id}', [TemplatePesanController::class, 'destroy'])->name('template.destroy');
+		Route::post('template/{id}/submit-meta', [TemplatePesanController::class, 'submitToMeta'])->name('template.submit-meta');
 		Route::get('api/template', [TemplatePesanController::class, 'list'])->name('template.list');
 
 		// Kontak Routes (CRUD)
