@@ -181,6 +181,11 @@ class TemplatePesanController extends Controller
             return back()->with('error', 'WhatsApp Business belum terhubung. Hubungkan dulu di halaman Nomor WhatsApp.');
         }
 
+        // Ensure connection has WABA ID and access token for Meta Cloud API
+        if (empty($connection->waba_id) || empty($connection->getDecryptedAccessToken())) {
+            return back()->with('error', 'Koneksi WhatsApp belum lengkap — WABA ID atau Access Token belum tersedia. Silakan hubungi admin untuk setup koneksi Meta Cloud API.');
+        }
+
         // Validate template has body content
         if (empty($template->body)) {
             return back()->with('error', 'Isi pesan template tidak boleh kosong.');
@@ -319,9 +324,13 @@ class TemplatePesanController extends Controller
                     'response' => $response->json(),
                 ]);
 
-                // Handle duplicate name error
-                if ($errorCode == 100 || str_contains($error, 'already exists')) {
+                // Handle specific Meta error codes
+                if (str_contains($error, 'already exists') || str_contains($error, 'duplicate')) {
                     return back()->with('error', 'Template dengan nama "' . $metaName . '" sudah ada di Meta. Gunakan nama template yang berbeda.');
+                }
+
+                if ($errorCode == 100) {
+                    return back()->with('error', 'Gagal mengirim template: WABA ID atau permission tidak valid. Hubungi admin untuk cek koneksi WhatsApp.');
                 }
 
                 return back()->with('error', 'Gagal mengirim template ke Meta: ' . $error);
