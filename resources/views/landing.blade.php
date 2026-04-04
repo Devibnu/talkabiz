@@ -408,8 +408,8 @@
             <div class="footer-col">
                 <h4>Legal</h4>
                 <ul>
-                    <li><a href="#">Syarat & Ketentuan</a></li>
-                    <li><a href="#">Kebijakan Privasi</a></li>
+                    <li><a href="{{ route('legal.terms') }}">Syarat & Ketentuan</a></li>
+                    <li><a href="{{ route('legal.privacy') }}">Kebijakan Privasi</a></li>
                     <li><a href="#">SLA</a></li>
                 </ul>
             </div>

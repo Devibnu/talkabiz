@@ -24,6 +24,7 @@ use App\Http\Controllers\SocialLoginController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\TopupInvoiceController;
 use App\Http\Controllers\InvoiceWebController;
+use App\Http\Controllers\LegalPublicController;
 use App\Http\Controllers\BusinessMetricsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -44,6 +45,11 @@ use Illuminate\Support\Facades\Route;
 
 // ==================== PUBLIC LANDING PAGE ====================
 Route::get('/', [LandingController::class, 'index'])->name('landing');
+Route::get('/privacy-policy', [LegalPublicController::class, 'privacyPolicy'])->name('legal.privacy');
+Route::get('/terms-of-service', [LegalPublicController::class, 'termsOfService'])->name('legal.terms');
+Route::get('/data-deletion', [LegalPublicController::class, 'dataDeletionInstructions'])->name('legal.data-deletion-instructions');
+Route::match(['get', 'post'], '/api/data-deletion-callback', [LegalPublicController::class, 'dataDeletionCallback'])
+	->name('legal.data-deletion-callback');
 
 // ==================== SMART LOGIN ENTRY POINT ====================
 // This route handles "Masuk" button clicks intelligently:
