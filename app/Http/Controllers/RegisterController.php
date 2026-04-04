@@ -37,13 +37,21 @@ class RegisterController extends Controller
 {
     public function create(Request $request)
     {
+        $selectedPlanCode = $request->query('plan') ?: session('selected_plan_code');
         $selectedPlan = null;
 
-        if ($request->filled('plan')) {
-            $selectedPlan = Plan::where('code', $request->query('plan'))
+        if ($selectedPlanCode) {
+            $selectedPlan = Plan::where('code', $selectedPlanCode)
                 ->where('is_active', true)
                 ->where('is_visible', true)
                 ->first();
+
+            if ($selectedPlan) {
+                session([
+                    'selected_plan_id' => $selectedPlan->id,
+                    'selected_plan_code' => $selectedPlan->code,
+                ]);
+            }
         }
 
         return view('session.register', [

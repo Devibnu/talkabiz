@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\Plan;
+use App\Models\PlanTransaction;
 use App\Models\User;
 use App\Services\LoginSecurityService;
 use Illuminate\Http\Request;
@@ -50,8 +52,10 @@ class SessionsController extends Controller
      * 
      * ANTI-LOOP: Prevents showing login form when already logged in
      */
-    public function create()
+    public function create(Request $request)
     {
+        $selectedPlan = $this->resolveSelectedPlan($request);
+
         // If user already logged in, redirect to dashboard
         if (Auth::check()) {
             $user = Auth::user();
@@ -63,7 +67,9 @@ class SessionsController extends Controller
                 'onboarding_complete' => $user->onboarding_complete ? 'YES' : 'NO',
             ]);
             
-            $redirectUrl = $this->getRedirectByRole($user);
+            $redirectUrl = $this->shouldRedirectToCheckout($user, $selectedPlan)
+                ? route('subscription.index', ['autocheckout' => 1, 'plan' => $selectedPlan->code])
+                : $this->getRedirectByRole($user);
             
             Log::info('🔄 SessionsController::create - Redirect to dashboard', [
                 'target' => $redirectUrl,
@@ -73,7 +79,9 @@ class SessionsController extends Controller
         }
 
         Log::info('🔐 SessionsController::create - Show login form (guest)');
-        return view('session.login-session');
+        return view('session.login-session', [
+            'selectedPlan' => $selectedPlan,
+        ]);
     }
 
     /**
@@ -180,6 +188,14 @@ class SessionsController extends Controller
                 'role' => $user->role,
             ]);
 
+            $selectedPlan = $this->resolveSelectedPlan($request);
+            if ($this->shouldRedirectToCheckout($user, $selectedPlan)) {
+                return redirect()->route('subscription.index', [
+                    'autocheckout' => 1,
+                    'plan' => $selectedPlan->code,
+                ])->with('success', 'Login berhasil. Lanjutkan pembayaran paket Anda.');
+            }
+
             return redirect()->intended($redirectUrl)->with('success', 'Login berhasil.');
         }
 
@@ -210,6 +226,46 @@ class SessionsController extends Controller
         return back()
             ->withInput($request->only('email'))
             ->withErrors(['email' => 'Email atau password salah.']);
+    }
+
+    protected function resolveSelectedPlan(Request $request): ?Plan
+    {
+        $selectedPlanCode = $request->query('plan') ?: session('selected_plan_code');
+
+        if (!$selectedPlanCode) {
+            return null;
+        }
+
+        $selectedPlan = Plan::where('code', $selectedPlanCode)
+            ->where('is_active', true)
+            ->where('is_self_serve', true)
+            ->first();
+
+        if ($selectedPlan) {
+            session([
+                'selected_plan_id' => $selectedPlan->id,
+                'selected_plan_code' => $selectedPlan->code,
+            ]);
+        }
+
+        return $selectedPlan;
+    }
+
+    protected function shouldRedirectToCheckout(User $user, ?Plan $selectedPlan): bool
+    {
+        if (!$selectedPlan || !$user->onboarding_complete || !$user->klien_id) {
+            return false;
+        }
+
+        $hasSuccessfulPlanPayment = PlanTransaction::where('klien_id', $user->klien_id)
+            ->where('status', PlanTransaction::STATUS_SUCCESS)
+            ->exists();
+
+        if ($hasSuccessfulPlanPayment) {
+            return false;
+        }
+
+        return !$user->current_plan_id || (int) $user->current_plan_id === (int) $selectedPlan->id;
     }
 
     /**

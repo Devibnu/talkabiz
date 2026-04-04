@@ -72,12 +72,52 @@ class SubscriptionController extends Controller
     {
         $user = Auth::user();
         $klien = $this->getKlienForUser($user);
+        $selectedPlanCode = request('plan') ?: session('selected_plan_code');
         $midtransClientKey = $this->gatewayService->isMidtransActive() ? $this->gatewayService->getClientKey() : null;
         $midtransSnapUrl = $this->gatewayService->isMidtransActive()
             ? ($this->gatewayService->isProduction()
                 ? 'https://app.midtrans.com/snap/snap.js'
                 : 'https://app.sandbox.midtrans.com/snap/snap.js')
             : null;
+
+        if (!$user->current_plan_id) {
+            $selectedPlan = $selectedPlanCode
+                ? Plan::where('code', $selectedPlanCode)
+                    ->where('is_active', true)
+                    ->where('is_self_serve', true)
+                    ->first()
+                : null;
+
+            if (!$selectedPlan && $user->plan_status === User::PLAN_STATUS_TRIAL_SELECTED) {
+                $selectedPlan = Plan::where('is_active', true)
+                    ->where('is_self_serve', true)
+                    ->orderBy('price_monthly', 'asc')
+                    ->first();
+            }
+
+            $hasSuccessfulPlanPayment = $user->klien_id
+                ? PlanTransaction::where('klien_id', $user->klien_id)
+                    ->where('status', PlanTransaction::STATUS_SUCCESS)
+                    ->exists()
+                : false;
+
+            if ($selectedPlan && !$hasSuccessfulPlanPayment) {
+                session([
+                    'selected_plan_id' => $selectedPlan->id,
+                    'selected_plan_code' => $selectedPlan->code,
+                ]);
+
+                $user->forceFill([
+                    'current_plan_id' => $selectedPlan->id,
+                    'plan_status' => User::PLAN_STATUS_TRIAL_SELECTED,
+                    'plan_started_at' => null,
+                    'plan_expires_at' => null,
+                    'plan_source' => 'purchase',
+                ])->save();
+
+                $user->refresh();
+            }
+        }
 
         // COMPUTED status from DB (source of truth)
         $planStatus = $this->subscriptionService->getPlanStatus($user);
