@@ -92,7 +92,7 @@
             @endif
 
             <div class="row px-xl-5 px-sm-4 px-3">
-              <div class="col-8 mx-auto px-1">
+              <div class="col-xl-8 col-12 mx-auto px-1">
                 <a class="btn border border-secondary w-100 d-flex align-items-center justify-content-center gap-2 shadow-none" href="{{ route('auth.google') }}" style="background:#fff;">
                   <svg width="20px" height="20px" viewBox="0 0 64 64" version="1.1" xmlns="http://www.w3.org/2000/svg">
                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
@@ -109,7 +109,7 @@
               </div>
               <div class="mt-2 position-relative text-center">
                 <p class="text-sm font-weight-bold mb-2 text-secondary text-border d-inline z-index-2 bg-white px-3">
-                  or
+                  atau
                 </p>
               </div>
             </div>
