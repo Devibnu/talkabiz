@@ -14,7 +14,7 @@
         "intervention/image": "^3.0",
         "laravel/framework": "^10.0",
         "laravel/sanctum": "^3.2",
-        "laravel/socialite": "*",
+        "laravel/socialite": "^5.26",
         "laravel/tinker": "^2.6",
         "midtrans/midtrans-php": "^2.6",
         "simplesoftwareio/simple-qrcode": "^4.2"

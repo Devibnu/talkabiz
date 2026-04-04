@@ -93,7 +93,7 @@
 
             <div class="row px-xl-5 px-sm-4 px-3">
               <div class="col-8 mx-auto px-1">
-                <a class="btn btn-outline-light w-100 d-flex align-items-center justify-content-center gap-2" href="{{ route('auth.google') }}">
+                <a class="btn border border-secondary w-100 d-flex align-items-center justify-content-center gap-2 shadow-none" href="{{ route('auth.google') }}" style="background:#fff;">
                   <svg width="20px" height="20px" viewBox="0 0 64 64" version="1.1" xmlns="http://www.w3.org/2000/svg">
                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
                       <g transform="translate(3.000000, 2.000000)" fill-rule="nonzero">
@@ -104,7 +104,7 @@
                       </g>
                     </g>
                   </svg>
-                  <span class="text-sm">Masuk dengan Google</span>
+                  <span class="text-sm text-dark">Masuk dengan Google</span>
                 </a>
               </div>
               <div class="mt-2 position-relative text-center">
