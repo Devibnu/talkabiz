@@ -591,12 +591,41 @@
                         <label class="form-label-soft">Mulai dari Template Siap Pakai <small class="text-muted">(opsional)</small></label>
                         <select class="form-select form-select-soft" id="quickTemplate" onchange="applyQuickTemplate()">
                             <option value="">-- Tulis sendiri --</option>
-                            <option value="promo">🛍️ Promo / Diskon</option>
-                            <option value="welcome">👋 Selamat Datang</option>
-                            <option value="order_confirm">📦 Konfirmasi Pesanan</option>
-                            <option value="payment_remind">💰 Pengingat Pembayaran</option>
-                            <option value="event_invite">🎉 Undangan Event</option>
-                            <option value="thank_you">🙏 Ucapan Terima Kasih</option>
+                            <optgroup label="📌 Umum (Semua Usaha)">
+                                <option value="welcome">👋 Selamat Datang</option>
+                                <option value="thank_you">🙏 Ucapan Terima Kasih</option>
+                                <option value="promo">🔥 Promo / Diskon</option>
+                                <option value="payment_remind">💰 Pengingat Pembayaran</option>
+                                <option value="event_invite">🎉 Undangan Acara / Event</option>
+                                <option value="feedback">⭐ Minta Ulasan / Feedback</option>
+                            </optgroup>
+                            <optgroup label="🏪 Toko / Retail / Online Shop">
+                                <option value="order_confirm">📦 Konfirmasi Pesanan</option>
+                                <option value="shipping">🚚 Notifikasi Pengiriman</option>
+                                <option value="restock">🔔 Produk Tersedia Kembali</option>
+                            </optgroup>
+                            <optgroup label="🔧 Jasa / Layanan">
+                                <option value="booking_confirm">📋 Konfirmasi Booking</option>
+                                <option value="appointment_remind">⏰ Pengingat Jadwal</option>
+                                <option value="service_done">✅ Layanan Selesai</option>
+                            </optgroup>
+                            <optgroup label="🎓 Sekolah / Pendidikan">
+                                <option value="school_info">📢 Info Sekolah / Pengumuman</option>
+                                <option value="school_payment">💳 Tagihan SPP / Biaya</option>
+                                <option value="school_event">🏫 Undangan Kegiatan Sekolah</option>
+                            </optgroup>
+                            <optgroup label="🏢 Kantor / Perusahaan">
+                                <option value="meeting_invite">📅 Undangan Rapat / Meeting</option>
+                                <option value="company_announce">📣 Pengumuman Perusahaan</option>
+                            </optgroup>
+                            <optgroup label="🍽️ F&B / Restoran / Kafe">
+                                <option value="order_ready">🍔 Pesanan Siap</option>
+                                <option value="menu_promo">🍕 Promo Menu Baru</option>
+                            </optgroup>
+                            <optgroup label="🏥 Kesehatan / Klinik">
+                                <option value="appointment_health">🩺 Pengingat Jadwal Kontrol</option>
+                                <option value="health_promo">💊 Promo Layanan Kesehatan</option>
+                            </optgroup>
                         </select>
                     </div>
 
@@ -716,35 +745,123 @@
 <script>
 // Template siap pakai
 const quickTemplates = {
-    promo: {
-        nama: 'Promo Diskon',
-        kategori: 'marketing',
-        konten: 'Halo {{nama}}, ada promo spesial untuk Anda! 🎉\n\nDapatkan diskon hingga {{harga}} untuk produk {{produk}}.\n\nPromo berlaku sampai {{tanggal}}. Jangan sampai kelewatan!\n\nInfo lebih lanjut hubungi kami.'
-    },
+    // === UMUM (Semua Usaha) ===
     welcome: {
         nama: 'Selamat Datang',
         kategori: 'utility',
         konten: 'Halo {{nama}}, selamat datang! 👋\n\nTerima kasih telah bergabung bersama kami. Kami siap membantu kebutuhan Anda.\n\nJika ada pertanyaan, silakan hubungi kami kapan saja.'
     },
+    thank_you: {
+        nama: 'Ucapan Terima Kasih',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, terima kasih atas kepercayaan Anda! 🙏\n\nKami sangat menghargai Anda sebagai pelanggan kami. Semoga kami bisa terus memberikan layanan terbaik.\n\nSampai jumpa kembali!'
+    },
+    promo: {
+        nama: 'Promo Diskon',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, ada promo spesial untuk Anda! 🔥\n\nDapatkan diskon hingga {{harga}} untuk {{produk}}.\n\nPromo berlaku sampai {{tanggal}}. Jangan sampai kelewatan!\n\nInfo lebih lanjut hubungi kami.'
+    },
+    payment_remind: {
+        nama: 'Pengingat Pembayaran',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, ini pengingat pembayaran Anda. 💰\n\nTotal: {{harga}}\nBatas pembayaran: {{tanggal}}\n\nSegera selesaikan pembayaran agar layanan bisa diproses. Terima kasih!'
+    },
+    event_invite: {
+        nama: 'Undangan Acara',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, Anda diundang ke acara kami! 🎉\n\nAcara: {{produk}}\nTanggal: {{tanggal}}\n\nJangan lewatkan! Kami tunggu kehadiran Anda.'
+    },
+    feedback: {
+        nama: 'Minta Ulasan',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, terima kasih telah menggunakan layanan kami! ⭐\n\nKami ingin tahu pendapat Anda. Mohon luangkan waktu sebentar untuk memberikan ulasan.\n\nMasukan Anda sangat berarti untuk peningkatan layanan kami. Terima kasih! 🙏'
+    },
+
+    // === TOKO / RETAIL / ONLINE SHOP ===
     order_confirm: {
         nama: 'Konfirmasi Pesanan',
         kategori: 'utility',
         konten: 'Halo {{nama}}, pesanan Anda sudah kami terima! 📦\n\nNo. Pesanan: {{no_order}}\nProduk: {{produk}}\nTotal: {{harga}}\n\nPesanan sedang diproses. Kami akan kabari jika sudah dikirim.'
     },
-    payment_remind: {
-        nama: 'Pengingat Pembayaran',
+    shipping: {
+        nama: 'Notifikasi Pengiriman',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, ini pengingat pembayaran Anda. 💰\n\nNo. Pesanan: {{no_order}}\nTotal: {{harga}}\nBatas pembayaran: {{tanggal}}\n\nSegera selesaikan pembayaran agar pesanan bisa diproses. Terima kasih!'
+        konten: 'Halo {{nama}}, pesanan Anda sudah dikirim! 🚚\n\nNo. Pesanan: {{no_order}}\nNo. Resi: {{produk}}\n\nEstimasi tiba: {{tanggal}}\n\nTerima kasih telah berbelanja!'
     },
-    event_invite: {
-        nama: 'Undangan Event',
+    restock: {
+        nama: 'Produk Tersedia Kembali',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, Anda diundang ke acara spesial kami! 🎉\n\nTanggal: {{tanggal}}\n\nJangan lewatkan kesempatan ini. Sampai jumpa!'
+        konten: 'Halo {{nama}}, kabar baik! 🔔\n\n{{produk}} yang Anda tunggu sudah tersedia kembali!\n\nHarga: {{harga}}\n\nSegera pesan sebelum kehabisan lagi. Stok terbatas!'
     },
-    thank_you: {
-        nama: 'Terima Kasih',
+
+    // === JASA / LAYANAN ===
+    booking_confirm: {
+        nama: 'Konfirmasi Booking',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, booking Anda sudah dikonfirmasi! 📋\n\nLayanan: {{produk}}\nTanggal: {{tanggal}}\nBiaya: {{harga}}\n\nMohon hadir tepat waktu. Terima kasih!'
+    },
+    appointment_remind: {
+        nama: 'Pengingat Jadwal',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, ini pengingat untuk jadwal Anda besok. ⏰\n\nLayanan: {{produk}}\nTanggal: {{tanggal}}\n\nJika perlu reschedule, silakan hubungi kami segera. Terima kasih!'
+    },
+    service_done: {
+        nama: 'Layanan Selesai',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, layanan Anda sudah selesai! ✅\n\nLayanan: {{produk}}\nTotal: {{harga}}\n\nTerima kasih telah mempercayakan kepada kami. Semoga puas dengan hasilnya! 🙏'
+    },
+
+    // === SEKOLAH / PENDIDIKAN ===
+    school_info: {
+        nama: 'Info Sekolah',
+        kategori: 'utility',
+        konten: 'Kepada Bapak/Ibu {{nama}}, 📢\n\nDengan ini kami informasikan:\n\n{{produk}}\n\nTanggal berlaku: {{tanggal}}\n\nDemikian informasi ini kami sampaikan. Terima kasih atas perhatiannya.'
+    },
+    school_payment: {
+        nama: 'Tagihan SPP',
+        kategori: 'utility',
+        konten: 'Kepada Bapak/Ibu {{nama}}, 💳\n\nBerikut tagihan pembayaran sekolah:\n\nKeterangan: {{produk}}\nJumlah: {{harga}}\nBatas bayar: {{tanggal}}\n\nMohon segera melakukan pembayaran. Terima kasih.'
+    },
+    school_event: {
+        nama: 'Undangan Kegiatan Sekolah',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, terima kasih telah berbelanja di toko kami! 🙏\n\nProduk: {{produk}}\nNo. Pesanan: {{no_order}}\n\nKami harap Anda puas dengan layanan kami. Sampai jumpa di pesanan berikutnya!'
+        konten: 'Kepada Bapak/Ibu {{nama}}, 🏫\n\nDengan ini kami mengundang untuk hadir pada:\n\nKegiatan: {{produk}}\nTanggal: {{tanggal}}\n\nKehadiran Bapak/Ibu sangat kami harapkan. Terima kasih.'
+    },
+
+    // === KANTOR / PERUSAHAAN ===
+    meeting_invite: {
+        nama: 'Undangan Rapat',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, 📅\n\nAnda diundang untuk menghadiri:\n\nRapat: {{produk}}\nTanggal: {{tanggal}}\n\nMohon konfirmasi kehadiran Anda. Terima kasih.'
+    },
+    company_announce: {
+        nama: 'Pengumuman Perusahaan',
+        kategori: 'utility',
+        konten: 'Kepada {{nama}}, 📣\n\nBerikut informasi penting dari perusahaan:\n\n{{produk}}\n\nBerlaku mulai: {{tanggal}}\n\nDemikian pengumuman ini disampaikan. Terima kasih atas perhatiannya.'
+    },
+
+    // === F&B / RESTORAN / KAFE ===
+    order_ready: {
+        nama: 'Pesanan Siap',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, pesanan Anda sudah siap! 🍔\n\nNo. Pesanan: {{no_order}}\nMenu: {{produk}}\n\nSilakan diambil. Selamat menikmati! 😊'
+    },
+    menu_promo: {
+        nama: 'Promo Menu Baru',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, ada menu baru yang wajib dicoba! 🍕\n\nMenu: {{produk}}\nHarga: {{harga}}\n\nPromo khusus sampai {{tanggal}}! Yuk, pesan sekarang!'
+    },
+
+    // === KESEHATAN / KLINIK ===
+    appointment_health: {
+        nama: 'Pengingat Jadwal Kontrol',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, ini pengingat jadwal kontrol Anda. 🩺\n\nLayanan: {{produk}}\nTanggal: {{tanggal}}\n\nMohon hadir tepat waktu. Jika perlu ubah jadwal, segera hubungi kami. Terima kasih!'
+    },
+    health_promo: {
+        nama: 'Promo Layanan Kesehatan',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, jaga kesehatan Anda! 💊\n\nPromo spesial: {{produk}}\nHarga: {{harga}}\nBerlaku sampai: {{tanggal}}\n\nSegera daftarkan diri Anda. Kesehatan adalah investasi terbaik!'
     }
 };
 
