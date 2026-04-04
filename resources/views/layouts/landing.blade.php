@@ -1020,13 +1020,38 @@
             }
 
             .footer-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+                margin-bottom: 24px;
+            }
+
+            .footer-col:first-child {
+                grid-column: 1 / -1;
+            }
+
+            .footer-col h4 {
+                font-size: 15px;
+                margin-bottom: 12px;
+            }
+
+            .footer-col li {
+                margin-bottom: 8px;
+            }
+
+            .footer-col a {
+                font-size: 13px;
+            }
+
+            footer {
+                padding: 40px 0 20px;
             }
 
             .footer-bottom {
                 flex-direction: column;
-                gap: 16px;
+                gap: 12px;
                 text-align: center;
+                padding-top: 20px;
+                font-size: 13px;
             }
 
             .trust-grid {

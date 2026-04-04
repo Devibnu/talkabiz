@@ -373,7 +373,7 @@
 <footer class="footer">
     <div class="container">
         <div class="footer-grid">
-            <div class="footer-col">
+            <div class="footer-col footer-brand">
                 <div class="footer-logo" style="display: flex; align-items: center; gap: 10px;">
                     @if($__brandLogoUrl)
                         <img src="{{ $__brandLogoUrl }}" alt="{{ $__brandName }}" style="height: 32px; width: auto; object-fit: contain;">
