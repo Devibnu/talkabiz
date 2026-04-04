@@ -126,7 +126,7 @@
                   <div class="input-group">
                     <input type="password" class="form-control @error('password') is-invalid @enderror" placeholder="Password" name="password" id="password" aria-label="Password" aria-describedby="password-addon" required>
                     <button class="btn btn-outline-secondary mb-0" type="button" id="togglePassword" tabindex="-1">
-                      <i class="fa fa-eye" id="eyeIcon"></i>
+                      <i class="fas fa-eye" id="eyeIcon"></i>
                     </button>
                   </div>
                   @error('password')
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // ==========================================
+  // ==========================================================
   // COUNTDOWN TIMER (when account is locked)
   // ==========================================
   const timerEl = document.getElementById('countdownTimer');

@@ -81,7 +81,7 @@
                   <div class="input-group">
                     <input type="password" class="form-control" placeholder="Buat Password" name="password" id="password" aria-label="Password" aria-describedby="password-addon" required minlength="5">
                     <button class="btn btn-outline-secondary mb-0" type="button" id="togglePassword" tabindex="-1">
-                      <i class="fa fa-eye" id="eyeIcon"></i>
+                      <i class="fas fa-eye" id="eyeIcon"></i>
                     </button>
                   </div>
                   @error('password')
