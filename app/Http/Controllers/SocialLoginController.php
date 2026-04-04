@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Plan;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -13,8 +15,28 @@ class SocialLoginController extends Controller
     /**
      * Redirect to Google OAuth consent screen.
      */
-    public function redirectToGoogle()
+    public function redirectToGoogle(Request $request)
     {
+        $selectedPlanCode = $request->query('plan') ?: $request->query('selected_plan_code');
+
+        if ($selectedPlanCode) {
+            $selectedPlan = Plan::where('code', $selectedPlanCode)
+                ->where('is_active', true)
+                ->where('is_self_serve', true)
+                ->first();
+
+            if ($selectedPlan) {
+                session([
+                    'selected_plan_id' => $selectedPlan->id,
+                    'selected_plan_code' => $selectedPlan->code,
+                ]);
+
+                Log::info('Google OAuth: selected plan stored in session', [
+                    'plan_code' => $selectedPlan->code,
+                ]);
+            }
+        }
+
         return Socialite::driver('google')->redirect();
     }
 
