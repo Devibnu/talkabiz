@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\DeliveryReportService;
+use App\Services\InboxService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -45,6 +46,7 @@ use Carbon\Carbon;
 class WABAWebhookController extends Controller
 {
     protected DeliveryReportService $deliveryReportService;
+    protected InboxService $inboxService;
 
     /**
      * Webhook secret untuk signature validation
@@ -57,9 +59,10 @@ class WABAWebhookController extends Controller
      */
     protected array $supportedProviders = ['gupshup', 'meta', 'cloud_api', 'twilio', 'waba'];
 
-    public function __construct(DeliveryReportService $deliveryReportService)
+    public function __construct(DeliveryReportService $deliveryReportService, InboxService $inboxService)
     {
         $this->deliveryReportService = $deliveryReportService;
+        $this->inboxService = $inboxService;
         $this->webhookSecret = config('whatsapp.webhook_secret');
     }
 
@@ -211,22 +214,174 @@ class WABAWebhookController extends Controller
 
     /**
      * Handle inbound messages
-     * Forward to existing InboxService
+     * Parse Meta/Gupshup payload and forward to InboxService
      */
     protected function handleInboundMessage(array $payload, string $provider): array
     {
-        // Delegate to InboxService (existing flow)
-        // This webhook controller focuses on delivery reports
-        
         Log::channel('whatsapp')->info('WABA Webhook: Inbound message received', [
             'provider' => $provider,
+            'payload' => $payload,
         ]);
 
-        // Return indication to route to correct handler
-        return [
-            'action' => 'forward_to_inbox',
-            'message' => 'Inbound message forwarded to inbox handler',
-        ];
+        try {
+            $parsedMessages = match ($provider) {
+                'meta' => $this->parseMetaInboundMessages($payload),
+                'gupshup' => $this->parseGupshupInboundMessages($payload),
+                default => [],
+            };
+
+            $processed = 0;
+            foreach ($parsedMessages as $msgData) {
+                $result = $this->inboxService->prosesPesanMasuk($msgData);
+                if ($result['sukses'] ?? false) {
+                    $processed++;
+                }
+                Log::channel('whatsapp')->info('WABA Webhook: Inbox result', $result);
+            }
+
+            return [
+                'action' => 'inbox_processed',
+                'message' => "Processed {$processed} inbound message(s)",
+            ];
+        } catch (\Exception $e) {
+            Log::channel('whatsapp')->error('WABA Webhook: Inbound processing error', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'action' => 'inbox_error',
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Parse Meta Cloud API inbound message payload
+     */
+    protected function parseMetaInboundMessages(array $payload): array
+    {
+        $messages = [];
+        $entries = $payload['entry'] ?? [];
+
+        foreach ($entries as $entry) {
+            $changes = $entry['changes'] ?? [];
+            foreach ($changes as $change) {
+                $value = $change['value'] ?? [];
+                $metadata = $value['metadata'] ?? [];
+                $phoneNumberId = $metadata['phone_number_id'] ?? null;
+                $displayPhone = $metadata['display_phone_number'] ?? null;
+
+                $contacts = $value['contacts'] ?? [];
+                $inboundMessages = $value['messages'] ?? [];
+
+                foreach ($inboundMessages as $msg) {
+                    $contactName = null;
+                    $from = $msg['from'] ?? null;
+                    foreach ($contacts as $contact) {
+                        if (($contact['wa_id'] ?? '') === $from) {
+                            $contactName = $contact['profile']['name'] ?? null;
+                        }
+                    }
+
+                    $tipe = 'teks';
+                    $isiPesan = '';
+                    $mediaUrl = null;
+                    $caption = null;
+
+                    switch ($msg['type'] ?? 'text') {
+                        case 'text':
+                            $isiPesan = $msg['text']['body'] ?? '';
+                            break;
+                        case 'image':
+                            $tipe = 'gambar';
+                            $mediaUrl = $msg['image']['id'] ?? null;
+                            $caption = $msg['image']['caption'] ?? null;
+                            $isiPesan = $caption ?: '[Gambar]';
+                            break;
+                        case 'document':
+                            $tipe = 'dokumen';
+                            $mediaUrl = $msg['document']['id'] ?? null;
+                            $caption = $msg['document']['caption'] ?? null;
+                            $isiPesan = $caption ?: '[Dokumen]';
+                            break;
+                        case 'audio':
+                            $tipe = 'audio';
+                            $isiPesan = '[Audio]';
+                            break;
+                        case 'video':
+                            $tipe = 'video';
+                            $mediaUrl = $msg['video']['id'] ?? null;
+                            $isiPesan = '[Video]';
+                            break;
+                        case 'sticker':
+                            $tipe = 'sticker';
+                            $isiPesan = '[Sticker]';
+                            break;
+                        case 'location':
+                            $tipe = 'lokasi';
+                            $isiPesan = '[Lokasi]';
+                            break;
+                        default:
+                            $isiPesan = '[' . ($msg['type'] ?? 'unknown') . ']';
+                    }
+
+                    $messages[] = [
+                        'no_bisnis' => $displayPhone ? preg_replace('/[^0-9]/', '', $displayPhone) : $phoneNumberId,
+                        'phone_number_id' => $phoneNumberId,
+                        'no_customer' => $from,
+                        'nama_customer' => $contactName,
+                        'wa_message_id' => $msg['id'] ?? uniqid('meta_'),
+                        'tipe' => $tipe,
+                        'isi_pesan' => $isiPesan,
+                        'media_url' => $mediaUrl,
+                        'caption' => $caption,
+                        'waktu_pesan' => isset($msg['timestamp']) ? Carbon::createFromTimestamp($msg['timestamp']) : now(),
+                    ];
+                }
+            }
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Parse Gupshup inbound message payload
+     */
+    protected function parseGupshupInboundMessages(array $payload): array
+    {
+        $msgPayload = $payload['payload'] ?? [];
+        $source = $msgPayload['source'] ?? null;
+        $destination = $msgPayload['destination'] ?? null;
+
+        if (!$source || !$destination) {
+            return [];
+        }
+
+        $tipe = 'teks';
+        $isiPesan = '';
+        $innerPayload = $msgPayload['payload'] ?? [];
+
+        switch ($msgPayload['type'] ?? 'text') {
+            case 'text':
+                $isiPesan = $innerPayload['text'] ?? '';
+                break;
+            case 'image':
+                $tipe = 'gambar';
+                $isiPesan = $innerPayload['caption'] ?? '[Gambar]';
+                break;
+            default:
+                $isiPesan = '[' . ($msgPayload['type'] ?? 'unknown') . ']';
+        }
+
+        return [[
+            'no_bisnis' => $destination,
+            'no_customer' => $source,
+            'nama_customer' => $msgPayload['sender']['name'] ?? null,
+            'wa_message_id' => $msgPayload['id'] ?? uniqid('gupshup_'),
+            'tipe' => $tipe,
+            'isi_pesan' => $isiPesan,
+            'waktu_pesan' => isset($payload['timestamp']) ? Carbon::createFromTimestamp($payload['timestamp'] / 1000) : now(),
+        ]];
     }
 
     /**

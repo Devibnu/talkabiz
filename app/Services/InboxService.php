@@ -6,6 +6,7 @@ use App\Models\Klien;
 use App\Models\PercakapanInbox;
 use App\Models\PesanInbox;
 use App\Models\Pengguna;
+use App\Models\WhatsappConnection;
 use App\Models\LogAktivitas;
 use App\Events\Inbox\PesanMasukEvent;
 use App\Events\Inbox\PercakapanDiambilEvent;
@@ -94,9 +95,15 @@ class InboxService
                 // 1. Identifikasi klien dari nomor bisnis
                 $klien = $this->cariKlienDariNomorBisnis($noBisnis);
                 
+                // Fallback: coba lookup via phone_number_id (Meta Cloud API)
+                if (!$klien && !empty($data['phone_number_id'])) {
+                    $klien = $this->cariKlienDariNomorBisnis($data['phone_number_id']);
+                }
+                
                 if (!$klien) {
                     Log::warning('InboxService: Klien tidak ditemukan', [
-                        'no_bisnis' => $noBisnis
+                        'no_bisnis' => $noBisnis,
+                        'phone_number_id' => $data['phone_number_id'] ?? null,
                     ]);
                     return [
                         'sukses' => false,
@@ -191,8 +198,8 @@ class InboxService
      */
     protected function cariKlienDariNomorBisnis(string $nomorBisnis): ?Klien
     {
-        // Cari di kolom no_whatsapp atau wa_phone_number_id
-        return Klien::where(function ($query) use ($nomorBisnis) {
+        // 1. Cari di kolom no_whatsapp atau wa_phone_number_id di tabel klien
+        $klien = Klien::where(function ($query) use ($nomorBisnis) {
             $query->where('no_whatsapp', $nomorBisnis)
                   ->orWhere('no_whatsapp', ltrim($nomorBisnis, '62'))
                   ->orWhere('no_whatsapp', '0' . ltrim($nomorBisnis, '62'))
@@ -201,6 +208,27 @@ class InboxService
         ->where('status', 'aktif')
         ->where('wa_terhubung', true)
         ->first();
+
+        if ($klien) {
+            return $klien;
+        }
+
+        // 2. Fallback: cari via whatsapp_connections (phone_number atau phone_number_id)
+        $connection = WhatsappConnection::where(function ($query) use ($nomorBisnis) {
+            $query->where('phone_number', $nomorBisnis)
+                  ->orWhere('phone_number', ltrim($nomorBisnis, '62'))
+                  ->orWhere('phone_number_id', $nomorBisnis);
+        })
+        ->where('is_active', true)
+        ->first();
+
+        if ($connection) {
+            return Klien::where('id', $connection->klien_id)
+                ->where('status', 'aktif')
+                ->first();
+        }
+
+        return null;
     }
 
     /**
