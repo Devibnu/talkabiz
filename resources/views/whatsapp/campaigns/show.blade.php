@@ -50,6 +50,10 @@
                             </button>
                         </form>
                     @endif
+
+                    <a href="{{ route('whatsapp.campaigns.index') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Kembali
+                    </a>
                 </div>
             </div>
         </div>
