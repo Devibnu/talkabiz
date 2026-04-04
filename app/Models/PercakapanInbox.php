@@ -50,7 +50,7 @@ class PercakapanInbox extends Model
 
     public function ditanganiOleh(): BelongsTo
     {
-        return $this->belongsTo(Pengguna::class, 'ditangani_oleh');
+        return $this->belongsTo(User::class, 'ditangani_oleh');
     }
 
     /**
@@ -58,7 +58,7 @@ class PercakapanInbox extends Model
      */
     public function penanggungjawab(): BelongsTo
     {
-        return $this->belongsTo(Pengguna::class, 'ditangani_oleh');
+        return $this->belongsTo(User::class, 'ditangani_oleh');
     }
 
     public function pesanInbox(): HasMany

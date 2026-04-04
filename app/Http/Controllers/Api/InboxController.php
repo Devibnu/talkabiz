@@ -46,7 +46,7 @@ class InboxController extends Controller
         $klienId = $pengguna->klien_id;
 
         $query = PercakapanInbox::where('klien_id', $klienId)
-            ->with(['pesanTerakhirRelasi', 'penanggungjawab:id,nama,email']);
+            ->with(['pesanTerakhirRelasi', 'penanggungjawab:id,name,email']);
 
         // Filter status
         if ($request->filled('status')) {
@@ -110,7 +110,7 @@ class InboxController extends Controller
 
         $percakapan = PercakapanInbox::where('id', $percakapanId)
             ->where('klien_id', $pengguna->klien_id)
-            ->with(['penanggungjawab:id,nama,email'])
+            ->with(['penanggungjawab:id,name,email'])
             ->first();
 
         if (!$percakapan) {
