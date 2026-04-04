@@ -26,6 +26,9 @@ Route::middleware(['auth', 'impersonate.client', 'share.subscription.status', 's
     // Initiate connection
     Route::post('/connect', [WhatsAppCloudController::class, 'connect'])->name('whatsapp.connect');
     
+    // Embedded Signup callback (from Facebook JS SDK)
+    Route::post('/embedded-signup-callback', [WhatsAppCloudController::class, 'embeddedSignupCallback'])->name('whatsapp.embedded-signup-callback');
+    
     // Gupshup OAuth callback
     Route::get('/callback', [WhatsAppCloudController::class, 'callback'])->name('whatsapp.callback');
     

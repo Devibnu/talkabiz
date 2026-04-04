@@ -117,9 +117,12 @@
                                 @endif
                             </p>
                             @if(!$__isViewOnly)
-                            <button type="button" class="btn btn-success btn-lg" data-bs-toggle="modal" data-bs-target="#connectModal">
-                                <i class="fab fa-whatsapp me-2"></i>Hubungkan WhatsApp Business (Resmi)
+                            <button type="button" class="btn btn-success btn-lg" id="btnEmbeddedSignup" onclick="launchWhatsAppSignup()">
+                                <i class="fab fa-whatsapp me-2"></i>Hubungkan WhatsApp Business
                             </button>
+                            <p class="text-xs text-muted mt-2 mb-0">
+                                <i class="fas fa-shield-alt me-1"></i>Koneksi resmi via Meta WhatsApp Cloud API. Aman & terverifikasi.
+                            </p>
                             @endif
                         </div>
                     @endif
@@ -323,170 +326,161 @@
     </div>
 </div>
 
-{{-- Connect Modal (SaaS Flow - NO API Key from user) --}}
+{{-- Facebook JS SDK for Embedded Signup --}}
 @if(!$__isViewOnly)
-<div class="modal fade" id="connectModal" tabindex="-1" aria-labelledby="connectModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-gradient-success">
-                <h5 class="modal-title text-white" id="connectModalLabel">
-                    <i class="fab fa-whatsapp me-2"></i>Hubungkan WhatsApp Business
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form action="{{ route('whatsapp.connect') }}" method="POST" id="connectForm" novalidate>
-                @csrf
-                <div class="modal-body">
-                    {{-- Info Box --}}
-                    <div class="alert alert-info mb-4">
-                        <div class="d-flex">
-                            <i class="fas fa-shield-alt fa-lg me-3 mt-1"></i>
-                            <div>
-                                <strong>WhatsApp Business Cloud API Resmi</strong>
-                                <p class="text-sm mb-0 mt-1">
-                                    Koneksi aman via Gupshup Partner API. Anda hanya perlu memasukkan nomor WhatsApp dan nama bisnis.
-                                </p>
-                            </div>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+<script>
+    // Facebook SDK initialization
+    window.fbAsyncInit = function() {
+        FB.init({
+            appId: '{{ config("whatsapp.meta.app_id") }}',
+            autoLogAppEvents: true,
+            xfbml: true,
+            version: '{{ config("whatsapp.meta.graph_version", "v22.0") }}'
+        });
+    };
+
+    // Session logging — captures WABA ID, phone_number_id from Embedded Signup
+    let embeddedSignupData = {};
+    window.addEventListener('message', (event) => {
+        if (!event.origin.endsWith('facebook.com')) return;
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'WA_EMBEDDED_SIGNUP') {
+                if (data.event === 'CANCEL') {
+                    console.log('[EmbeddedSignup] User cancelled at step:', data.data?.current_step);
+                    return;
+                }
+                // Successful completion — capture asset IDs
+                embeddedSignupData = data.data || {};
+                console.log('[EmbeddedSignup] Session data:', embeddedSignupData);
+            }
+        } catch {
+            // Non-JSON message, ignore
+        }
+    });
+
+    // Response callback — receives exchangeable token code
+    const fbLoginCallback = (response) => {
+        if (response.authResponse) {
+            const code = response.authResponse.code;
+            console.log('[EmbeddedSignup] Got code, sending to server...');
+
+            // Send code + session info to backend
+            processEmbeddedSignup(code, embeddedSignupData);
+        } else {
+            console.log('[EmbeddedSignup] Login failed or cancelled:', response);
+            if (response.status === 'unknown') {
+                // User closed popup without completing
+                return;
+            }
+            ClientPopup.error('Login Facebook dibatalkan atau gagal. Silakan coba lagi.');
+        }
+    };
+
+    // Launch Embedded Signup flow
+    function launchWhatsAppSignup() {
+        const configId = '{{ config("whatsapp.meta.config_id") }}';
+        if (!configId) {
+            ClientPopup.error('Embedded Signup belum dikonfigurasi. Hubungi admin.');
+            return;
+        }
+
+        const btn = document.getElementById('btnEmbeddedSignup');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Memproses...';
+
+        FB.login(fbLoginCallback, {
+            config_id: configId,
+            response_type: 'code',
+            override_default_response_type: true,
+            extras: {
+                setup: {},
+            }
+        });
+
+        // Re-enable button after 3 seconds (in case user closes popup)
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fab fa-whatsapp me-2"></i>Hubungkan WhatsApp Business';
+        }, 3000);
+    }
+
+    // Send Embedded Signup data to server
+    async function processEmbeddedSignup(code, sessionData) {
+        // Show loading
+        Swal.fire({
+            title: 'Menghubungkan WhatsApp...',
+            html: '<p class="mb-0">Sedang memproses koneksi WhatsApp Business Anda.</p><p class="text-xs text-muted">Mohon tunggu, jangan tutup halaman ini.</p>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            const response = await fetch('{{ route("whatsapp.embedded-signup-callback") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    code: code,
+                    waba_id: sessionData.waba_id || '',
+                    phone_number_id: sessionData.phone_number_id || '',
+                    business_id: sessionData.business_id || '',
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'WhatsApp Terhubung!',
+                    html: `
+                        <div class="text-start">
+                            <p class="mb-2">WhatsApp Business berhasil terhubung.</p>
+                            ${data.connection?.business_name ? '<p class="text-sm mb-1"><strong>Bisnis:</strong> ' + data.connection.business_name + '</p>' : ''}
+                            ${data.connection?.phone_number ? '<p class="text-sm mb-0"><strong>Nomor:</strong> +' + data.connection.phone_number + '</p>' : ''}
                         </div>
-                    </div>
-
-                    {{-- Backend Validation Errors (Laravel) --}}
-                    @if($errors->any())
-                    <div class="alert alert-danger mb-3">
-                        <ul class="mb-0 ps-3">
-                            @foreach($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                    @endif
-
-                    {{-- JS Validation Error Container --}}
-                    <div id="connectFormErrors" class="alert alert-danger d-none mb-3">
-                        <ul class="mb-0 ps-3" id="connectFormErrorList"></ul>
-                    </div>
-
-                    {{-- Nama Bisnis --}}
-                    <div class="mb-4">
-                        <label class="form-label">Nama Bisnis <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-building"></i></span>
-                            <input type="text" name="business_name" id="inputBusinessName" class="form-control"
-                                   placeholder="Contoh: Toko Berkah Jaya"
-                                   value="{{ $klien?->nama_perusahaan ?? '' }}">
-                        </div>
-                        <small class="text-muted">Nama yang akan tampil di WhatsApp Business</small>
-                    </div>
-
-                    {{-- Nomor WhatsApp --}}
-                    <div class="mb-4">
-                        <label class="form-label">Nomor WhatsApp <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fab fa-whatsapp"></i></span>
-                            <input type="text" name="phone_number" id="inputPhoneNumber" class="form-control"
-                                   placeholder="628123456789"
-                                   inputmode="numeric"
-                                   value="{{ $klien?->no_whatsapp ?? '' }}">
-                        </div>
-                        <small class="text-muted">Format: 62 + nomor (tanpa + atau 0). Contoh: 628123456789</small>
-                    </div>
-
-                    {{-- Checklist --}}
-                    <div class="bg-light rounded p-3">
-                        <p class="text-sm font-weight-bold mb-2">Dengan menghubungkan, Anda menyetujui:</p>
-                        <ul class="list-unstyled mb-0 text-sm">
-                            <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Nomor digunakan untuk WhatsApp Business API</li>
-                            <li class="mb-1"><i class="fas fa-check text-success me-2"></i>Hanya mengirim pesan template yang disetujui</li>
-                            <li><i class="fas fa-check text-success me-2"></i>Mematuhi kebijakan WhatsApp Business</li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-success" id="btnSubmitConnect">
-                        <i class="fab fa-whatsapp me-2"></i>Hubungkan Sekarang
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+                    `,
+                    confirmButtonText: 'OK',
+                    customClass: { confirmButton: 'btn btn-success' },
+                    buttonsStyling: false
+                });
+                window.location.reload();
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Menghubungkan',
+                    text: data.message || 'Terjadi kesalahan saat menghubungkan WhatsApp.',
+                    confirmButtonText: 'OK',
+                    customClass: { confirmButton: 'btn btn-primary' },
+                    buttonsStyling: false
+                });
+            }
+        } catch (error) {
+            console.error('[EmbeddedSignup] Error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Terjadi Kesalahan',
+                text: 'Gagal menghubungkan WhatsApp. Periksa koneksi internet Anda.',
+                confirmButtonText: 'OK',
+                customClass: { confirmButton: 'btn btn-primary' },
+                buttonsStyling: false
+            });
+        }
+    }
+</script>
 @endif
 @endsection
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Connect Form Submit with custom validation (native validation hidden in modals)
-    const connectForm = document.getElementById('connectForm');
-    if (connectForm) {
-        connectForm.addEventListener('submit', function(e) {
-            console.log('[WA-Connect] Form submit triggered');
-            
-            const errorsDiv = document.getElementById('connectFormErrors');
-            const errorList = document.getElementById('connectFormErrorList');
-            const btn = document.getElementById('btnSubmitConnect');
-            const businessName = document.getElementById('inputBusinessName');
-            const phoneNumber = document.getElementById('inputPhoneNumber');
-            
-            // Clear previous errors
-            errorList.innerHTML = '';
-            errorsDiv.classList.add('d-none');
-            businessName.classList.remove('is-invalid');
-            phoneNumber.classList.remove('is-invalid');
-            
-            const errors = [];
-            
-            // Validate business name
-            const name = (businessName.value || '').trim();
-            if (!name) {
-                errors.push('Nama Bisnis wajib diisi');
-                businessName.classList.add('is-invalid');
-            } else if (name.length < 3) {
-                errors.push('Nama Bisnis minimal 3 karakter');
-                businessName.classList.add('is-invalid');
-            } else if (name.length > 100) {
-                errors.push('Nama Bisnis maksimal 100 karakter');
-                businessName.classList.add('is-invalid');
-            }
-            
-            // Validate phone number
-            let phone = (phoneNumber.value || '').trim();
-            // Auto-fix common formats
-            phone = phone.replace(/[\s\-\+]/g, ''); // strip spaces, dashes, plus
-            if (phone.startsWith('0')) {
-                phone = '62' + phone.substring(1); // 08xx → 628xx
-            }
-            phoneNumber.value = phone; // update field with cleaned value
-            
-            if (!phone) {
-                errors.push('Nomor WhatsApp wajib diisi');
-                phoneNumber.classList.add('is-invalid');
-            } else if (!/^62[0-9]{9,13}$/.test(phone)) {
-                errors.push('Nomor WhatsApp harus format 62xxxxxxxxxx (contoh: 628123456789)');
-                phoneNumber.classList.add('is-invalid');
-            }
-            
-            if (errors.length > 0) {
-                e.preventDefault();
-                errors.forEach(function(err) {
-                    const li = document.createElement('li');
-                    li.textContent = err;
-                    errorList.appendChild(li);
-                });
-                errorsDiv.classList.remove('d-none');
-                errorsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                console.log('[WA-Connect] Validation failed:', errors);
-                return false;
-            }
-            
-            // Validation passed — disable button & show spinner
-            console.log('[WA-Connect] Validation passed, submitting form to', connectForm.action);
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Menghubungkan...';
-        });
-    }
-
     // Sync Templates
     const syncButtons = document.querySelectorAll('#btnSyncTemplates, #btnSyncTemplates2');
     syncButtons.forEach(btn => {

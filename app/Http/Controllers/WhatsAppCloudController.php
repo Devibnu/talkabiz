@@ -12,6 +12,7 @@ use App\Services\PlanLimitService;
 use App\Services\WhatsAppProviderService;
 use App\Exceptions\Subscription\PlanLimitExceededException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
@@ -856,5 +857,190 @@ class WhatsAppCloudController extends Controller
             'wa_terhubung' => false,
             'wa_terakhir_sync' => now(),
         ]);
+    }
+
+    /**
+     * Handle Embedded Signup callback from frontend.
+     *
+     * Receives the exchangeable code + session info (waba_id, phone_number_id)
+     * from the Facebook JS SDK after user completes the Embedded Signup flow.
+     *
+     * Flow:
+     * 1. Exchange code → business token via OAuth endpoint
+     * 2. Subscribe app to webhooks on customer's WABA
+     * 3. Register customer's phone number for Cloud API
+     * 4. Save credentials to WhatsappConnection
+     */
+    public function embeddedSignupCallback(Request $request)
+    {
+        $request->validate([
+            'code' => 'required|string',
+            'waba_id' => 'required|string',
+            'phone_number_id' => 'required|string',
+            'business_id' => 'nullable|string',
+        ]);
+
+        $user = auth()->user();
+        $klien = $user->klien;
+
+        if (!$klien) {
+            return response()->json(['success' => false, 'message' => 'Profil bisnis tidak ditemukan.'], 404);
+        }
+
+        if ($user->isImpersonating()) {
+            return response()->json(['success' => false, 'message' => 'Aksi tidak diizinkan dalam mode lihat saja.'], 403);
+        }
+
+        $appId = config('whatsapp.meta.app_id');
+        $appSecret = config('whatsapp.meta.app_secret');
+        $graphVersion = config('whatsapp.meta.graph_version', 'v22.0');
+
+        if (!$appId || !$appSecret) {
+            Log::error('[EmbeddedSignup] Meta App ID or Secret not configured');
+            return response()->json(['success' => false, 'message' => 'Konfigurasi Meta belum lengkap. Hubungi admin.'], 500);
+        }
+
+        try {
+            // ─── Step 1: Exchange code for business token ───
+            $tokenResponse = Http::get("https://graph.facebook.com/{$graphVersion}/oauth/access_token", [
+                'client_id' => $appId,
+                'client_secret' => $appSecret,
+                'code' => $request->code,
+            ]);
+
+            if (!$tokenResponse->successful()) {
+                $error = $tokenResponse->json('error.message', 'Token exchange failed');
+                Log::error('[EmbeddedSignup] Token exchange failed', [
+                    'klien_id' => $klien->id,
+                    'error' => $error,
+                    'response' => $tokenResponse->json(),
+                ]);
+                return response()->json(['success' => false, 'message' => 'Gagal mendapatkan token: ' . $error], 422);
+            }
+
+            $businessToken = $tokenResponse->json('access_token');
+
+            if (!$businessToken) {
+                Log::error('[EmbeddedSignup] No access_token in response', ['response' => $tokenResponse->json()]);
+                return response()->json(['success' => false, 'message' => 'Token tidak ditemukan dalam respons Meta.'], 422);
+            }
+
+            Log::info('[EmbeddedSignup] Token exchanged successfully', [
+                'klien_id' => $klien->id,
+                'waba_id' => $request->waba_id,
+                'phone_number_id' => $request->phone_number_id,
+            ]);
+
+            // ─── Step 2: Subscribe app to webhooks on customer's WABA ───
+            $subscribeResponse = Http::withToken($businessToken)
+                ->post("https://graph.facebook.com/{$graphVersion}/{$request->waba_id}/subscribed_apps");
+
+            if (!$subscribeResponse->successful()) {
+                Log::warning('[EmbeddedSignup] Webhook subscription failed (non-fatal)', [
+                    'klien_id' => $klien->id,
+                    'waba_id' => $request->waba_id,
+                    'error' => $subscribeResponse->json('error.message', 'Unknown'),
+                ]);
+                // Non-fatal — continue with onboarding
+            } else {
+                Log::info('[EmbeddedSignup] Webhook subscribed', ['waba_id' => $request->waba_id]);
+            }
+
+            // ─── Step 3: Register customer's phone number for Cloud API ───
+            $pin = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $registerResponse = Http::withToken($businessToken)
+                ->post("https://graph.facebook.com/{$graphVersion}/{$request->phone_number_id}/register", [
+                    'messaging_product' => 'whatsapp',
+                    'pin' => $pin,
+                ]);
+
+            if (!$registerResponse->successful()) {
+                Log::warning('[EmbeddedSignup] Phone registration failed (non-fatal)', [
+                    'klien_id' => $klien->id,
+                    'phone_number_id' => $request->phone_number_id,
+                    'error' => $registerResponse->json('error.message', 'Unknown'),
+                ]);
+                // Non-fatal — phone may already be registered
+            } else {
+                Log::info('[EmbeddedSignup] Phone registered for Cloud API', [
+                    'phone_number_id' => $request->phone_number_id,
+                ]);
+            }
+
+            // ─── Step 4: Get phone number details ───
+            $phoneResponse = Http::withToken($businessToken)
+                ->get("https://graph.facebook.com/{$graphVersion}/{$request->phone_number_id}", [
+                    'fields' => 'display_phone_number,verified_name,quality_rating',
+                ]);
+
+            $displayPhone = $phoneResponse->json('display_phone_number', '');
+            $verifiedName = $phoneResponse->json('verified_name', '');
+            $qualityRating = $phoneResponse->json('quality_rating', '');
+
+            // Normalize phone number: +62 812-3456-7890 → 6281234567890
+            $normalizedPhone = preg_replace('/[^0-9]/', '', $displayPhone);
+
+            // ─── Step 5: Save to WhatsappConnection ───
+            $connection = WhatsappConnection::updateOrCreate(
+                ['klien_id' => $klien->id],
+                [
+                    'provider' => 'meta_cloud',
+                    'connection_name' => $verifiedName ?: ($klien->nama_perusahaan ?? 'WhatsApp Business'),
+                    'phone_number' => $normalizedPhone,
+                    'phone_number_id' => $request->phone_number_id,
+                    'waba_id' => $request->waba_id,
+                    'meta_app_id' => $appId,
+                    'meta_business_id' => $request->business_id,
+                    'business_name' => $verifiedName ?: ($klien->nama_perusahaan ?? ''),
+                    'display_name' => $verifiedName,
+                    'quality_rating' => $qualityRating,
+                    'verification_status' => 'verified',
+                    'access_token' => encrypt($businessToken),
+                    'token_type' => 'business_integration',
+                    'connected_by_user_id' => $user->id,
+                    'status' => WhatsappConnection::STATUS_CONNECTED,
+                    'connected_at' => now(),
+                    'disconnected_at' => null,
+                    'failed_at' => null,
+                    'error_reason' => null,
+                    'last_error_code' => null,
+                    'last_error_message' => null,
+                    'webhook_last_update' => now(),
+                ]
+            );
+
+            // Sync klien legacy state
+            $this->syncLegacyKlienState($klien, $connection);
+
+            Log::info('[EmbeddedSignup] Connection completed successfully', [
+                'klien_id' => $klien->id,
+                'connection_id' => $connection->id,
+                'waba_id' => $request->waba_id,
+                'phone' => $normalizedPhone,
+                'verified_name' => $verifiedName,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'WhatsApp Business berhasil terhubung!',
+                'connection' => [
+                    'phone_number' => $normalizedPhone,
+                    'business_name' => $verifiedName ?: $connection->business_name,
+                    'waba_id' => $request->waba_id,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('[EmbeddedSignup] Exception during onboarding', [
+                'klien_id' => $klien->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghubungkan WhatsApp: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }
