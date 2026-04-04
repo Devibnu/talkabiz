@@ -92,7 +92,7 @@
                 $waConnected = $isOwnerRole || $isImpersonating || (auth()->user()->klien?->wa_terhubung ?? false);
             @endphp
             <li class="nav-item">
-                <a class="nav-link {{ Request::is('whatsapp*') ? 'active' : '' }}" href="{{ url('whatsapp') }}">
+                <a class="nav-link {{ (Request::is('whatsapp') || (Request::is('whatsapp/*') && !Request::is('whatsapp/campaigns*'))) ? 'active' : '' }}" href="{{ url('whatsapp') }}">
                     <div class="icon-wrapper">
                         <i class="fab fa-whatsapp"></i>
                     </div>
