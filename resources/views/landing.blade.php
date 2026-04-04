@@ -18,6 +18,12 @@
     $trustSection = $sectionsByKey->get('trust');
     $faqSection = $sectionsByKey->get('faq');
     $ctaSection = $sectionsByKey->get('cta');
+    $pricingAnchor = '#paket';
+    $heroPrimaryUrl = $heroPrimaryCta?->cta_url;
+
+    if (!$heroPrimaryUrl || in_array($heroPrimaryUrl, [route('register'), url('/register')], true)) {
+        $heroPrimaryUrl = $pricingAnchor;
+    }
 @endphp
 
 <!-- TEST MARKER: If you see this, the correct file is loaded - v2026.01.31 -->
@@ -45,7 +51,7 @@
             
             <div class="nav-cta">
                 <a href="{{ route('enter') }}" class="btn btn-outline">Masuk</a>
-                <a href="{{ route('register') }}" class="btn btn-primary cta-primary">Mulai Sekarang</a>
+                <a href="{{ $pricingAnchor }}" class="btn btn-primary cta-primary">Mulai Sekarang</a>
             </div>
             
             <button class="mobile-menu-btn">
@@ -69,7 +75,7 @@
         <li><a href="{{ route('contact') }}">Kontak</a></li>
     </ul>
     <a href="{{ route('enter') }}" class="btn btn-outline">Masuk</a>
-    <a href="{{ route('register') }}" class="btn btn-primary">Mulai Sekarang</a>
+    <a href="{{ $pricingAnchor }}" class="btn btn-primary">Mulai Sekarang</a>
 </div>
 
 <!-- Hero Section -->
@@ -95,7 +101,7 @@
                 
                 <div class="hero-cta">
                     @if($heroPrimaryCta?->cta_url && $heroPrimaryCta?->cta_label)
-                        <a href="{{ $heroPrimaryCta->cta_url }}" class="btn btn-primary btn-lg cta-secondary">
+                        <a href="{{ $heroPrimaryUrl }}" class="btn btn-primary btn-lg cta-secondary">
                             <i class="fas fa-arrow-right"></i>
                             {{ $heroPrimaryCta->cta_label }}
                         </a>
