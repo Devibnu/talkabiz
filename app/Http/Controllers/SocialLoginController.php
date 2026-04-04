@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Plan;
+use App\Models\PlanTransaction;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -58,6 +59,8 @@ class SocialLoginController extends Controller
                 ->with('error', 'Login Google gagal. Silakan coba lagi.');
         }
 
+            $selectedPlan = $this->resolveSelectedPlanFromSession();
+
         // 1. Find by google_id
         $user = User::where('google_id', $googleUser->getId())->first();
 
@@ -100,6 +103,10 @@ class SocialLoginController extends Controller
                 'current_plan_id' => null,
             ]);
 
+            if ($selectedPlan) {
+                $this->syncSelectedPlanToUser($user, $selectedPlan);
+            }
+
             Log::info('New user registered via Google', [
                 'user_id' => $user->id,
                 'email' => $user->email,
@@ -111,6 +118,10 @@ class SocialLoginController extends Controller
                 ->with('success', 'Akun berhasil dibuat via Google! Silakan lengkapi profil bisnis Anda.');
         }
 
+            if ($selectedPlan && !$this->userHasSuccessfulPlanPayment($user)) {
+                $this->syncSelectedPlanToUser($user, $selectedPlan);
+            }
+
         // Existing user → login and go to dashboard
         Auth::login($user);
 
@@ -119,6 +130,65 @@ class SocialLoginController extends Controller
             'email' => $user->email,
         ]);
 
+        if ($selectedPlan && $user->onboarding_complete && $user->klien_id && !$this->userHasSuccessfulPlanPayment($user)) {
+            return redirect()->route('subscription.index', [
+                'autocheckout' => 1,
+                'plan' => $selectedPlan->code,
+            ]);
+        }
+
         return redirect()->intended('/dashboard');
+    }
+
+    protected function resolveSelectedPlanFromSession(): ?Plan
+    {
+        $selectedPlanId = session('selected_plan_id');
+        $selectedPlanCode = session('selected_plan_code');
+
+        $query = Plan::query()
+            ->where('is_active', true)
+            ->where('is_self_serve', true);
+
+        if ($selectedPlanId) {
+            return (clone $query)->where('id', $selectedPlanId)->first();
+        }
+
+        if ($selectedPlanCode) {
+            return (clone $query)->where('code', $selectedPlanCode)->first();
+        }
+
+        return null;
+    }
+
+    protected function userHasSuccessfulPlanPayment(User $user): bool
+    {
+        if (!$user->klien_id) {
+            return false;
+        }
+
+        return PlanTransaction::where('klien_id', $user->klien_id)
+            ->where('status', PlanTransaction::STATUS_SUCCESS)
+            ->exists();
+    }
+
+    protected function syncSelectedPlanToUser(User $user, Plan $plan): void
+    {
+        $isPaidPlan = (float) $plan->price_monthly > 0;
+
+        $user->forceFill([
+            'current_plan_id' => $plan->id,
+            'plan_status' => $isPaidPlan ? User::PLAN_STATUS_TRIAL_SELECTED : User::PLAN_STATUS_ACTIVE,
+            'plan_started_at' => $isPaidPlan ? null : now(),
+            'plan_expires_at' => $isPaidPlan
+                ? null
+                : ($plan->duration_days > 0 ? now()->addDays($plan->duration_days) : null),
+            'plan_source' => 'purchase',
+        ])->save();
+
+        Log::info('Google OAuth: selected plan synced to user', [
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+            'plan_code' => $plan->code,
+        ]);
     }
 }

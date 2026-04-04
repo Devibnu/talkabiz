@@ -294,6 +294,15 @@
         </div>
         <hr class="horizontal dark my-4">
         <div class="d-flex flex-wrap gap-2">
+          @php
+            $dashboardActivationPlan = auth()->user()?->currentPlan;
+            $dashboardActivationPlanCode = ($dashboardActivationPlan && $dashboardActivationPlan->is_self_serve)
+              ? $dashboardActivationPlan->code
+              : session('selected_plan_code');
+            $dashboardActivationUrl = $dashboardActivationPlanCode
+              ? route('subscription.index', ['autocheckout' => 1, 'plan' => $dashboardActivationPlanCode])
+              : route('subscription.index');
+          @endphp
           @if($subscriptionIsActive ?? false)
             {{-- Campaign & Inbox buttons — only when subscription is active --}}
             <a href="{{ url('campaign') }}" class="btn bg-gradient-primary btn-sm mb-0">
@@ -304,7 +313,7 @@
             </a>
           @else
             {{-- HIDDEN — user focus goes to Activation Banner CTA --}}
-            <a href="{{ (auth()->user()?->currentPlan && auth()->user()->currentPlan->is_self_serve) ? route('subscription.index', ['autocheckout' => 1, 'plan' => auth()->user()->currentPlan->code]) : route('subscription.index') }}" class="btn bg-gradient-primary btn-sm mb-0"
+            <a href="{{ $dashboardActivationUrl }}" class="btn bg-gradient-primary btn-sm mb-0"
                onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('clicked_pay', {source: 'quick_actions'});">
               <i class="fas fa-bolt me-2"></i>Aktifkan Paket
             </a>

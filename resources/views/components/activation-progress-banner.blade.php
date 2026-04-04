@@ -18,8 +18,11 @@
     $isAdminOwner = in_array(auth()->user()->role ?? '', ['super_admin', 'superadmin', 'owner']);
     $showActivationBanner = $isTrialSelected && !$isAdminOwner && !($subscriptionIsActive ?? false);
     $activationPlan = auth()->user()?->currentPlan;
-    $activationCheckoutUrl = ($activationPlan && $activationPlan->is_self_serve)
-        ? route('subscription.index', ['autocheckout' => 1, 'plan' => $activationPlan->code])
+    $activationPlanCode = ($activationPlan && $activationPlan->is_self_serve)
+        ? $activationPlan->code
+        : session('selected_plan_code');
+    $activationCheckoutUrl = $activationPlanCode
+        ? route('subscription.index', ['autocheckout' => 1, 'plan' => $activationPlanCode])
         : route('subscription.index');
 @endphp
 

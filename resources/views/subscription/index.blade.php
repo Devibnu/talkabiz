@@ -1035,9 +1035,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const requestedPlanCode = @json(request('plan'));
     const currentPlanCode = @json($currentPlan?->code);
     const currentPlanIsSelfServe = @json((bool) ($currentPlan?->is_self_serve ?? false));
+    const selfServePlanCodes = @json($availablePlans->where('is_self_serve', true)->pluck('code')->values()->all());
     const autoCheckoutPlanCode = requestedPlanCode || currentPlanCode;
+    const autoCheckoutAllowed = requestedPlanCode
+        ? selfServePlanCodes.includes(requestedPlanCode)
+        : currentPlanIsSelfServe;
 
-    if (!shouldAutoCheckout || autoCheckoutStarted || !autoCheckoutPlanCode || !currentPlanIsSelfServe) {
+    if (!shouldAutoCheckout || autoCheckoutStarted || !autoCheckoutPlanCode || !autoCheckoutAllowed) {
         return;
     }
 
