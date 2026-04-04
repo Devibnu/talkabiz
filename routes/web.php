@@ -20,6 +20,7 @@ use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\WhatsAppController;
 use App\Http\Controllers\AccountUnlockController;
 use App\Http\Controllers\ForcePasswordChangeController;
+use App\Http\Controllers\SocialLoginController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\TopupInvoiceController;
 use App\Http\Controllers\InvoiceWebController;
@@ -584,6 +585,10 @@ Route::group(['middleware' => 'guest'], function () {
     Route::post('/login', [SessionsController::class, 'store'])->name('login.store');
     Route::get('/login/forgot-password', [ResetController::class, 'create'])->name('password.request');
     Route::post('/forgot-password', [ResetController::class, 'sendEmail'])->name('password.email');
+
+    // Google OAuth
+    Route::get('/auth/google', [SocialLoginController::class, 'redirectToGoogle'])->name('auth.google');
+    Route::get('/auth/google/callback', [SocialLoginController::class, 'handleGoogleCallback'])->name('auth.google.callback');
     Route::get('/reset-password/{token}', [ResetController::class, 'resetPass'])->name('password.reset');
     Route::post('/reset-password', [ChangePasswordController::class, 'changePassword'])->name('password.update');
 

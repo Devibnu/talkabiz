@@ -189,6 +189,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'google_id',
         'phone',
         'location',
         'about_me',
