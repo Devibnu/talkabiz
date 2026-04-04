@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\Klien;
 use App\Models\PercakapanInbox;
 use App\Models\PesanInbox;
-use App\Models\Pengguna;
+use App\Models\User;
 use App\Models\WhatsappConnection;
 use App\Models\LogAktivitas;
 use App\Events\Inbox\PesanMasukEvent;
@@ -488,7 +488,7 @@ class InboxService
             ]);
 
             // Dispatch event untuk update badge
-            $pengguna = Pengguna::find($penggunaId);
+            $pengguna = User::find($penggunaId);
             $klien = Klien::find($percakapan->klien_id);
             event(new PesanDibacaEvent($percakapan, $pengguna, $klien));
 
@@ -550,7 +550,7 @@ class InboxService
 
                 // Refresh untuk mendapatkan data terbaru
                 $percakapan->refresh();
-                $pengguna = Pengguna::find($penggunaId);
+                $pengguna = User::find($penggunaId);
                 $klien = Klien::find($percakapan->klien_id);
 
                 // Dispatch event untuk notifikasi assignment
@@ -604,7 +604,7 @@ class InboxService
             }
 
             // Simpan pengguna sebelum update untuk event
-            $pengguna = Pengguna::find($penggunaId);
+            $pengguna = User::find($penggunaId);
             $klien = Klien::find($percakapan->klien_id);
 
             // Lepas assignment
@@ -791,7 +791,7 @@ class InboxService
                     ];
                 }
 
-                $penggunaAsal = Pengguna::find($dariPenggunaId);
+                $penggunaAsal = User::find($dariPenggunaId);
                 $klien = Klien::find($percakapan->klien_id);
 
                 // Update assignment

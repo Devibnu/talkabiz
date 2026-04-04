@@ -1955,18 +1955,25 @@ const TalkabizInbox = {
             if (data.sukses) {
                 this.loadConversations();
                 this.selectConversation(id);
+                ClientPopup.toast('Percakapan berhasil diambil', 'success');
             } else {
-                alert(data.pesan || 'Gagal mengambil percakapan');
+                ClientPopup.error(data.pesan || 'Gagal mengambil percakapan');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Terjadi kesalahan');
+            ClientPopup.error('Terjadi kesalahan, silakan coba lagi.');
         }
     },
     
     // Lepas percakapan
     async lepasPercakapan(id) {
-        if (!confirm('Yakin ingin melepas percakapan ini?')) return;
+        const confirmed = await ClientPopup.confirm({
+            title: 'Lepas Percakapan?',
+            text: 'Yakin ingin melepas percakapan ini? Percakapan akan kembali ke antrian.',
+            confirmText: 'Ya, Lepas',
+            cancelText: 'Batal'
+        });
+        if (!confirmed) return;
         
         try {
             const response = await fetch(`/api/inbox/${id}/lepas`, {
@@ -1978,8 +1985,9 @@ const TalkabizInbox = {
             if (data.sukses) {
                 this.loadConversations();
                 this.selectConversation(id);
+                ClientPopup.toast('Percakapan berhasil dilepas', 'success');
             } else {
-                alert(data.pesan || 'Gagal melepas percakapan');
+                ClientPopup.error(data.pesan || 'Gagal melepas percakapan');
             }
         } catch (error) {
             console.error('Error:', error);
@@ -1988,7 +1996,14 @@ const TalkabizInbox = {
     
     // Selesaikan percakapan
     async selesaikanPercakapan(id) {
-        if (!confirm('Tandai percakapan ini sebagai selesai?')) return;
+        const confirmed = await ClientPopup.confirm({
+            title: 'Selesaikan Percakapan?',
+            text: 'Tandai percakapan ini sebagai selesai?',
+            confirmText: 'Ya, Selesai',
+            cancelText: 'Batal',
+            icon: 'question'
+        });
+        if (!confirmed) return;
         
         try {
             const response = await fetch(`/api/inbox/${id}/selesai`, {
@@ -2002,8 +2017,9 @@ const TalkabizInbox = {
                 this.state.activeConversation = null;
                 this.renderChatWindow();
                 this.renderDetailPanel();
+                ClientPopup.toast('Percakapan selesai', 'success');
             } else {
-                alert(data.pesan || 'Gagal menyelesaikan percakapan');
+                ClientPopup.error(data.pesan || 'Gagal menyelesaikan percakapan');
             }
         } catch (error) {
             console.error('Error:', error);
@@ -2081,19 +2097,11 @@ const TalkabizInbox = {
                     LimitMonitor.refreshQuota();
                 }
             } else {
-                if (typeof ClientPopup !== 'undefined') {
-                    ClientPopup.actionFailed(data.pesan || 'Pesan belum bisa dikirim. Coba lagi.');
-                } else {
-                    alert(data.pesan || 'Gagal mengirim pesan');
-                }
+                ClientPopup.error(data.pesan || 'Gagal mengirim pesan');
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            if (typeof ClientPopup !== 'undefined') {
-                ClientPopup.connectionError();
-            } else {
-                alert('Gagal mengirim pesan');
-            }
+            ClientPopup.error('Gagal mengirim pesan, silakan coba lagi.');
         } finally {
             this.state.sending = false;
             if (btnSend) {
@@ -2371,29 +2379,21 @@ const TalkabizInbox = {
             } else {
                 // Handle insufficient balance/quota using friendly popup
                 if (data.error_code === 'INSUFFICIENT_BALANCE' || data.error_code === 'QUOTA_EXCEEDED') {
-                    if (typeof ClientPopup !== 'undefined') {
-                        ClientPopup.limitExhausted('/billing/plan');
-                    } else {
-                        this.showToast(data.pesan, 'error');
-                        if (confirm('Kuota/saldo tidak mencukupi. Buka halaman upgrade?')) {
-                            window.location.href = '/billing/plan';
-                        }
-                    }
+                    ClientPopup.confirm({
+                        title: 'Kuota Tidak Cukup',
+                        text: data.pesan || 'Kuota/saldo tidak mencukupi. Buka halaman upgrade?',
+                        icon: 'warning',
+                        confirmText: 'Upgrade Sekarang',
+                        cancelText: 'Nanti Saja',
+                        onConfirm: () => { window.location.href = '/billing/plan'; }
+                    });
                 } else {
-                    if (typeof ClientPopup !== 'undefined') {
-                        ClientPopup.actionFailed(data.pesan || 'Pesan belum bisa dikirim. Coba lagi.');
-                    } else {
-                        this.showToast(data.pesan || 'Gagal mengirim pesan', 'error');
-                    }
+                    ClientPopup.error(data.pesan || 'Pesan belum bisa dikirim. Coba lagi.');
                 }
             }
         } catch (error) {
             console.error('Error sending template:', error);
-            if (typeof ClientPopup !== 'undefined') {
-                ClientPopup.connectionError();
-            } else {
-                this.showToast('Terjadi kesalahan saat mengirim', 'error');
-            }
+            ClientPopup.error('Terjadi kesalahan saat mengirim, silakan coba lagi.');
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;

@@ -3,7 +3,7 @@
 namespace App\Events\Inbox;
 
 use App\Models\PercakapanInbox;
-use App\Models\Pengguna;
+use App\Models\User;
 use App\Models\Klien;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -42,7 +42,7 @@ class PercakapanDiambilEvent implements ShouldBroadcast
     /**
      * Sales yang mengambil
      */
-    public Pengguna $sales;
+    public User $sales;
 
     /**
      * Data klien
@@ -56,14 +56,10 @@ class PercakapanDiambilEvent implements ShouldBroadcast
 
     /**
      * Create a new event instance.
-     *
-     * @param PercakapanInbox $percakapan
-     * @param Pengguna $sales
-     * @param Klien $klien
      */
     public function __construct(
         PercakapanInbox $percakapan,
-        Pengguna $sales,
+        User $sales,
         Klien $klien
     ) {
         $this->percakapan = $percakapan;

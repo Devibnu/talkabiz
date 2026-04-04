@@ -3,7 +3,7 @@
 namespace App\Events\Inbox;
 
 use App\Models\PercakapanInbox;
-use App\Models\Pengguna;
+use App\Models\User;
 use App\Models\Klien;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -41,7 +41,7 @@ class PesanDibacaEvent implements ShouldBroadcast
     /**
      * Sales yang membaca
      */
-    public Pengguna $sales;
+    public User $sales;
 
     /**
      * Data klien
@@ -60,15 +60,10 @@ class PesanDibacaEvent implements ShouldBroadcast
 
     /**
      * Create a new event instance.
-     *
-     * @param PercakapanInbox $percakapan
-     * @param Pengguna $sales
-     * @param Klien $klien
-     * @param int $jumlahPesan
      */
     public function __construct(
         PercakapanInbox $percakapan,
-        Pengguna $sales,
+        User $sales,
         Klien $klien,
         int $jumlahPesan = 0
     ) {
