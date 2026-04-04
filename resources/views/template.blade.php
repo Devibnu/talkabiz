@@ -701,32 +701,22 @@
                         </div>
 
                         <div class="variable-info-box">
-                            <i class="ni ni-check-bold me-1"></i>
-                            <strong>Otomatis</strong> = data diambil dari Kontak, beda tiap penerima<br>
-                            <i class="ni ni-tag me-1"></i>
-                            <strong>Teks Bebas</strong> = Anda isi nilainya saat buat kampanye, sama untuk semua penerima
+                            Variabel akan otomatis diganti saat pesan dikirim.<br>
+                            Contoh: <code>Halo {{nama}}</code> → <code>Halo Budi</code>, <code>Halo Siti</code>, dst.
                         </div>
 
-                        <div class="variable-section-label text-success"><i class="ni ni-single-02 me-1"></i> Otomatis (dari data kontak):</div>
-                        <div class="variable-tags mb-2">
-                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('nama', 'createKonten')">+ Nama</span>
-                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('telepon', 'createKonten')">+ No HP</span>
-                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('email', 'createKonten')">+ Email</span>
-                        </div>
-
-                        <div class="variable-section-label text-primary"><i class="ni ni-ruler-pencil me-1"></i> Teks bebas (isi saat kirim kampanye):</div>
                         <div class="variable-tags">
-                            <span class="variable-tag" onclick="insertVariable('produk', 'createKonten')">+ Produk</span>
-                            <span class="variable-tag" onclick="insertVariable('harga', 'createKonten')">+ Harga</span>
-                            <span class="variable-tag" onclick="insertVariable('tanggal', 'createKonten')">+ Tanggal</span>
-                            <span class="variable-tag" onclick="insertVariable('no_order', 'createKonten')">+ No Order</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('nama', 'createKonten')" title="Nama penerima dari data Kontak">+ Nama Penerima</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('telepon', 'createKonten')" title="No HP penerima dari data Kontak">+ No HP</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('email', 'createKonten')" title="Email penerima dari data Kontak">+ Email</span>
                         </div>
                     </div>
 
                     {{-- Live Preview --}}
                     <div class="mt-3" id="createPreviewWrap" style="display:none;">
-                        <label class="form-label-soft">Preview Pesan</label>
-                        <div class="alert alert-light border" id="createPreview" style="white-space: pre-wrap; font-size: 0.875rem;"></div>
+                        <label class="form-label-soft">Preview — Contoh pesan yang diterima pelanggan:</label>
+                        <div class="alert border" id="createPreview" style="white-space: pre-wrap; font-size: 0.875rem; background: #f0fdf4; border-color: #bbf7d0 !important;"></div>
+                        <small class="text-muted"><i class="ni ni-bell-55 me-1"></i>Nama, No HP, Email otomatis diisi dari data Kontak setiap penerima.</small>
                     </div>
                 </form>
             </div>
@@ -802,109 +792,109 @@ const quickTemplates = {
     promo: {
         nama: 'Promo Diskon',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, ada promo spesial untuk Anda! 🔥\n\nDapatkan diskon hingga {{harga}} untuk {{produk}}.\n\nPromo berlaku sampai {{tanggal}}. Jangan sampai kelewatan!\n\nInfo lebih lanjut hubungi kami.'
+        konten: 'Halo {{nama}}, ada promo spesial untuk Anda! 🔥\n\nDapatkan diskon hingga 50% untuk semua produk kami.\n\nPromo berlaku sampai akhir bulan ini. Jangan sampai kelewatan!\n\nInfo lebih lanjut hubungi kami.'
     },
     payment_remind: {
         nama: 'Pengingat Pembayaran',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, ini pengingat pembayaran Anda. 💰\n\nTotal: {{harga}}\nBatas pembayaran: {{tanggal}}\n\nSegera selesaikan pembayaran agar layanan bisa diproses. Terima kasih!'
+        konten: 'Halo {{nama}}, ini pengingat pembayaran Anda. 💰\n\nMohon segera selesaikan pembayaran agar layanan bisa diproses.\n\nJika sudah bayar, abaikan pesan ini. Terima kasih!'
     },
     event_invite: {
         nama: 'Undangan Acara',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, Anda diundang ke acara kami! 🎉\n\nAcara: {{produk}}\nTanggal: {{tanggal}}\n\nJangan lewatkan! Kami tunggu kehadiran Anda.'
+        konten: 'Halo {{nama}}, Anda diundang ke acara spesial kami! 🎉\n\nJangan lewatkan! Kami tunggu kehadiran Anda.\n\nUntuk info lengkap, silakan hubungi kami.'
     },
     feedback: {
         nama: 'Minta Ulasan',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, terima kasih telah menggunakan layanan kami! ⭐\n\nKami ingin tahu pendapat Anda. Mohon luangkan waktu sebentar untuk memberikan ulasan.\n\nMasukan Anda sangat berarti untuk peningkatan layanan kami. Terima kasih! 🙏'
+        konten: 'Halo {{nama}}, terima kasih telah menggunakan layanan kami! ⭐\n\nKami ingin tahu pendapat Anda. Mohon luangkan waktu sebentar untuk memberikan ulasan.\n\nMasukan Anda sangat berarti bagi kami. Terima kasih! 🙏'
     },
 
     // === TOKO / RETAIL / ONLINE SHOP ===
     order_confirm: {
         nama: 'Konfirmasi Pesanan',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, pesanan Anda sudah kami terima! 📦\n\nNo. Pesanan: {{no_order}}\nProduk: {{produk}}\nTotal: {{harga}}\n\nPesanan sedang diproses. Kami akan kabari jika sudah dikirim.'
+        konten: 'Halo {{nama}}, pesanan Anda sudah kami terima! 📦\n\nPesanan sedang diproses dan kami akan kabari jika sudah dikirim.\n\nTerima kasih telah berbelanja!'
     },
     shipping: {
         nama: 'Notifikasi Pengiriman',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, pesanan Anda sudah dikirim! 🚚\n\nNo. Pesanan: {{no_order}}\nNo. Resi: {{produk}}\n\nEstimasi tiba: {{tanggal}}\n\nTerima kasih telah berbelanja!'
+        konten: 'Halo {{nama}}, pesanan Anda sudah dikirim! 🚚\n\nSilakan cek status pengiriman secara berkala.\n\nTerima kasih telah berbelanja!'
     },
     restock: {
         nama: 'Produk Tersedia Kembali',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, kabar baik! 🔔\n\n{{produk}} yang Anda tunggu sudah tersedia kembali!\n\nHarga: {{harga}}\n\nSegera pesan sebelum kehabisan lagi. Stok terbatas!'
+        konten: 'Halo {{nama}}, kabar baik! 🔔\n\nProduk yang Anda tunggu sudah tersedia kembali.\n\nSegera pesan sebelum kehabisan lagi. Stok terbatas!'
     },
 
     // === JASA / LAYANAN ===
     booking_confirm: {
         nama: 'Konfirmasi Booking',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, booking Anda sudah dikonfirmasi! 📋\n\nLayanan: {{produk}}\nTanggal: {{tanggal}}\nBiaya: {{harga}}\n\nMohon hadir tepat waktu. Terima kasih!'
+        konten: 'Halo {{nama}}, booking Anda sudah dikonfirmasi! 📋\n\nMohon hadir tepat waktu sesuai jadwal.\n\nJika perlu reschedule, silakan hubungi kami. Terima kasih!'
     },
     appointment_remind: {
         nama: 'Pengingat Jadwal',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, ini pengingat untuk jadwal Anda besok. ⏰\n\nLayanan: {{produk}}\nTanggal: {{tanggal}}\n\nJika perlu reschedule, silakan hubungi kami segera. Terima kasih!'
+        konten: 'Halo {{nama}}, ini pengingat untuk jadwal Anda besok. ⏰\n\nJika perlu reschedule, silakan hubungi kami segera.\n\nTerima kasih!'
     },
     service_done: {
         nama: 'Layanan Selesai',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, layanan Anda sudah selesai! ✅\n\nLayanan: {{produk}}\nTotal: {{harga}}\n\nTerima kasih telah mempercayakan kepada kami. Semoga puas dengan hasilnya! 🙏'
+        konten: 'Halo {{nama}}, layanan Anda sudah selesai! ✅\n\nTerima kasih telah mempercayakan kepada kami.\n\nSemoga puas dengan hasilnya! 🙏'
     },
 
     // === SEKOLAH / PENDIDIKAN ===
     school_info: {
         nama: 'Info Sekolah',
         kategori: 'utility',
-        konten: 'Kepada Bapak/Ibu {{nama}}, 📢\n\nDengan ini kami informasikan:\n\n{{produk}}\n\nTanggal berlaku: {{tanggal}}\n\nDemikian informasi ini kami sampaikan. Terima kasih atas perhatiannya.'
+        konten: 'Kepada Bapak/Ibu {{nama}}, 📢\n\nDengan ini kami sampaikan informasi penting dari sekolah.\n\nSilakan hubungi pihak sekolah untuk informasi lebih lanjut.\n\nTerima kasih atas perhatiannya.'
     },
     school_payment: {
         nama: 'Tagihan SPP',
         kategori: 'utility',
-        konten: 'Kepada Bapak/Ibu {{nama}}, 💳\n\nBerikut tagihan pembayaran sekolah:\n\nKeterangan: {{produk}}\nJumlah: {{harga}}\nBatas bayar: {{tanggal}}\n\nMohon segera melakukan pembayaran. Terima kasih.'
+        konten: 'Kepada Bapak/Ibu {{nama}}, 💳\n\nMohon segera melakukan pembayaran SPP/biaya sekolah sebelum jatuh tempo.\n\nJika sudah membayar, abaikan pesan ini.\n\nTerima kasih.'
     },
     school_event: {
         nama: 'Undangan Kegiatan Sekolah',
         kategori: 'marketing',
-        konten: 'Kepada Bapak/Ibu {{nama}}, 🏫\n\nDengan ini kami mengundang untuk hadir pada:\n\nKegiatan: {{produk}}\nTanggal: {{tanggal}}\n\nKehadiran Bapak/Ibu sangat kami harapkan. Terima kasih.'
+        konten: 'Kepada Bapak/Ibu {{nama}}, 🏫\n\nDengan ini kami mengundang Bapak/Ibu untuk hadir pada kegiatan sekolah.\n\nKehadiran Bapak/Ibu sangat kami harapkan.\n\nTerima kasih.'
     },
 
     // === KANTOR / PERUSAHAAN ===
     meeting_invite: {
         nama: 'Undangan Rapat',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, 📅\n\nAnda diundang untuk menghadiri:\n\nRapat: {{produk}}\nTanggal: {{tanggal}}\n\nMohon konfirmasi kehadiran Anda. Terima kasih.'
+        konten: 'Halo {{nama}}, 📅\n\nAnda diundang untuk menghadiri rapat.\n\nMohon konfirmasi kehadiran Anda. Terima kasih.'
     },
     company_announce: {
         nama: 'Pengumuman Perusahaan',
         kategori: 'utility',
-        konten: 'Kepada {{nama}}, 📣\n\nBerikut informasi penting dari perusahaan:\n\n{{produk}}\n\nBerlaku mulai: {{tanggal}}\n\nDemikian pengumuman ini disampaikan. Terima kasih atas perhatiannya.'
+        konten: 'Kepada {{nama}}, 📣\n\nBerikut informasi penting dari perusahaan.\n\nDemikian pengumuman ini disampaikan. Terima kasih atas perhatiannya.'
     },
 
     // === F&B / RESTORAN / KAFE ===
     order_ready: {
         nama: 'Pesanan Siap',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, pesanan Anda sudah siap! 🍔\n\nNo. Pesanan: {{no_order}}\nMenu: {{produk}}\n\nSilakan diambil. Selamat menikmati! 😊'
+        konten: 'Halo {{nama}}, pesanan Anda sudah siap! 🍔\n\nSilakan diambil.\n\nSelamat menikmati! 😊'
     },
     menu_promo: {
         nama: 'Promo Menu Baru',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, ada menu baru yang wajib dicoba! 🍕\n\nMenu: {{produk}}\nHarga: {{harga}}\n\nPromo khusus sampai {{tanggal}}! Yuk, pesan sekarang!'
+        konten: 'Halo {{nama}}, ada menu baru yang wajib dicoba! 🍕\n\nDapatkan harga spesial untuk menu terbaru kami.\n\nYuk, pesan sekarang!'
     },
 
     // === KESEHATAN / KLINIK ===
     appointment_health: {
         nama: 'Pengingat Jadwal Kontrol',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, ini pengingat jadwal kontrol Anda. 🩺\n\nLayanan: {{produk}}\nTanggal: {{tanggal}}\n\nMohon hadir tepat waktu. Jika perlu ubah jadwal, segera hubungi kami. Terima kasih!'
+        konten: 'Halo {{nama}}, ini pengingat jadwal kontrol kesehatan Anda. 🩺\n\nMohon hadir tepat waktu.\n\nJika perlu ubah jadwal, segera hubungi kami. Terima kasih!'
     },
     health_promo: {
         nama: 'Promo Layanan Kesehatan',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, jaga kesehatan Anda! 💊\n\nPromo spesial: {{produk}}\nHarga: {{harga}}\nBerlaku sampai: {{tanggal}}\n\nSegera daftarkan diri Anda. Kesehatan adalah investasi terbaik!'
+        konten: 'Halo {{nama}}, jaga kesehatan Anda! 💊\n\nDapatkan promo spesial untuk layanan kesehatan kami.\n\nSegera daftarkan diri Anda. Kesehatan adalah investasi terbaik!'
     }
 };
 
@@ -942,17 +932,16 @@ function updatePreview(textareaId, previewId, wrapId) {
     const wrap = document.getElementById(wrapId);
     
     if (text.trim()) {
-        // Auto variables (green) = from contact data, different per recipient
-        // Manual variables (blue) = filled when creating campaign, same for all
+        // Show preview with clear labels showing what gets replaced
         let html = text
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\{\{nama\}\}/g, '<span style="background:#dcfce7;color:#166534;padding:1px 4px;border-radius:3px;font-weight:600;">Budi</span>')
-            .replace(/\{\{telepon\}\}/g, '<span style="background:#dcfce7;color:#166534;padding:1px 4px;border-radius:3px;font-weight:600;">081234567890</span>')
-            .replace(/\{\{email\}\}/g, '<span style="background:#dcfce7;color:#166534;padding:1px 4px;border-radius:3px;font-weight:600;">budi@email.com</span>')
-            .replace(/\{\{produk\}\}/g, '<span style="background:#e0e7ff;color:#3730a3;padding:1px 4px;border-radius:3px;font-weight:600;">isi saat kirim</span>')
-            .replace(/\{\{harga\}\}/g, '<span style="background:#e0e7ff;color:#3730a3;padding:1px 4px;border-radius:3px;font-weight:600;">isi saat kirim</span>')
-            .replace(/\{\{tanggal\}\}/g, '<span style="background:#e0e7ff;color:#3730a3;padding:1px 4px;border-radius:3px;font-weight:600;">isi saat kirim</span>')
-            .replace(/\{\{no_order\}\}/g, '<span style="background:#e0e7ff;color:#3730a3;padding:1px 4px;border-radius:3px;font-weight:600;">isi saat kirim</span>')
+            .replace(/\{\{nama\}\}/g, '<span style="background:#2dce89;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Nama Penerima</span>')
+            .replace(/\{\{telepon\}\}/g, '<span style="background:#2dce89;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">No HP Penerima</span>')
+            .replace(/\{\{email\}\}/g, '<span style="background:#2dce89;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Email Penerima</span>')
+            .replace(/\{\{produk\}\}/g, '<span style="background:#5e72e4;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Produk</span>')
+            .replace(/\{\{harga\}\}/g, '<span style="background:#5e72e4;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Harga</span>')
+            .replace(/\{\{tanggal\}\}/g, '<span style="background:#5e72e4;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Tanggal</span>')
+            .replace(/\{\{no_order\}\}/g, '<span style="background:#5e72e4;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">No Order</span>')
             .replace(/\n/g, '<br>');
         preview.innerHTML = html;
         wrap.style.display = 'block';
