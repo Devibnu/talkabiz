@@ -78,7 +78,12 @@
                   @enderror
                 </div>
                 <div class="mb-3">
-                  <input type="password" class="form-control" placeholder="Buat Password" name="password" id="password" aria-label="Password" aria-describedby="password-addon" required minlength="5">
+                  <div class="input-group">
+                    <input type="password" class="form-control" placeholder="Buat Password" name="password" id="password" aria-label="Password" aria-describedby="password-addon" required minlength="5">
+                    <button class="btn btn-outline-secondary mb-0" type="button" id="togglePassword" tabindex="-1">
+                      <i class="fa fa-eye" id="eyeIcon"></i>
+                    </button>
+                  </div>
                   @error('password')
                     <p class="text-danger text-xs mt-2">{{ $message }}</p>
                   @enderror
@@ -106,3 +111,20 @@
 
 @endsection
 
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const toggleBtn = document.getElementById('togglePassword');
+  const passwordInput = document.getElementById('password');
+  const eyeIcon = document.getElementById('eyeIcon');
+  if (toggleBtn && passwordInput) {
+    toggleBtn.addEventListener('click', function() {
+      const isPassword = passwordInput.type === 'password';
+      passwordInput.type = isPassword ? 'text' : 'password';
+      eyeIcon.classList.toggle('fa-eye');
+      eyeIcon.classList.toggle('fa-eye-slash');
+    });
+  }
+});
+</script>
+@endpush
