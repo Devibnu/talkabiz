@@ -404,6 +404,16 @@ class WhatsAppCampaignController extends Controller
         // Build message content with variables
         $messageContent = $this->buildMessageContent($template, $campaign->template_variables ?? []);
 
+        // Resolve template variable mappings
+        // If no mappings set but template has parameters, default to ['name']
+        $templateVars = $campaign->template_variables ?? [];
+        if (empty($templateVars)) {
+            $varCount = $template->getVariableCount();
+            if ($varCount > 0) {
+                $templateVars = array_fill(0, $varCount, 'name');
+            }
+        }
+
         // Create dispatch request
         $dispatchRequest = MessageDispatchRequest::fromCampaign(
             userId: $dispatchUserId,
@@ -415,7 +425,7 @@ class WhatsAppCampaignController extends Controller
                 'template_provider_id' => $template->template_id,
                 'template_name' => $template->name,
                 'template_language' => $template->language,
-                'template_params' => array_values($campaign->template_variables ?? []),
+                'template_params' => array_values($templateVars),
             ],
             revenueGuardTransactionId: $revenueGuardTxId,
         );

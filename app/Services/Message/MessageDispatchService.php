@@ -391,11 +391,15 @@ class MessageDispatchService
         foreach ($recipients as $index => $recipient) {
             try {
                 $phone = $recipient['phone'];
+                
+                // Resolve template params per-recipient
+                $resolvedParams = $this->resolveTemplateParams($templateParams, $recipient);
+                
                 $providerResult = $templateId
                     ? $this->whatsAppProvider->sendTemplateMessage(
                         phone: $phone,
                         templateId: $templateId,
-                        bodyParams: $templateParams,
+                        bodyParams: $resolvedParams,
                         components: [],
                         klienId: $klienId,
                         penggunaId: $request->userId
@@ -432,6 +436,31 @@ class MessageDispatchService
         }
 
         return $results;
+    }
+
+    /**
+     * Resolve template params per-recipient
+     * Maps field names (name, phone, email) to actual contact data
+     */
+    protected function resolveTemplateParams(array $mappings, array $recipient): array
+    {
+        if (empty($mappings)) {
+            // Auto-detect: if no mappings but recipient has name, send name as param
+            $name = $recipient['name'] ?? null;
+            if ($name && $name !== 'Unknown') {
+                return [$name];
+            }
+            return [];
+        }
+
+        return array_map(function ($mapping) use ($recipient) {
+            return match ($mapping) {
+                'name'  => $recipient['name'] ?? 'Pelanggan',
+                'phone' => $recipient['phone'] ?? '',
+                'email' => $recipient['email'] ?? '',
+                default => (string) $mapping,
+            };
+        }, $mappings);
     }
 
     /**
