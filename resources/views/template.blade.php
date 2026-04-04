@@ -712,6 +712,7 @@
 @endsection
 
 @push('dashboard')
+@verbatim
 <script>
 // Template siap pakai
 const quickTemplates = {
@@ -848,4 +849,5 @@ async function hapusTemplate(id) {
     }
 }
 </script>
+@endverbatim
 @endpush
