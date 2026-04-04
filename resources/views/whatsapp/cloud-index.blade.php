@@ -342,17 +342,20 @@
 
     // Session logging — captures WABA ID, phone_number_id from Embedded Signup
     let embeddedSignupData = {};
+    let embeddedSignupError = null;
     window.addEventListener('message', (event) => {
         if (!event.origin.endsWith('facebook.com')) return;
         try {
             const data = JSON.parse(event.data);
             if (data.type === 'WA_EMBEDDED_SIGNUP') {
                 if (data.event === 'CANCEL') {
-                    console.log('[EmbeddedSignup] User cancelled at step:', data.data?.current_step);
+                    embeddedSignupError = data.data || null;
+                    console.log('[EmbeddedSignup] User cancelled at step:', data.data?.current_step, data.data);
                     return;
                 }
                 // Successful completion — capture asset IDs
                 embeddedSignupData = data.data || {};
+                embeddedSignupError = null;
                 console.log('[EmbeddedSignup] Session data:', embeddedSignupData);
             }
         } catch {
@@ -371,6 +374,34 @@
         } else {
             console.log('[EmbeddedSignup] Login failed or cancelled:', response);
             if (response.status === 'unknown') {
+                if (embeddedSignupError?.error_message || embeddedSignupError?.error_code) {
+                    const errorMessage = embeddedSignupError.error_message || 'Meta menghentikan proses Embedded Signup.';
+                    const metaContext = [
+                        embeddedSignupError.error_code ? 'Kode error: ' + embeddedSignupError.error_code : null,
+                        embeddedSignupError.current_step ? 'Step: ' + embeddedSignupError.current_step : null,
+                        embeddedSignupError.session_id ? 'Session ID: ' + embeddedSignupError.session_id : null,
+                    ].filter(Boolean).join(' | ');
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Meta Menolak Proses Koneksi',
+                        html: `
+                            <div class="text-start">
+                                <p class="mb-2">${errorMessage}</p>
+                                ${metaContext ? '<p class="text-xs text-muted mb-0">' + metaContext + '</p>' : ''}
+                                <div class="alert alert-light border mt-3 mb-0 text-start">
+                                    <small class="text-muted">
+                                        Periksa konfigurasi Meta App: mode Live, Facebook Login for Business allowed domains, dan advanced access untuk permission WhatsApp.
+                                    </small>
+                                </div>
+                            </div>
+                        `,
+                        confirmButtonText: 'OK',
+                        customClass: { confirmButton: 'btn btn-primary' },
+                        buttonsStyling: false
+                    });
+                }
+
                 // User closed popup without completing
                 return;
             }
