@@ -14,6 +14,7 @@
 @php
     $isOnSubscriptionPage = request()->routeIs('subscription.index');
     $subscriptionPlanCode = auth()->user()?->currentPlan?->code;
+    $subscriptionPlanIsSelfServe = auth()->user()?->currentPlan?->is_self_serve ?? false;
 @endphp
 
 @if(!($subscriptionIsActive ?? false) && !in_array(auth()->user()->role ?? '', ['super_admin', 'superadmin', 'owner']))
@@ -30,7 +31,7 @@
                     <span class="text-sm d-block d-md-inline ms-md-1">Fitur pengiriman pesan tidak tersedia. Perpanjang sekarang untuk melanjutkan.</span>
                 </div>
             </div>
-            @if($isOnSubscriptionPage && $subscriptionPlanCode)
+            @if($isOnSubscriptionPage && $subscriptionPlanCode && $subscriptionPlanIsSelfServe)
                 <button type="button" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0" onclick="fastCheckout('{{ $subscriptionPlanCode }}')">
                     <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
                 </button>
@@ -56,7 +57,7 @@
                     <span class="text-sm d-block d-md-inline ms-md-1">Silakan lakukan pembayaran untuk mulai menggunakan {{ $__brandName ?? 'Talkabiz' }}.</span>
                 </div>
             </div>
-            @if($isOnSubscriptionPage && $subscriptionPlanCode)
+            @if($isOnSubscriptionPage && $subscriptionPlanCode && $subscriptionPlanIsSelfServe)
                 <button type="button" class="btn btn-sm btn-white text-danger ms-auto mb-0 flex-shrink-0" onclick="fastCheckout('{{ $subscriptionPlanCode }}')">
                     <i class="fas fa-credit-card me-1"></i> Bayar Sekarang
                 </button>
@@ -91,7 +92,7 @@
                 <span class="text-sm d-block d-md-inline ms-md-1">Paket berakhir {{ $graceDayLabel }}. Perpanjang sekarang agar layanan tidak terhenti.</span>
             </div>
         </div>
-        @if($isOnSubscriptionPage && $subscriptionPlanCode)
+        @if($isOnSubscriptionPage && $subscriptionPlanCode && $subscriptionPlanIsSelfServe)
             <button type="button" class="btn btn-sm btn-white text-{{ $graceUrgency }} ms-auto mb-0 flex-shrink-0" onclick="fastCheckout('{{ $subscriptionPlanCode }}')">
                 <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang Sekarang
             </button>
@@ -124,7 +125,7 @@
                 <span class="text-sm d-block d-md-inline ms-md-1">Perpanjang untuk menghindari gangguan layanan.</span>
             </div>
         </div>
-        @if($isOnSubscriptionPage && $subscriptionPlanCode)
+        @if($isOnSubscriptionPage && $subscriptionPlanCode && $subscriptionPlanIsSelfServe)
             <button type="button" class="btn btn-sm btn-white text-{{ $urgency }} ms-auto mb-0 flex-shrink-0" onclick="fastCheckout('{{ $subscriptionPlanCode }}')">
                 <i class="fas fa-arrow-circle-up me-1"></i> Perpanjang
             </button>
