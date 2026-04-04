@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Klien;
 use App\Models\WhatsappConnection;
+use App\Models\WhatsappWebhookLog;
+use App\Services\InboxService;
 use App\Services\WhatsAppConnectionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -22,10 +24,12 @@ use Illuminate\Support\Facades\Log;
 class WhatsAppWebhookController extends Controller
 {
     protected WhatsAppConnectionService $connectionService;
+    protected InboxService $inboxService;
 
-    public function __construct(WhatsAppConnectionService $connectionService)
+    public function __construct(WhatsAppConnectionService $connectionService, InboxService $inboxService)
     {
         $this->connectionService = $connectionService;
+        $this->inboxService = $inboxService;
     }
 
     /**
@@ -321,16 +325,122 @@ class WhatsAppWebhookController extends Controller
     {
         $klienId = $payload['klien_id'];
         $message = $payload['message'] ?? [];
+        $webhookLog = WhatsappWebhookLog::log('message.received', $payload);
 
         Log::info('WhatsApp message received', [
             'klien_id' => $klienId,
             'from' => $message['from'] ?? 'unknown',
+            'type' => $message['type'] ?? 'unknown',
         ]);
 
-        // TODO: Store in inbox table if needed
-        // InboxMessage::create([...])
+        try {
+            $normalized = $this->normalizeIncomingMessagePayload($payload);
 
-        return response()->json(['received' => true]);
+            if (!$normalized) {
+                $webhookLog->markAsFailed('Unsupported or incomplete inbound payload');
+
+                return response()->json([
+                    'received' => true,
+                    'processed' => false,
+                    'message' => 'Payload skipped',
+                ]);
+            }
+
+            $result = $this->inboxService->prosesPesanMasuk($normalized);
+
+            if ($result['sukses'] ?? false) {
+                $webhookLog->markAsProcessed();
+            } else {
+                $webhookLog->markAsFailed($result['error'] ?? $result['pesan'] ?? 'Inbox processing failed');
+            }
+
+            return response()->json([
+                'received' => true,
+                'processed' => (bool) ($result['sukses'] ?? false),
+                'result' => $result,
+            ]);
+        } catch (\Throwable $e) {
+            $webhookLog->markAsFailed($e->getMessage());
+
+            Log::error('WhatsApp legacy message webhook failed', [
+                'klien_id' => $klienId,
+                'error' => $e->getMessage(),
+                'payload' => $payload,
+            ]);
+
+            return response()->json([
+                'received' => true,
+                'processed' => false,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+
+    }
+
+    protected function normalizeIncomingMessagePayload(array $payload): ?array
+    {
+        $message = $payload['message'] ?? [];
+        $connection = isset($payload['_resolved_connection_id'])
+            ? WhatsappConnection::find($payload['_resolved_connection_id'])
+            : $this->resolveConnectionFromPayload($payload);
+
+        $from = $message['from'] ?? null;
+        $messageId = $message['id'] ?? null;
+        $messageType = strtolower((string) ($message['type'] ?? 'text'));
+
+        if (!$connection || !$from || !$messageId) {
+            return null;
+        }
+
+        if (str_contains($from, '@g.us') || str_contains($from, 'status@broadcast')) {
+            return null;
+        }
+
+        $normalizedCustomer = preg_replace('/\D+/', '', explode('@', $from)[0] ?? '');
+        if (!$normalizedCustomer) {
+            return null;
+        }
+
+        $typeMap = [
+            'chat' => 'teks',
+            'text' => 'teks',
+            'image' => 'gambar',
+            'document' => 'dokumen',
+            'audio' => 'audio',
+            'ptt' => 'audio',
+            'video' => 'video',
+            'sticker' => 'sticker',
+            'location' => 'lokasi',
+            'vcard' => 'kontak',
+        ];
+
+        $mappedType = $typeMap[$messageType] ?? 'teks';
+        $body = $message['body'] ?? null;
+
+        $placeholderMap = [
+            'gambar' => '[Gambar]',
+            'dokumen' => '[Dokumen]',
+            'audio' => '[Audio]',
+            'video' => '[Video]',
+            'sticker' => '[Sticker]',
+            'lokasi' => '[Lokasi]',
+            'kontak' => '[Kontak]',
+        ];
+
+        return [
+            'no_bisnis' => $connection->phone_number ?: $connection->phone_number_id,
+            'phone_number_id' => $connection->phone_number_id,
+            'no_customer' => $normalizedCustomer,
+            'nama_customer' => $message['pushName'] ?? null,
+            'wa_message_id' => $messageId,
+            'tipe' => $mappedType,
+            'isi_pesan' => $body ?: ($placeholderMap[$mappedType] ?? '[Pesan]'),
+            'media_url' => null,
+            'caption' => null,
+            'timestamp' => $message['timestamp'] ?? now()->timestamp,
+        ];
+
     }
 
     /**

@@ -1489,6 +1489,9 @@ const TalkabizInbox = {
         sending: false,
         hasInitializedList: false,
         conversationSnapshot: new Map(),
+        pollTimer: null,
+        audioContext: null,
+        soundEnabled: true,
         userId: {{ auth()->id() ?? 'null' }},
         subscriptionIsActive: {{ ($subscriptionIsActive ?? false) ? 'true' : 'false' }}
     },
@@ -1513,9 +1516,7 @@ const TalkabizInbox = {
         this.bindEvents();
         this.prepareNotifications();
         this.loadConversations();
-        
-        // Auto refresh setiap 30 detik
-        setInterval(() => this.loadConversations(true), 30000);
+        this.startPolling();
     },
     
     // Bind events
@@ -1559,6 +1560,17 @@ const TalkabizInbox = {
                 }
             });
         }
+
+        const unlockAudio = () => this.ensureAudioReady();
+        document.addEventListener('click', unlockAudio, { once: true });
+        document.addEventListener('keydown', unlockAudio, { once: true });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                this.loadConversations(true);
+            }
+            this.startPolling();
+        });
     },
 
     prepareNotifications() {
@@ -1568,6 +1580,69 @@ const TalkabizInbox = {
 
         if (Notification.permission === 'default') {
             Notification.requestPermission().catch(() => {});
+        }
+    },
+
+    startPolling() {
+        if (this.state.pollTimer) {
+            clearTimeout(this.state.pollTimer);
+        }
+
+        const interval = document.hidden ? 15000 : 5000;
+        this.state.pollTimer = setTimeout(async () => {
+            await this.loadConversations(true);
+            this.startPolling();
+        }, interval);
+    },
+
+    ensureAudioReady() {
+        if (!this.state.soundEnabled || this.state.audioContext || !('AudioContext' in window || 'webkitAudioContext' in window)) {
+            return;
+        }
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        try {
+            this.state.audioContext = new AudioCtx();
+            if (this.state.audioContext.state === 'suspended') {
+                this.state.audioContext.resume().catch(() => {});
+            }
+        } catch (error) {
+            console.warn('Audio notification unavailable:', error);
+        }
+    },
+
+    playIncomingSound() {
+        if (!this.state.soundEnabled) {
+            return;
+        }
+
+        this.ensureAudioReady();
+
+        const ctx = this.state.audioContext;
+        if (!ctx) {
+            return;
+        }
+
+        try {
+            const now = ctx.currentTime;
+            const gainNode = ctx.createGain();
+            const oscillator = ctx.createOscillator();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, now);
+            oscillator.frequency.exponentialRampToValueAtTime(660, now + 0.18);
+
+            gainNode.gain.setValueAtTime(0.0001, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            oscillator.start(now);
+            oscillator.stop(now + 0.22);
+        } catch (error) {
+            console.warn('Failed to play incoming sound:', error);
         }
     },
     
@@ -1689,6 +1764,7 @@ const TalkabizInbox = {
         const senderName = conv.nama_customer || conv.no_whatsapp || 'Kontak baru';
         const preview = conv.pesan_terakhir || 'Ada pesan baru';
 
+        this.playIncomingSound();
         this.showToast(`Pesan baru dari ${senderName}`, 'info');
 
         if ('Notification' in window && Notification.permission === 'granted') {
