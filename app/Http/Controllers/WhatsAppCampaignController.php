@@ -248,7 +248,7 @@ class WhatsAppCampaignController extends Controller
             ]);
         }
 
-        return redirect()->route('whatsapp.campaigns.show', $campaign)
+        return redirect()->route('whatsapp.campaigns.index')
             ->with('success', "Kampanye berhasil dibuat dengan {$totalRecipients} penerima.");
     }
 
