@@ -636,6 +636,7 @@
 // Store pending upgrade data
 let pendingUpgrade = null;
 let isCheckoutProcessing = false;
+let autoCheckoutStarted = false;
 
 function scrollToPlans() {
     document.getElementById('available-plans').scrollIntoView({ behavior: 'smooth' });
@@ -1028,5 +1029,24 @@ function showToast(type, message) {
 const style = document.createElement('style');
 style.textContent = '@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }';
 document.head.appendChild(style);
+
+document.addEventListener('DOMContentLoaded', function() {
+    const shouldAutoCheckout = @json((bool) request('autocheckout'));
+    const requestedPlanCode = @json(request('plan'));
+    const currentPlanCode = @json($currentPlan?->code);
+    const currentPlanIsSelfServe = @json((bool) ($currentPlan?->is_self_serve ?? false));
+    const autoCheckoutPlanCode = requestedPlanCode || currentPlanCode;
+
+    if (!shouldAutoCheckout || autoCheckoutStarted || !autoCheckoutPlanCode || !currentPlanIsSelfServe) {
+        return;
+    }
+
+    if (requestedPlanCode && currentPlanCode && requestedPlanCode !== currentPlanCode) {
+        return;
+    }
+
+    autoCheckoutStarted = true;
+    setTimeout(() => fastCheckout(autoCheckoutPlanCode), 300);
+});
 </script>
 @endpush

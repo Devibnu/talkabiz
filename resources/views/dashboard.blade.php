@@ -304,7 +304,7 @@
             </a>
           @else
             {{-- HIDDEN — user focus goes to Activation Banner CTA --}}
-            <a href="{{ route('subscription.index') }}" class="btn bg-gradient-primary btn-sm mb-0"
+            <a href="{{ (auth()->user()?->currentPlan && auth()->user()->currentPlan->is_self_serve) ? route('subscription.index', ['autocheckout' => 1, 'plan' => auth()->user()->currentPlan->code]) : route('subscription.index') }}" class="btn bg-gradient-primary btn-sm mb-0"
                onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('clicked_pay', {source: 'quick_actions'});">
               <i class="fas fa-bolt me-2"></i>Aktifkan Paket
             </a>

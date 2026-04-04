@@ -14,6 +14,10 @@
     $isTrialSelected = (isset($subscriptionPlanStatus) && $subscriptionPlanStatus === 'trial_selected');
     $isAdminOwner = in_array(auth()->user()->role ?? '', ['super_admin', 'superadmin', 'owner']);
     $shouldShowModal = $isTrialSelected && !$isAdminOwner && !($subscriptionIsActive ?? false);
+    $activationPlan = auth()->user()?->currentPlan;
+    $activationCheckoutUrl = ($activationPlan && $activationPlan->is_self_serve)
+        ? route('subscription.index', ['autocheckout' => 1, 'plan' => $activationPlan->code])
+        : route('subscription.index');
     
     // Check if first visit this session (prevent re-showing on every page load)
     $modalShownThisSession = session('activation_modal_shown', false);
@@ -64,7 +68,7 @@
 
             {{-- Footer --}}
             <div class="modal-footer flex-column border-0 px-4 pb-4 pt-0">
-                <a href="{{ route('subscription.index') }}" 
+                     <a href="{{ $activationCheckoutUrl }}" 
                    class="btn bg-gradient-primary w-100 mb-2"
                    id="btnModalPayNow"
                    onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('activation_modal_cta_clicked', {action: 'pay_now'});">

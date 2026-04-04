@@ -17,6 +17,10 @@
     $isTrialSelected = (isset($subscriptionPlanStatus) && $subscriptionPlanStatus === 'trial_selected');
     $isAdminOwner = in_array(auth()->user()->role ?? '', ['super_admin', 'superadmin', 'owner']);
     $showActivationBanner = $isTrialSelected && !$isAdminOwner && !($subscriptionIsActive ?? false);
+    $activationPlan = auth()->user()?->currentPlan;
+    $activationCheckoutUrl = ($activationPlan && $activationPlan->is_self_serve)
+        ? route('subscription.index', ['autocheckout' => 1, 'plan' => $activationPlan->code])
+        : route('subscription.index');
 @endphp
 
 @if($showActivationBanner)
@@ -77,7 +81,7 @@
             {{-- CTA Column --}}
             <div class="col-lg-5 d-flex align-items-center justify-content-center mt-3 mt-lg-0">
                 <div class="text-center">
-                    <a href="{{ route('subscription.index') }}" 
+                          <a href="{{ $activationCheckoutUrl }}" 
                        class="btn bg-gradient-primary btn-lg px-5 mb-2 activation-cta-btn"
                        id="btnActivationCta"
                        onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('clicked_pay', {source: 'progress_banner'});">

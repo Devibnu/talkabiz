@@ -14,6 +14,10 @@
     $isTrialSelected = (isset($subscriptionPlanStatus) && $subscriptionPlanStatus === 'trial_selected');
     $isAdminOwner = in_array(auth()->user()->role ?? '', ['super_admin', 'superadmin', 'owner']);
     $showTimer = $isTrialSelected && !$isAdminOwner && !($subscriptionIsActive ?? false);
+    $activationPlan = auth()->user()?->currentPlan;
+    $activationCheckoutUrl = ($activationPlan && $activationPlan->is_self_serve)
+        ? route('subscription.index', ['autocheckout' => 1, 'plan' => $activationPlan->code])
+        : route('subscription.index');
     
     $registeredAt = auth()->user()->created_at ?? now();
     $deadlineAt = $registeredAt->copy()->addHours(24);
@@ -39,7 +43,7 @@
                     </p>
                 </div>
             </div>
-            <a href="{{ route('subscription.index') }}" 
+                <a href="{{ $activationCheckoutUrl }}" 
                class="btn btn-sm btn-warning mb-0 mt-2 mt-md-0 flex-shrink-0"
                onclick="if(typeof ActivationKpi !== 'undefined') ActivationKpi.track('clicked_pay', {source: 'scarcity_timer'});">
                 <i class="fas fa-bolt me-1"></i>Aktifkan Sekarang
