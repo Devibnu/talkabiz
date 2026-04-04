@@ -12,6 +12,7 @@ use App\Events\Inbox\PesanMasukEvent;
 use App\Events\Inbox\PercakapanDiambilEvent;
 use App\Events\Inbox\PercakapanDilepasEvent;
 use App\Events\Inbox\PesanDibacaEvent;
+use App\Services\WhatsAppProviderService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -670,31 +671,43 @@ class InboxService
                     ];
                 }
 
-                // Kirim via WhatsApp provider
-                $whatsapp = app('whatsapp');
+                // Inbox reply must use the real provider service so it can send via
+                // Meta Cloud/Gupshup based on the active connection, not the mock binding.
+                $whatsapp = app(WhatsAppProviderService::class);
                 
                 // Pilih method berdasarkan tipe pesan
                 $tipe = $data['tipe'] ?? 'teks';
                 
                 if ($tipe === 'teks') {
-                    $hasilKirim = $whatsapp->kirimPesan(
+                    $hasilKirim = $whatsapp->sendText(
                         $percakapan->no_whatsapp,
-                        $data['isi_pesan'] ?? ''
+                        $data['isi_pesan'] ?? '',
+                        $klien->id,
+                        $penggunaId
                     );
                 } else {
-                    // Untuk media (gambar, dokumen, audio, video)
-                    $hasilKirim = $whatsapp->kirimMedia(
+                    $mediaTypeMap = [
+                        'gambar' => 'image',
+                        'dokumen' => 'document',
+                        'audio' => 'audio',
+                        'video' => 'video',
+                    ];
+
+                    $hasilKirim = $whatsapp->sendMedia(
                         $percakapan->no_whatsapp,
-                        $data['caption'] ?? '',
+                        $mediaTypeMap[$tipe] ?? 'image',
                         $data['media_url'] ?? '',
-                        $tipe
+                        $data['caption'] ?? null,
+                        $data['nama_file'] ?? null,
+                        $klien->id,
+                        $penggunaId
                     );
                 }
 
                 if (!$hasilKirim['sukses']) {
                     return [
                         'sukses' => false,
-                        'pesan' => $hasilKirim['pesan'] ?? 'Gagal mengirim pesan'
+                        'pesan' => $hasilKirim['error_message'] ?? $hasilKirim['pesan'] ?? 'Gagal mengirim pesan'
                     ];
                 }
 
