@@ -130,8 +130,8 @@ class OnboardingController extends Controller
                 ]);
             });
             
-            return redirect()->route('dashboard')
-                ->with('success', 'Selamat! Akun bisnis Anda sudah siap. Silakan mulai menggunakan Talkabiz.');
+            return redirect()->route('subscription.index')
+                ->with('success', 'Profil bisnis berhasil disimpan! Silakan pilih paket untuk mulai menggunakan Talkabiz.');
                 
         } catch (\Exception $e) {
             Log::error('Onboarding failed', [

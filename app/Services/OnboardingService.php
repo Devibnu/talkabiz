@@ -446,8 +446,12 @@ class OnboardingService
             // 3. Auto-create Legacy Wallet (DompetSaldo for backward compat)
             $this->createWallet($klien);
             
-            // 4. Auto-assign FREE plan
-            $this->assignFreePlan($user->fresh());
+            // 4. Skip auto-assign FREE plan — user must choose & pay a plan
+            // Plan assignment happens via SubscriptionController::checkout()
+            Log::info('Onboarding: Skipping auto plan assignment (user must select paid plan)', [
+                'user_id' => $user->id,
+                'klien_id' => $klien->id,
+            ]);
             
             // NOTE: onboarding_complete flag and NEW Wallet creation
             // will be handled by OnboardingController in separate transaction
