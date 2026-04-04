@@ -170,9 +170,10 @@ class WABAWebhookController extends Controller
      */
     public function verify(Request $request)
     {
-        $mode = $request->input('hub.mode');
-        $token = $request->input('hub.verify_token');
-        $challenge = $request->input('hub.challenge');
+        // PHP converts dots in query params to underscores: hub.mode → hub_mode
+        $mode = $request->query('hub_mode');
+        $token = $request->query('hub_verify_token');
+        $challenge = $request->query('hub_challenge');
 
         // Verify token matches
         $expectedToken = config('whatsapp.verify_token');
@@ -185,6 +186,7 @@ class WABAWebhookController extends Controller
         Log::channel('whatsapp')->warning('WABA Webhook: Verification failed', [
             'mode' => $mode,
             'token' => $token,
+            'expected' => $expectedToken,
         ]);
 
         return response()->json(['error' => 'Verification failed'], 403);
