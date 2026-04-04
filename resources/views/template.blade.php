@@ -585,22 +585,38 @@
             <div class="modal-body">
                 <form id="createTemplateForm" action="{{ route('template.store') }}" method="POST">
                     @csrf
+
+                    {{-- Pilih Template Siap Pakai --}}
+                    <div class="mb-3">
+                        <label class="form-label-soft">Mulai dari Template Siap Pakai <small class="text-muted">(opsional)</small></label>
+                        <select class="form-select form-select-soft" id="quickTemplate" onchange="applyQuickTemplate()">
+                            <option value="">-- Tulis sendiri --</option>
+                            <option value="promo">🛍️ Promo / Diskon</option>
+                            <option value="welcome">👋 Selamat Datang</option>
+                            <option value="order_confirm">📦 Konfirmasi Pesanan</option>
+                            <option value="payment_remind">💰 Pengingat Pembayaran</option>
+                            <option value="event_invite">🎉 Undangan Event</option>
+                            <option value="thank_you">🙏 Ucapan Terima Kasih</option>
+                        </select>
+                    </div>
+
+                    <hr class="my-3">
+
                     {{-- Nama Template --}}
                     <div class="mb-3">
                         <label class="form-label-soft">Nama Template</label>
-                        <input type="text" name="nama" class="form-control form-control-soft" placeholder="Contoh: Selamat Datang Pelanggan Baru" required>
+                        <input type="text" name="nama" id="createNama" class="form-control form-control-soft" placeholder="Contoh: Promo Akhir Tahun" required>
                     </div>
 
                     {{-- Kategori --}}
                     <div class="mb-3">
                         <label class="form-label-soft">Kategori</label>
-                        <select name="kategori" class="form-select form-select-soft" required>
+                        <select name="kategori" id="createKategori" class="form-select form-select-soft" required>
                             <option value="">Pilih kategori...</option>
                             <option value="marketing">Marketing / Promosi</option>
                             <option value="utility">Utility (Notifikasi, Transaksi)</option>
                             <option value="authentication">Authentication (OTP, Verifikasi)</option>
                         </select>
-                        <small class="text-muted">Meta hanya menerima 3 kategori ini untuk template WhatsApp.</small>
                     </div>
 
                     {{-- Bahasa --}}
@@ -615,29 +631,30 @@
                     {{-- Isi Pesan --}}
                     <div class="mb-3">
                         <label class="form-label-soft">Isi Pesan</label>
-                        <textarea name="konten" class="form-control form-control-soft textarea-soft" placeholder="Tulis isi pesan template Anda di sini...
-
-Contoh:
-Halo @{{ nama }}, terima kasih telah berbelanja di toko kami!
-
-Pesanan Anda untuk @{{ produk }} sedang diproses." required></textarea>
+                        <textarea name="konten" id="createKonten" class="form-control form-control-soft textarea-soft" placeholder="Tulis isi pesan di sini..." required></textarea>
+                        <small class="text-muted">Klik tombol variabel di bawah untuk menyisipkan data pelanggan otomatis.</small>
                     </div>
 
-                    {{-- Variable Helper --}}
+                    {{-- Variable Buttons --}}
                     <div class="variable-helper">
                         <div class="variable-helper-title">
                             <i class="ni ni-bulb-61 me-1" style="color: #fbcf33;"></i>
-                            Variable yang tersedia (klik untuk menyalin):
+                            Klik untuk sisipkan ke pesan:
                         </div>
                         <div class="variable-tags">
-                            <span class="variable-tag" data-var="nama" onclick="copyVariable(this)">@{{ nama }}</span>
-                            <span class="variable-tag" data-var="telepon" onclick="copyVariable(this)">@{{ telepon }}</span>
-                            <span class="variable-tag" data-var="email" onclick="copyVariable(this)">@{{ email }}</span>
-                            <span class="variable-tag" data-var="produk" onclick="copyVariable(this)">@{{ produk }}</span>
-                            <span class="variable-tag" data-var="harga" onclick="copyVariable(this)">@{{ harga }}</span>
-                            <span class="variable-tag" data-var="tanggal" onclick="copyVariable(this)">@{{ tanggal }}</span>
-                            <span class="variable-tag" data-var="no_order" onclick="copyVariable(this)">@{{ no_order }}</span>
+                            <span class="variable-tag" onclick="insertVariable('nama', 'createKonten')">+ Nama</span>
+                            <span class="variable-tag" onclick="insertVariable('telepon', 'createKonten')">+ No HP</span>
+                            <span class="variable-tag" onclick="insertVariable('produk', 'createKonten')">+ Produk</span>
+                            <span class="variable-tag" onclick="insertVariable('harga', 'createKonten')">+ Harga</span>
+                            <span class="variable-tag" onclick="insertVariable('tanggal', 'createKonten')">+ Tanggal</span>
+                            <span class="variable-tag" onclick="insertVariable('no_order', 'createKonten')">+ No Order</span>
                         </div>
+                    </div>
+
+                    {{-- Live Preview --}}
+                    <div class="mt-3" id="createPreviewWrap" style="display:none;">
+                        <label class="form-label-soft">Preview Pesan</label>
+                        <div class="alert alert-light border" id="createPreview" style="white-space: pre-wrap; font-size: 0.875rem;"></div>
                     </div>
                 </form>
             </div>
@@ -696,41 +713,112 @@ Pesanan Anda untuk @{{ produk }} sedang diproses." required></textarea>
 
 @push('dashboard')
 <script>
-// Copy variable to clipboard
-function copyVariable(element) {
-    const varName = element.getAttribute('data-var');
-    // Wrap with double curly braces for WhatsApp placeholder format
-    const variable = '{{' + varName + '}}';
+// Template siap pakai
+const quickTemplates = {
+    promo: {
+        nama: 'Promo Diskon',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, ada promo spesial untuk Anda! 🎉\n\nDapatkan diskon hingga {{harga}} untuk produk {{produk}}.\n\nPromo berlaku sampai {{tanggal}}. Jangan sampai kelewatan!\n\nInfo lebih lanjut hubungi kami.'
+    },
+    welcome: {
+        nama: 'Selamat Datang',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, selamat datang! 👋\n\nTerima kasih telah bergabung bersama kami. Kami siap membantu kebutuhan Anda.\n\nJika ada pertanyaan, silakan hubungi kami kapan saja.'
+    },
+    order_confirm: {
+        nama: 'Konfirmasi Pesanan',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, pesanan Anda sudah kami terima! 📦\n\nNo. Pesanan: {{no_order}}\nProduk: {{produk}}\nTotal: {{harga}}\n\nPesanan sedang diproses. Kami akan kabari jika sudah dikirim.'
+    },
+    payment_remind: {
+        nama: 'Pengingat Pembayaran',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, ini pengingat pembayaran Anda. 💰\n\nNo. Pesanan: {{no_order}}\nTotal: {{harga}}\nBatas pembayaran: {{tanggal}}\n\nSegera selesaikan pembayaran agar pesanan bisa diproses. Terima kasih!'
+    },
+    event_invite: {
+        nama: 'Undangan Event',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, Anda diundang ke acara spesial kami! 🎉\n\nTanggal: {{tanggal}}\n\nJangan lewatkan kesempatan ini. Sampai jumpa!'
+    },
+    thank_you: {
+        nama: 'Terima Kasih',
+        kategori: 'marketing',
+        konten: 'Halo {{nama}}, terima kasih telah berbelanja di toko kami! 🙏\n\nProduk: {{produk}}\nNo. Pesanan: {{no_order}}\n\nKami harap Anda puas dengan layanan kami. Sampai jumpa di pesanan berikutnya!'
+    }
+};
+
+// Apply template siap pakai
+function applyQuickTemplate() {
+    const selected = document.getElementById('quickTemplate').value;
+    if (!selected) return;
     
-    navigator.clipboard.writeText(variable).then(function() {
-        const originalText = element.innerText;
-        element.innerText = 'Tersalin!';
-        element.style.background = 'linear-gradient(310deg, #17ad37 0%, #98ec2d 100%)';
-        element.style.color = '#fff';
-        element.style.borderColor = 'transparent';
-        
-        setTimeout(function() {
-            element.innerText = originalText;
-            element.style.background = '';
-            element.style.color = '';
-            element.style.borderColor = '';
-        }, 1000);
-    });
+    const t = quickTemplates[selected];
+    document.getElementById('createNama').value = t.nama;
+    document.getElementById('createKategori').value = t.kategori;
+    document.getElementById('createKonten').value = t.konten;
+    updatePreview('createKonten', 'createPreview', 'createPreviewWrap');
 }
 
-// Edit template - fetch data from card element (safe from JS escape issues)
+// Insert variable at cursor position in textarea
+function insertVariable(varName, textareaId) {
+    const textarea = document.getElementById(textareaId);
+    const variable = '{{' + varName + '}}';
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    
+    textarea.value = text.substring(0, start) + variable + text.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+    textarea.focus();
+    updatePreview(textareaId, textareaId === 'createKonten' ? 'createPreview' : null, textareaId === 'createKonten' ? 'createPreviewWrap' : null);
+}
+
+// Live preview
+function updatePreview(textareaId, previewId, wrapId) {
+    if (!previewId) return;
+    const text = document.getElementById(textareaId).value;
+    const preview = document.getElementById(previewId);
+    const wrap = document.getElementById(wrapId);
+    
+    if (text.trim()) {
+        // Replace variables with colored example values
+        let html = text
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\{\{nama\}\}/g, '<span style="color:#5e72e4;font-weight:600;">John</span>')
+            .replace(/\{\{telepon\}\}/g, '<span style="color:#5e72e4;font-weight:600;">081234567890</span>')
+            .replace(/\{\{email\}\}/g, '<span style="color:#5e72e4;font-weight:600;">john@email.com</span>')
+            .replace(/\{\{produk\}\}/g, '<span style="color:#5e72e4;font-weight:600;">Produk A</span>')
+            .replace(/\{\{harga\}\}/g, '<span style="color:#5e72e4;font-weight:600;">Rp 100.000</span>')
+            .replace(/\{\{tanggal\}\}/g, '<span style="color:#5e72e4;font-weight:600;">01 Jan 2026</span>')
+            .replace(/\{\{no_order\}\}/g, '<span style="color:#5e72e4;font-weight:600;">ORD-001</span>')
+            .replace(/\n/g, '<br>');
+        preview.innerHTML = html;
+        wrap.style.display = 'block';
+    } else {
+        wrap.style.display = 'none';
+    }
+}
+
+// Auto-update preview on typing
+document.addEventListener('DOMContentLoaded', function() {
+    const createKonten = document.getElementById('createKonten');
+    if (createKonten) {
+        createKonten.addEventListener('input', function() {
+            updatePreview('createKonten', 'createPreview', 'createPreviewWrap');
+        });
+    }
+});
+
+// Edit template
 function editTemplate(id) {
     const card = document.querySelector('[data-template-id="' + id + '"]');
     if (!card) {
-        ClientPopup.actionFailed('Template tidak ditemukan. Coba refresh halaman.');
+        alert('Template tidak ditemukan. Coba refresh halaman.');
         return;
     }
     
-    // Get data from card elements
     const nama = card.querySelector('.template-item-name').textContent.trim();
     const kategori = card.getAttribute('data-kategori') || 'other';
-    
-    // Get full content from hidden script element (not truncated)
     const fullContentEl = card.querySelector('.template-full-content');
     const konten = fullContentEl ? fullContentEl.textContent.trim() : '';
     
@@ -743,32 +831,20 @@ function editTemplate(id) {
 
 // Hapus template
 async function hapusTemplate(id) {
-    const confirmed = await ClientPopup.confirm({
-        title: 'Hapus Template?',
-        text: 'Template yang dihapus tidak dapat dikembalikan.',
-        confirmText: 'Ya, Hapus',
-        cancelText: 'Batal'
-    });
+    if (!confirm('Hapus template ini? Template yang dihapus tidak dapat dikembalikan.')) return;
     
-    if (confirmed) {
-        ClientPopup.loading('Menghapus template...');
-        
-        fetch('/template/' + id, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Accept': 'application/json'
-            }
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                ClientPopup.actionSuccess('Template berhasil dihapus').then(() => location.reload());
-            } else {
-                ClientPopup.actionFailed('Template belum bisa dihapus saat ini.');
-            }
-        })
-        .catch(() => ClientPopup.connectionError());
+    const res = await fetch('/template/' + id, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json'
+        }
+    });
+    const data = await res.json();
+    if (data.success) {
+        location.reload();
+    } else {
+        alert('Gagal menghapus template.');
     }
 }
 </script>
