@@ -935,24 +935,88 @@
                 display: block;
             }
 
+            .container {
+                padding: 0 16px;
+            }
+
             .hero h1 {
-                font-size: 32px;
+                font-size: 28px;
+                line-height: 1.25;
             }
 
             .hero {
-                padding: 120px 0 60px;
+                padding: 100px 0 50px;
+            }
+
+            .hero p {
+                font-size: 15px;
+                margin-bottom: 24px;
+            }
+
+            .hero-badge {
+                font-size: 12px;
+                padding: 6px 12px;
+                margin-bottom: 16px;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+                gap: 10px;
+                margin-bottom: 32px;
+            }
+
+            .hero-cta .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .btn-lg {
+                padding: 14px 24px;
+                font-size: 15px;
+            }
+
+            .hero-stats {
+                gap: 24px;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            .hero-stat {
+                text-align: center;
+            }
+
+            .hero-stat-value {
+                font-size: 24px;
+            }
+
+            .hero-stat-label {
+                font-size: 12px;
+            }
+
+            .hero-visual {
+                max-width: 280px;
+                margin: 0 auto;
             }
 
             section {
-                padding: 60px 0;
+                padding: 50px 0;
             }
 
             .section-header h2 {
-                font-size: 28px;
+                font-size: 24px;
+            }
+
+            .section-header p {
+                font-size: 14px;
             }
 
             .features-grid {
                 grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .feature-card {
+                padding: 20px;
             }
 
             .footer-grid {
@@ -963,6 +1027,47 @@
                 flex-direction: column;
                 gap: 16px;
                 text-align: center;
+            }
+
+            .trust-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .pricing-grid {
+                max-width: 100%;
+            }
+
+            .cta-section h2 {
+                font-size: 24px;
+            }
+
+            .cta-section p {
+                font-size: 14px;
+            }
+
+            .faq-question {
+                font-size: 15px;
+                padding: 14px 16px;
+            }
+
+            .faq-answer {
+                padding: 0 16px 14px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .hero h1 {
+                font-size: 24px;
+            }
+
+            .hero-stats {
+                gap: 16px;
+            }
+
+            .hero-stat-value {
+                font-size: 20px;
             }
         }
 
