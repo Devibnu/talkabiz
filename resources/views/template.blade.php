@@ -538,9 +538,9 @@
                         @endif
                         <div class="template-item-actions">
                             @if($template->status == 'draft' || $template->status == 'ditolak')
-                                <form action="{{ route('template.submit-meta', $template->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Submit template ini ke WhatsApp untuk di-review Meta?')">
+                                <form id="submitMetaForm-{{ $template->id }}" action="{{ route('template.submit-meta', $template->id) }}" method="POST" class="d-inline">
                                     @csrf
-                                    <button type="submit" class="btn-template-action btn-submit-meta" title="Submit ke WhatsApp untuk review">
+                                    <button type="button" class="btn-template-action btn-submit-meta" title="Submit ke WhatsApp untuk review" onclick="konfirmasiSubmitMeta({{ $template->id }})">
                                         <i class="fab fa-whatsapp"></i> Submit ke WA
                                     </button>
                                 </form>
@@ -830,9 +830,43 @@ function editTemplate(id) {
     new bootstrap.Modal(document.getElementById('editTemplateModal')).show();
 }
 
+// Konfirmasi submit ke Meta
+function konfirmasiSubmitMeta(id) {
+    Swal.fire({
+        title: 'Submit ke WhatsApp?',
+        html: '<div style="text-align:left;font-size:14px;line-height:1.6">' +
+            '<p>Template ini akan dikirim ke <strong>Meta (WhatsApp)</strong> untuk di-review.</p>' +
+            '<ul style="padding-left:18px;margin:8px 0">' +
+            '<li>Proses review biasanya <strong>beberapa menit</strong> hingga 24 jam</li>' +
+            '<li>Setelah di-approve, template bisa dipakai untuk <strong>WA Blast</strong></li>' +
+            '</ul></div>',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#2dce89',
+        cancelButtonColor: '#8898aa',
+        confirmButtonText: '<i class="fab fa-whatsapp"></i> Ya, Submit Sekarang',
+        cancelButtonText: 'Batal',
+        customClass: { popup: 'swal-wide' }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById('submitMetaForm-' + id).submit();
+        }
+    });
+}
+
 // Hapus template
 async function hapusTemplate(id) {
-    if (!confirm('Hapus template ini? Template yang dihapus tidak dapat dikembalikan.')) return;
+    const result = await Swal.fire({
+        title: 'Hapus Template?',
+        text: 'Template yang dihapus tidak dapat dikembalikan.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#f5365c',
+        cancelButtonColor: '#8898aa',
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal'
+    });
+    if (!result.isConfirmed) return;
     
     const res = await fetch('/template/' + id, {
         method: 'DELETE',
@@ -843,9 +877,10 @@ async function hapusTemplate(id) {
     });
     const data = await res.json();
     if (data.success) {
-        location.reload();
+        Swal.fire({ title: 'Terhapus!', text: 'Template berhasil dihapus.', icon: 'success', timer: 1500, showConfirmButton: false });
+        setTimeout(() => location.reload(), 1500);
     } else {
-        alert('Gagal menghapus template.');
+        Swal.fire('Gagal', 'Gagal menghapus template.', 'error');
     }
 }
 </script>
