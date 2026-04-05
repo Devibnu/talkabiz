@@ -126,13 +126,20 @@ class MobileInboxController extends Controller
 
         $response = $this->legacyInboxController->kirimPesan($percakapanId, $request);
         $payload = $response->getData(true);
+        $data = [
+            'status' => ($payload['sukses'] ?? false) ? 'queued' : 'failed',
+        ];
+
+        foreach (['error_code', 'topup_url', 'errors'] as $key) {
+            if (array_key_exists($key, $payload)) {
+                $data[$key] = $payload[$key];
+            }
+        }
 
         return response()->json([
             'success' => (bool) ($payload['sukses'] ?? false),
             'message' => $payload['pesan'] ?? 'Pesan diproses',
-            'data' => [
-                'status' => ($payload['sukses'] ?? false) ? 'queued' : 'failed',
-            ],
+            'data' => $data,
         ], $response->getStatusCode());
     }
 

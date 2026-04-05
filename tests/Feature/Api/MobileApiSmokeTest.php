@@ -7,8 +7,10 @@ use App\Models\Klien;
 use App\Models\Kontak;
 use App\Models\PercakapanInbox;
 use App\Models\PesanInbox;
+use App\Models\Pengguna;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Services\RevenueGuardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -355,5 +357,65 @@ class MobileApiSmokeTest extends TestCase
             ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Anda harus mengambil percakapan ini terlebih dahulu')
             ->assertJsonPath('data.status', 'failed');
+    }
+
+    /** @test */
+    public function mobile_inbox_send_returns_topup_context_when_balance_is_insufficient(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        Pengguna::factory()->owner()->create([
+            'id' => $user->id,
+            'klien_id' => $klien->id,
+            'email' => 'legacy-handler-'.$user->id.'@example.test',
+        ]);
+
+        $conversation = PercakapanInbox::factory()->create([
+            'klien_id' => $klien->id,
+            'ditangani_oleh' => $user->id,
+            'status' => 'aktif',
+        ]);
+
+        $revenueGuard = Mockery::mock(RevenueGuardService::class);
+        $revenueGuard->shouldReceive('chargeAndExecute')
+            ->once()
+            ->withArgs(function (
+                int $userId,
+                int $messageCount,
+                string $category,
+                string $referenceType,
+                int $referenceId,
+                callable $dispatchCallable,
+                array $costPreview
+            ) use ($user) {
+                return $userId === $user->id
+                    && $messageCount === 1
+                    && $category === 'utility'
+                    && $referenceType === 'inbox_reply'
+                    && $referenceId > 0
+                    && is_callable($dispatchCallable)
+                    && $costPreview === [];
+            })
+            ->andThrow(new \RuntimeException('Saldo tidak cukup untuk mengirim balasan.'));
+
+        $this->app->instance(RevenueGuardService::class, $revenueGuard);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/mobile/inbox/{$conversation->id}/send", [
+            'message' => 'Butuh saldo',
+        ])
+            ->assertStatus(402)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Saldo tidak cukup untuk mengirim balasan.')
+            ->assertJsonPath('data.status', 'failed')
+            ->assertJsonPath('data.error_code', 'INSUFFICIENT_BALANCE')
+            ->assertJsonPath('data.topup_url', route('billing'));
     }
 }
