@@ -12,14 +12,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('plans', function (Blueprint $table) {
-            $table->unsignedTinyInteger('sort_order')->default(0)->after('is_popular');
-        });
+        if (!Schema::hasColumn('plans', 'sort_order')) {
+            Schema::table('plans', function (Blueprint $table) {
+                $table->unsignedTinyInteger('sort_order')->default(0)->after('is_popular');
+            });
+        }
 
         // Set default sort order by price
-        DB::table('plans')->orderBy('price_monthly')->get()->each(function ($plan, $index) {
-            DB::table('plans')->where('id', $plan->id)->update(['sort_order' => ($index + 1) * 10]);
-        });
+        if (Schema::hasColumn('plans', 'sort_order') && Schema::hasColumn('plans', 'price_monthly')) {
+            DB::table('plans')->orderBy('price_monthly')->get()->each(function ($plan, $index) {
+                DB::table('plans')->where('id', $plan->id)->update(['sort_order' => ($index + 1) * 10]);
+            });
+        }
     }
 
     /**
@@ -27,8 +31,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('plans', function (Blueprint $table) {
-            $table->dropColumn('sort_order');
-        });
+        if (Schema::hasColumn('plans', 'sort_order')) {
+            Schema::table('plans', function (Blueprint $table) {
+                $table->dropColumn('sort_order');
+            });
+        }
     }
 };

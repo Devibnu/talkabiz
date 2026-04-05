@@ -31,7 +31,11 @@ return new class extends Migration
 
     public function up(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        $driver = DB::getDriverName();
+
+        if ($driver !== 'sqlite') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        }
 
         foreach ($this->tables as $table) {
             if (Schema::hasTable($table)) {
@@ -39,7 +43,9 @@ return new class extends Migration
             }
         }
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        if ($driver !== 'sqlite') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        }
     }
 
     public function down(): void

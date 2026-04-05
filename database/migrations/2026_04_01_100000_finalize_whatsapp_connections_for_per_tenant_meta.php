@@ -147,6 +147,10 @@ return new class extends Migration
 
     private function expandStatusEnum(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::statement(
             "ALTER TABLE whatsapp_connections MODIFY status ENUM('disconnected','pending','connected','restricted','failed','suspended','expired','token_expired','permission_revoked') NOT NULL DEFAULT 'disconnected'"
         );
@@ -154,6 +158,10 @@ return new class extends Migration
 
     private function restoreLegacyStatusEnum(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::statement(
             "ALTER TABLE whatsapp_connections MODIFY status ENUM('disconnected','pending','connected','restricted') NOT NULL DEFAULT 'disconnected'"
         );
@@ -206,6 +214,10 @@ return new class extends Migration
 
     private function dropIndexes(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         $indexNames = [
             'whatsapp_connections_provider_index',
             'whatsapp_connections_phone_number_id_index',
@@ -225,6 +237,10 @@ return new class extends Migration
 
     private function backfillFromKlien(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         if (!Schema::hasTable('klien')) {
             return;
         }

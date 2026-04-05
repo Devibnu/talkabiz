@@ -13,6 +13,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // 1. Alter enum: replace 'paid' with 'success'
         DB::statement("ALTER TABLE plan_transactions MODIFY COLUMN status ENUM('pending','waiting_payment','success','failed','expired','cancelled','refunded') NOT NULL DEFAULT 'pending'");
 
@@ -24,6 +28,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Revert data first
         DB::table('plan_transactions')
             ->where('status', 'success')

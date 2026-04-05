@@ -118,13 +118,32 @@ return new class extends Migration
      */
     protected function backfillTransactionCodes(): void
     {
-        $updated = DB::statement("
-            UPDATE subscription_invoices si
-            INNER JOIN plan_transactions pt ON pt.id = si.plan_transaction_id
-            SET si.transaction_code = pt.transaction_code
-            WHERE si.transaction_code IS NULL
-              AND si.plan_transaction_id IS NOT NULL
-        ");
+        if (DB::getDriverName() === 'sqlite') {
+            DB::table('subscription_invoices')
+                ->whereNull('transaction_code')
+                ->whereNotNull('plan_transaction_id')
+                ->orderBy('id')
+                ->get()
+                ->each(function ($invoice) {
+                    $transactionCode = DB::table('plan_transactions')
+                        ->where('id', $invoice->plan_transaction_id)
+                        ->value('transaction_code');
+
+                    if ($transactionCode !== null) {
+                        DB::table('subscription_invoices')
+                            ->where('id', $invoice->id)
+                            ->update(['transaction_code' => $transactionCode]);
+                    }
+                });
+        } else {
+            DB::statement(" 
+                UPDATE subscription_invoices si
+                INNER JOIN plan_transactions pt ON pt.id = si.plan_transaction_id
+                SET si.transaction_code = pt.transaction_code
+                WHERE si.transaction_code IS NULL
+                  AND si.plan_transaction_id IS NOT NULL
+            ");
+        }
 
         $count = DB::table('subscription_invoices')
             ->whereNotNull('transaction_code')

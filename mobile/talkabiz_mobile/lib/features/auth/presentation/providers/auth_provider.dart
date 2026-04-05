@@ -35,13 +35,14 @@ class AuthState {
   }
 }
 
-final authControllerProvider =
-    StateNotifierProvider<AuthController, AuthState>((ref) {
-  return AuthController(
-    ref.watch(authRepositoryProvider),
-    ref.watch(secureStorageServiceProvider),
-  );
-});
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
+  (ref) {
+    return AuthController(
+      ref.watch(authRepositoryProvider),
+      ref.watch(secureStorageServiceProvider),
+    );
+  },
+);
 
 class AuthController extends StateNotifier<AuthState> {
   AuthController(this._repository, this._storage) : super(const AuthState());
@@ -71,10 +72,7 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> login({
-    required String email,
-    required String password,
-  }) async {
+  Future<bool> login({required String email, required String password}) async {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
@@ -86,11 +84,7 @@ class AuthController extends StateNotifier<AuthState> {
 
       await _storage.saveToken(session.token);
 
-      state = AuthState(
-        session: session,
-        isLoading: false,
-        isReady: true,
-      );
+      state = AuthState(session: session, isLoading: false, isReady: true);
 
       return true;
     } catch (error) {

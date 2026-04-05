@@ -17,6 +17,8 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $driver = DB::getDriverName();
+
         // Pre-flight: check for existing duplicates
         $duplicates = DB::select("
             SELECT gateway_order_id, COUNT(*) as cnt 
@@ -35,10 +37,20 @@ return new class extends Migration
         }
 
         // Drop the old non-unique index if present, then add unique
-        $indexes = DB::select("SHOW INDEX FROM payments WHERE Key_name = 'payments_gateway_order_id_index'");
-        if (count($indexes) > 0) {
+        if ($driver !== 'sqlite') {
+            $indexes = DB::select("SHOW INDEX FROM payments WHERE Key_name = 'payments_gateway_order_id_index'");
+            if (count($indexes) > 0) {
+                Schema::table('payments', function (Blueprint $table) {
+                    $table->dropIndex('payments_gateway_order_id_index');
+                });
+            }
+        } elseif (Schema::hasColumn('payments', 'gateway_order_id')) {
             Schema::table('payments', function (Blueprint $table) {
-                $table->dropIndex('payments_gateway_order_id_index');
+                try {
+                    $table->dropIndex('payments_gateway_order_id_index');
+                } catch (\Throwable $e) {
+                    // Ignore if the non-unique index does not exist on SQLite.
+                }
             });
         }
 
@@ -50,7 +62,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('payments', function (Blueprint $table) {
-            $table->dropUnique('payments_gateway_order_id_unique');
+            try {
+                $table->dropUnique('payments_gateway_order_id_unique');
+            } catch (\Throwable $e) {
+                // Ignore when index is absent.
+            }
         });
 
         // Restore original non-unique index

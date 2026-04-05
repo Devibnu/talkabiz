@@ -5,7 +5,9 @@ import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import '../datasources/dashboard_remote_datasource.dart';
 
-final dashboardRemoteDatasourceProvider = Provider<DashboardRemoteDatasource>((ref) {
+final dashboardRemoteDatasourceProvider = Provider<DashboardRemoteDatasource>((
+  ref,
+) {
   return DashboardRemoteDatasource(ref.watch(dioProvider));
 });
 

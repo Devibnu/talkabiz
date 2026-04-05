@@ -87,9 +87,17 @@ return new class extends Migration
 
     public function up(): void
     {
+        $driver = DB::getDriverName();
+
         // 1. Rename price → price_monthly (MySQL 5.7 compatible, idempotent)
         if (Schema::hasColumn('plans', 'price') && !Schema::hasColumn('plans', 'price_monthly')) {
-            DB::statement('ALTER TABLE plans CHANGE COLUMN `price` `price_monthly` DECIMAL(12,2) NOT NULL DEFAULT 0');
+            if ($driver === 'sqlite') {
+                Schema::table('plans', function (Blueprint $table) {
+                    $table->renameColumn('price', 'price_monthly');
+                });
+            } else {
+                DB::statement('ALTER TABLE plans CHANGE COLUMN `price` `price_monthly` DECIMAL(12,2) NOT NULL DEFAULT 0');
+            }
         }
 
         Schema::table('plans', function (Blueprint $table) {
@@ -104,14 +112,16 @@ return new class extends Migration
             DB::statement('UPDATE plans SET max_recipients_per_campaign = max_campaign_recipients WHERE max_campaign_recipients > 0');
         }
 
-        Schema::table('plans', function (Blueprint $table) {
-            // 4. Drop deprecated columns (idempotent)
-            foreach ($this->columnsToDrop as $col) {
-                if (Schema::hasColumn('plans', $col)) {
-                    $table->dropColumn($col);
+        if ($driver !== 'sqlite') {
+            Schema::table('plans', function (Blueprint $table) {
+                // 4. Drop deprecated columns (idempotent)
+                foreach ($this->columnsToDrop as $col) {
+                    if (Schema::hasColumn('plans', $col)) {
+                        $table->dropColumn($col);
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // 5. Ensure features column is JSON type
         if (Schema::hasColumn('plans', 'features')) {
@@ -125,9 +135,17 @@ return new class extends Migration
 
     public function down(): void
     {
+        $driver = DB::getDriverName();
+
         // Rename back
         if (Schema::hasColumn('plans', 'price_monthly') && !Schema::hasColumn('plans', 'price')) {
-            DB::statement('ALTER TABLE plans CHANGE COLUMN `price_monthly` `price` DECIMAL(12,2) NOT NULL DEFAULT 0');
+            if ($driver === 'sqlite') {
+                Schema::table('plans', function (Blueprint $table) {
+                    $table->renameColumn('price_monthly', 'price');
+                });
+            } else {
+                DB::statement('ALTER TABLE plans CHANGE COLUMN `price_monthly` `price` DECIMAL(12,2) NOT NULL DEFAULT 0');
+            }
         }
 
         // Re-add dropped columns with defaults

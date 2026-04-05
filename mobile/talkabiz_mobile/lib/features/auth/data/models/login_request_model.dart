@@ -10,10 +10,6 @@ class LoginRequestModel {
   final String deviceName;
 
   Map<String, dynamic> toJson() {
-    return {
-      'email': email,
-      'password': password,
-      'device_name': deviceName,
-    };
+    return {'email': email, 'password': password, 'device_name': deviceName};
   }
 }

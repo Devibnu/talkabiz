@@ -28,6 +28,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // ── Pre-flight: verify no klien has multiple active subscriptions ──
         $dualActive = DB::select("
             SELECT klien_id, COUNT(*) as cnt
@@ -66,6 +70,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Drop unique index first
         $indexExists = DB::select("
             SHOW INDEX FROM subscriptions WHERE Key_name = 'subscriptions_klien_single_active'

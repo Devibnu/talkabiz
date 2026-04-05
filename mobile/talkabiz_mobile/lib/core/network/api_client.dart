@@ -12,9 +12,7 @@ final dioProvider = Provider<Dio>((ref) {
       baseUrl: kApiBaseUrl,
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 20),
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers: {'Accept': 'application/json'},
     ),
   );
 

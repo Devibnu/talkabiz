@@ -29,7 +29,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       return;
     }
 
-    final success = await ref.read(authControllerProvider.notifier).login(
+    final success = await ref
+        .read(authControllerProvider.notifier)
+        .login(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
@@ -70,9 +72,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Email'),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'Email wajib diisi';
@@ -84,9 +84,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextFormField(
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Password'),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Password wajib diisi';

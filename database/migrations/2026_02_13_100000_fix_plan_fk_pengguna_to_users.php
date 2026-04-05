@@ -33,6 +33,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // =====================================================
         // 1. plan_transactions.created_by: pengguna → users
         // =====================================================
@@ -86,6 +90,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Rollback: Kembalikan FK ke pengguna (original state)
 
         // 1. plan_transactions.created_by

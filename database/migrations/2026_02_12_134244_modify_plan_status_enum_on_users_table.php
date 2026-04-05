@@ -18,6 +18,8 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $driver = DB::getDriverName();
+
         // 1. Migrasi data lama ke value baru sebelum alter ENUM
         //    Harus dilakukan SEBELUM alter karena alter akan reject value lama.
         DB::table('users')
@@ -29,11 +31,13 @@ return new class extends Migration
             ->update(['plan_status' => 'expired']);
 
         // 2. Alter ENUM ke value baru
-        DB::statement("
-            ALTER TABLE users
-            MODIFY COLUMN plan_status ENUM('trial_selected','active','expired')
-            NOT NULL DEFAULT 'trial_selected'
-        ");
+        if ($driver !== 'sqlite') {
+            DB::statement(" 
+                ALTER TABLE users
+                MODIFY COLUMN plan_status ENUM('trial_selected','active','expired')
+                NOT NULL DEFAULT 'trial_selected'
+            ");
+        }
 
         // 3. Sekarang ubah 'pending' (yang sudah jadi 'active' di step 1) ke 'trial_selected'
         //    Hanya yang BELUM pernah bayar — plan_expires_at IS NULL
@@ -48,16 +52,20 @@ return new class extends Migration
      */
     public function down(): void
     {
+        $driver = DB::getDriverName();
+
         // Konversi trial_selected → pending (value lama)
         DB::table('users')
             ->where('plan_status', 'trial_selected')
             ->update(['plan_status' => 'active']); // sementara
 
-        DB::statement("
-            ALTER TABLE users
-            MODIFY COLUMN plan_status ENUM('active','expired','cancelled','pending')
-            NOT NULL DEFAULT 'active'
-        ");
+        if ($driver !== 'sqlite') {
+            DB::statement(" 
+                ALTER TABLE users
+                MODIFY COLUMN plan_status ENUM('active','expired','cancelled','pending')
+                NOT NULL DEFAULT 'active'
+            ");
+        }
 
         // Kembalikan yang tadinya trial_selected → pending
         DB::table('users')

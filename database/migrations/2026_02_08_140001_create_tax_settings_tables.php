@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -22,7 +23,7 @@ return new class extends Migration
             $table->string('value_type', 20)->default('decimal'); // decimal, boolean, string, json
             $table->boolean('is_active')->default(true)->index();
             $table->text('description')->nullable();
-            $table->unsignedBigInteger('created_by');
+            $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
             $table->timestamps();
 
@@ -98,7 +99,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true)->index();
             $table->date('effective_from');
             $table->date('effective_until')->nullable();
-            $table->unsignedBigInteger('created_by');
+            $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();
 
             // Indexes
@@ -154,6 +155,8 @@ return new class extends Migration
      */
     private function seedDefaultTaxRules(): void
     {
+        $defaultUserId = $this->resolveDefaultUserId();
+
         DB::table('tax_rules')->insertOrIgnore([
             [
                 'rule_code' => 'PPN_STANDARD',
@@ -171,7 +174,7 @@ return new class extends Migration
                 'is_active' => true,
                 'effective_from' => '2022-04-01',
                 'effective_until' => null,
-                'created_by' => 1,
+                'created_by' => $defaultUserId,
                 'created_at' => now(),
                 'updated_at' => now()
             ],
@@ -191,7 +194,7 @@ return new class extends Migration
                 'is_active' => true,
                 'effective_from' => '2020-01-01',
                 'effective_until' => null,
-                'created_by' => 1,
+                'created_by' => $defaultUserId,
                 'created_at' => now(),
                 'updated_at' => now()
             ],
@@ -212,7 +215,7 @@ return new class extends Migration
                 'is_active' => true,
                 'effective_from' => '2020-01-01',
                 'effective_until' => null,
-                'created_by' => 1,
+                'created_by' => $defaultUserId,
                 'created_at' => now(),
                 'updated_at' => now()
             ],
@@ -229,7 +232,7 @@ return new class extends Migration
                 'is_active' => true,
                 'effective_from' => '2020-01-01',
                 'effective_until' => null,
-                'created_by' => 1,
+                'created_by' => $defaultUserId,
                 'created_at' => now(),
                 'updated_at' => now()
             ]
@@ -245,6 +248,8 @@ return new class extends Migration
         if (!Schema::hasColumn('tax_settings', 'setting_key')) {
             return;
         }
+
+        $defaultUserId = $this->resolveDefaultUserId();
 
         $defaultSettings = [
             ['setting_key' => 'default_ppn_rate', 'setting_value' => '11.00', 'value_type' => 'decimal', 'description' => 'Default PPN rate'],
@@ -262,10 +267,19 @@ return new class extends Migration
                 'scope' => 'global',
                 'client_id' => null,
                 'is_active' => true,
-                'created_by' => 1,
+                'created_by' => $defaultUserId,
                 'created_at' => now(),
                 'updated_at' => now()
             ]));
         }
+    }
+
+    private function resolveDefaultUserId(): ?int
+    {
+        if (!Schema::hasTable('users')) {
+            return null;
+        }
+
+        return DB::table('users')->where('id', 1)->exists() ? 1 : null;
     }
 };

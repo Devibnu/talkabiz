@@ -20,28 +20,52 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('subscriptions', function (Blueprint $table) {
-            $table->string('midtrans_subscription_id')->nullable()->after('cancelled_at');
-            $table->text('recurring_token')->nullable()->after('midtrans_subscription_id');
-            $table->boolean('auto_renew')->default(true)->after('recurring_token');
-            $table->timestamp('last_renewal_at')->nullable()->after('auto_renew');
-            $table->unsignedTinyInteger('renewal_attempts')->default(0)->after('last_renewal_at');
+            if (!Schema::hasColumn('subscriptions', 'midtrans_subscription_id')) {
+                $table->string('midtrans_subscription_id')->nullable()->after('cancelled_at');
+            }
+            if (!Schema::hasColumn('subscriptions', 'recurring_token')) {
+                $table->text('recurring_token')->nullable()->after('midtrans_subscription_id');
+            }
+            if (!Schema::hasColumn('subscriptions', 'auto_renew')) {
+                $table->boolean('auto_renew')->default(true)->after('recurring_token');
+            }
+            if (!Schema::hasColumn('subscriptions', 'last_renewal_at')) {
+                $table->timestamp('last_renewal_at')->nullable()->after('auto_renew');
+            }
+            if (!Schema::hasColumn('subscriptions', 'renewal_attempts')) {
+                $table->unsignedTinyInteger('renewal_attempts')->default(0)->after('last_renewal_at');
+            }
         });
 
         // Index for the scheduler query: active + auto_renew + expiring soon
-        DB::statement("
-            CREATE INDEX subscriptions_auto_renew_idx 
-            ON subscriptions (status, auto_renew, expires_at)
-        ");
+        try {
+            DB::statement(" 
+                CREATE INDEX subscriptions_auto_renew_idx 
+                ON subscriptions (status, auto_renew, expires_at)
+            ");
+        } catch (\Throwable $e) {
+            // Ignore if the index already exists in test databases.
+        }
     }
 
     public function down(): void
     {
         // Drop index first
-        $indexExists = DB::select("
-            SHOW INDEX FROM subscriptions WHERE Key_name = 'subscriptions_auto_renew_idx'
-        ");
-        if (!empty($indexExists)) {
-            DB::statement("DROP INDEX subscriptions_auto_renew_idx ON subscriptions");
+        if (DB::getDriverName() !== 'sqlite') {
+            $indexExists = DB::select(" 
+                SHOW INDEX FROM subscriptions WHERE Key_name = 'subscriptions_auto_renew_idx'
+            ");
+            if (!empty($indexExists)) {
+                DB::statement("DROP INDEX subscriptions_auto_renew_idx ON subscriptions");
+            }
+        } else {
+            try {
+                Schema::table('subscriptions', function (Blueprint $table) {
+                    $table->dropIndex('subscriptions_auto_renew_idx');
+                });
+            } catch (\Throwable $e) {
+                // Ignore if absent.
+            }
         }
 
         Schema::table('subscriptions', function (Blueprint $table) {

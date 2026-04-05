@@ -22,6 +22,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // ── Step 1: Expand ENUM to include 'grace' ──
         DB::statement("
             ALTER TABLE subscriptions 
@@ -67,6 +71,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // ── Reverse Step 5: Drop unique index ──
         $indexExists = DB::select("
             SHOW INDEX FROM subscriptions WHERE Key_name = 'subscriptions_klien_single_active'

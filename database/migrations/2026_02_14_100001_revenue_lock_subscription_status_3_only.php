@@ -22,6 +22,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Step 1: Migrate existing data to new status values
         DB::statement("UPDATE subscriptions SET status = 'expired' WHERE status IN ('cancelled')");
         
@@ -42,6 +46,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Restore original ENUM
         DB::statement("ALTER TABLE subscriptions MODIFY COLUMN status ENUM('active', 'expired', 'cancelled', 'pending') NOT NULL DEFAULT 'pending'");
         

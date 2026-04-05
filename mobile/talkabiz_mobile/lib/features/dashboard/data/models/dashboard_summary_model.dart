@@ -14,11 +14,13 @@ class DashboardSummaryModel extends DashboardSummary {
     final whatsapp = data['whatsapp'] as Map<String, dynamic>? ?? {};
     final stats = data['stats'] as Map<String, dynamic>? ?? {};
     final quickActions = (data['quick_actions'] as List<dynamic>? ?? [])
-        .map((item) => QuickActionItem(
-              key: item.toString(),
-              label: item.toString(),
-              icon: 'flash_on',
-            ))
+        .map(
+          (item) => QuickActionItem(
+            key: item.toString(),
+            label: item.toString(),
+            icon: 'flash_on',
+          ),
+        )
         .toList();
 
     return DashboardSummaryModel(

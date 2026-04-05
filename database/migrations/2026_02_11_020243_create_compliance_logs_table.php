@@ -16,6 +16,8 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $driver = DB::getDriverName();
+
         Schema::create('compliance_logs', function (Blueprint $table) {
             // Primary key - ordered ULID for chronological ordering
             $table->id();
@@ -85,6 +87,10 @@ return new class extends Migration
             $table->index(['is_financial', 'occurred_at']);
             $table->index(['target_type', 'target_id']);
         });
+
+        if ($driver === 'sqlite') {
+            return;
+        }
 
         // Create immutability triggers (prevent UPDATE and DELETE)
         DB::unprepared("

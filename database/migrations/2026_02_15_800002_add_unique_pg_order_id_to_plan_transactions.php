@@ -17,6 +17,8 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $driver = DB::getDriverName();
+
         // Pre-flight: check for existing duplicates
         $duplicates = DB::select("
             SELECT pg_order_id, COUNT(*) as cnt 
@@ -35,10 +37,20 @@ return new class extends Migration
         }
 
         // Drop existing non-unique index if present, then add unique
-        $indexes = DB::select("SHOW INDEX FROM plan_transactions WHERE Key_name = 'plan_transactions_pg_order_id_index'");
-        if (count($indexes) > 0) {
+        if ($driver !== 'sqlite') {
+            $indexes = DB::select("SHOW INDEX FROM plan_transactions WHERE Key_name = 'plan_transactions_pg_order_id_index'");
+            if (count($indexes) > 0) {
+                Schema::table('plan_transactions', function (Blueprint $table) {
+                    $table->dropIndex('plan_transactions_pg_order_id_index');
+                });
+            }
+        } elseif (Schema::hasColumn('plan_transactions', 'pg_order_id')) {
             Schema::table('plan_transactions', function (Blueprint $table) {
-                $table->dropIndex('plan_transactions_pg_order_id_index');
+                try {
+                    $table->dropIndex('plan_transactions_pg_order_id_index');
+                } catch (\Throwable $e) {
+                    // Ignore if the old index is absent on SQLite.
+                }
             });
         }
 
@@ -50,7 +62,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('plan_transactions', function (Blueprint $table) {
-            $table->dropUnique('plan_transactions_pg_order_id_unique');
+            try {
+                $table->dropUnique('plan_transactions_pg_order_id_unique');
+            } catch (\Throwable $e) {
+                // Ignore when index is absent.
+            }
         });
 
         // Restore original non-unique index

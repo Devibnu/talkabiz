@@ -25,6 +25,8 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $driver = DB::getDriverName();
+
         // =====================================================================
         // 1. SLI DEFINITIONS - Definisi metrik yang diukur
         // =====================================================================
@@ -130,7 +132,7 @@ return new class extends Migration
         // =====================================================================
         // 3. SLI MEASUREMENTS - Pengukuran aktual
         // =====================================================================
-        Schema::create('sli_measurements', function (Blueprint $table) {
+        Schema::create('sli_measurements', function (Blueprint $table) use ($driver) {
             $table->id();
             
             $table->foreignId('sli_id')->constrained('sli_definitions')->onDelete('cascade');
@@ -143,9 +145,13 @@ return new class extends Migration
             // Measurements
             $table->unsignedBigInteger('good_events')->default(0);
             $table->unsignedBigInteger('total_events')->default(0);
-            // Use CAST to avoid BIGINT UNSIGNED subtraction issues
-            $table->unsignedBigInteger('bad_events')
-                ->storedAs('GREATEST(0, CAST(total_events AS SIGNED) - CAST(good_events AS SIGNED))');
+            if ($driver === 'sqlite') {
+                $table->unsignedBigInteger('bad_events')->default(0);
+            } else {
+                // Use CAST to avoid BIGINT UNSIGNED subtraction issues
+                $table->unsignedBigInteger('bad_events')
+                    ->storedAs('GREATEST(0, CAST(total_events AS SIGNED) - CAST(good_events AS SIGNED))');
+            }
             
             // Calculated values
             $table->decimal('value', 10, 4)->nullable(); // Calculated SLI value
@@ -174,7 +180,7 @@ return new class extends Migration
         // =====================================================================
         // 4. ERROR BUDGET STATUS - Status budget per SLO
         // =====================================================================
-        Schema::create('error_budget_status', function (Blueprint $table) {
+        Schema::create('error_budget_status', function (Blueprint $table) use ($driver) {
             $table->id();
             
             $table->foreignId('slo_id')->constrained('slo_definitions')->onDelete('cascade');
@@ -188,9 +194,13 @@ return new class extends Migration
             $table->unsignedBigInteger('total_events')->default(0);
             $table->unsignedBigInteger('allowed_bad_events')->default(0); // Error budget in absolute
             $table->unsignedBigInteger('actual_bad_events')->default(0);
-            // Use CAST to avoid BIGINT UNSIGNED subtraction issues
-            $table->unsignedBigInteger('remaining_bad_events')
-                ->storedAs('GREATEST(0, CAST(allowed_bad_events AS SIGNED) - CAST(actual_bad_events AS SIGNED))');
+            if ($driver === 'sqlite') {
+                $table->unsignedBigInteger('remaining_bad_events')->default(0);
+            } else {
+                // Use CAST to avoid BIGINT UNSIGNED subtraction issues
+                $table->unsignedBigInteger('remaining_bad_events')
+                    ->storedAs('GREATEST(0, CAST(allowed_bad_events AS SIGNED) - CAST(actual_bad_events AS SIGNED))');
+            }
             
             // Percentages
             $table->decimal('budget_total_percent', 10, 4)->default(0); // Error budget %

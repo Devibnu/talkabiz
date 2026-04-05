@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/router/route_names.dart';
+import '../../../../core/navigation/mobile_bottom_nav.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 
@@ -58,13 +61,46 @@ class DashboardPage extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 16),
-                      _StatRow(label: 'Pesan hari ini', value: summary.stats.messagesToday.toString()),
-                      _StatRow(label: 'Campaign aktif', value: summary.stats.campaignsActive.toString()),
-                      _StatRow(label: 'Template aktif', value: summary.stats.templatesActive.toString()),
-                      _StatRow(label: 'Total kontak', value: summary.stats.contactsTotal.toString()),
+                      _StatRow(
+                        label: 'Pesan hari ini',
+                        value: summary.stats.messagesToday.toString(),
+                      ),
+                      _StatRow(
+                        label: 'Campaign aktif',
+                        value: summary.stats.campaignsActive.toString(),
+                      ),
+                      _StatRow(
+                        label: 'Template aktif',
+                        value: summary.stats.templatesActive.toString(),
+                      ),
+                      _StatRow(
+                        label: 'Total kontak',
+                        value: summary.stats.contactsTotal.toString(),
+                      ),
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Menu Cepat',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              _QuickActionTile(
+                title: 'Inbox Mobile',
+                subtitle: 'Lihat daftar percakapan dari endpoint mobile.',
+                icon: Icons.chat_bubble_outline_rounded,
+                color: const Color(0xFF4F6BED),
+                onTap: () => context.goNamed(RouteNames.inbox),
+              ),
+              const SizedBox(height: 12),
+              _QuickActionTile(
+                title: 'Kontak Mobile',
+                subtitle: 'Lihat daftar kontak dari endpoint mobile.',
+                icon: Icons.people_alt_outlined,
+                color: const Color(0xFF25D366),
+                onTap: () => context.goNamed(RouteNames.contacts),
               ),
             ],
           );
@@ -78,6 +114,65 @@ class DashboardPage extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
+      ),
+      bottomNavigationBar: const MobileBottomNav(),
+    );
+  }
+}
+
+class _QuickActionTile extends StatelessWidget {
+  const _QuickActionTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              Container(
+                height: 48,
+                width: 48,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.arrow_forward_rounded),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -147,10 +242,7 @@ class _StatRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(label)),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
         ],
       ),
     );

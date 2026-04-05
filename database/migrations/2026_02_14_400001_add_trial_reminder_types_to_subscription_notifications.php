@@ -15,12 +15,20 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Alter ENUM to include new trial activation types
         DB::statement("ALTER TABLE subscription_notifications MODIFY COLUMN `type` ENUM('t7','t3','t1','expired','email_1h','email_24h','wa_24h') NOT NULL");
     }
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Revert to original ENUM (will fail if rows exist with new types)
         DB::statement("ALTER TABLE subscription_notifications MODIFY COLUMN `type` ENUM('t7','t3','t1','expired') NOT NULL");
     }
