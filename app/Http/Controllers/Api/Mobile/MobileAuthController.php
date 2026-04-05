@@ -9,8 +9,10 @@ use App\Services\LoginSecurityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class MobileAuthController extends Controller
 {
@@ -88,6 +90,99 @@ class MobileAuthController extends Controller
         RateLimiter::clear($ipKey);
         $this->security->recordSuccessfulLogin($user, $request->ip());
 
+        $token = $user->createToken($request->string('device_name'))->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Login berhasil',
+            'data' => [
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'user' => $this->transformUser($user->fresh(['klien'])),
+            ],
+        ]);
+    }
+
+    public function googleLogin(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'id_token' => ['required', 'string'],
+            'device_name' => ['required', 'string', 'max:100'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi gagal',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // Verify Google ID token
+        $response = Http::get('https://oauth2.googleapis.com/tokeninfo', [
+            'id_token' => $request->string('id_token'),
+        ]);
+
+        if (!$response->successful()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token Google tidak valid.',
+            ], 401);
+        }
+
+        $googleData = $response->json();
+        $clientId = config('services.google.client_id');
+
+        // Verify audience matches our client ID
+        if (($googleData['aud'] ?? '') !== $clientId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token Google tidak valid untuk aplikasi ini.',
+            ], 401);
+        }
+
+        $googleId = $googleData['sub'] ?? null;
+        $email = $googleData['email'] ?? null;
+        $name = $googleData['name'] ?? $email;
+
+        if (!$email) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email tidak tersedia dari akun Google.',
+            ], 422);
+        }
+
+        // Match by google_id first, then email, or create new
+        $user = User::where('google_id', $googleId)->first();
+
+        if (!$user) {
+            $user = User::where('email', $email)->first();
+            if ($user) {
+                // Link Google ID to existing account
+                $user->update(['google_id' => $googleId]);
+            } else {
+                // Create new user
+                $user = User::create([
+                    'name' => $name,
+                    'email' => $email,
+                    'google_id' => $googleId,
+                    'password' => Hash::make(Str::random(32)),
+                    'role' => 'umkm',
+                    'onboarding_complete' => false,
+                ]);
+            }
+        }
+
+        // Check lock status
+        $lockStatus = $this->security->checkLockStatus($user);
+        if ($lockStatus['locked']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun sedang terkunci sementara.',
+            ], 423);
+        }
+
+        $this->security->recordSuccessfulLogin($user, $request->ip());
         $token = $user->createToken($request->string('device_name'))->plainTextToken;
 
         return response()->json([

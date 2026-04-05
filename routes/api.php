@@ -47,6 +47,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::prefix('mobile/auth')->group(function () {
     Route::post('/login', [MobileAuthController::class, 'login'])->name('mobile.auth.login');
+    Route::post('/google', [MobileAuthController::class, 'googleLogin'])->name('mobile.auth.google');
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [MobileAuthController::class, 'me'])->name('mobile.auth.me');
