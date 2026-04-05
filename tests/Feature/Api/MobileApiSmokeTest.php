@@ -130,4 +130,106 @@ class MobileApiSmokeTest extends TestCase
             ->assertStatus(200)
             ->assertJsonPath('success', true);
     }
+
+    /** @test */
+    public function authenticated_user_can_create_update_and_delete_mobile_contacts(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $createResponse = $this->postJson('/api/mobile/contacts', [
+            'name' => 'Kontak Baru',
+            'phone' => '628123450000',
+            'email' => 'kontak@example.com',
+            'tags' => ['vip', 'reseller'],
+            'notes' => 'Catatan kontak mobile',
+        ]);
+
+        $createResponse->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.name', 'Kontak Baru')
+            ->assertJsonPath('data.phone', '628123450000');
+
+        $contactId = $createResponse->json('data.id');
+
+        $this->assertDatabaseHas('kontak', [
+            'id' => $contactId,
+            'klien_id' => $klien->id,
+            'nama' => 'Kontak Baru',
+            'no_telepon' => '628123450000',
+            'source' => Kontak::SOURCE_API,
+        ]);
+
+        $this->putJson("/api/mobile/contacts/{$contactId}", [
+            'name' => 'Kontak Update',
+            'notes' => 'Catatan diperbarui',
+            'tags' => ['warm'],
+        ])
+            ->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.name', 'Kontak Update')
+            ->assertJsonPath('data.notes', 'Catatan diperbarui')
+            ->assertJsonPath('data.tags.0', 'warm');
+
+        $this->getJson("/api/mobile/contacts/{$contactId}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.name', 'Kontak Update');
+
+        $this->deleteJson("/api/mobile/contacts/{$contactId}")
+            ->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertSoftDeleted('kontak', [
+            'id' => $contactId,
+        ]);
+    }
+
+    /** @test */
+    public function authenticated_user_can_mark_mobile_inbox_conversation_as_read(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        $conversation = PercakapanInbox::factory()->create([
+            'klien_id' => $klien->id,
+            'pesan_belum_dibaca' => 2,
+            'status' => 'belum_dibaca',
+        ]);
+
+        PesanInbox::factory()->count(2)->create([
+            'percakapan_id' => $conversation->id,
+            'klien_id' => $klien->id,
+            'arah' => 'masuk',
+            'dibaca_sales' => false,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/mobile/inbox/{$conversation->id}/read")
+            ->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('percakapan_inbox', [
+            'id' => $conversation->id,
+            'pesan_belum_dibaca' => 0,
+        ]);
+
+        $this->assertDatabaseMissing('pesan_inbox', [
+            'percakapan_id' => $conversation->id,
+            'arah' => 'masuk',
+            'dibaca_sales' => false,
+        ]);
+    }
 }
