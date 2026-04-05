@@ -116,3 +116,37 @@ Jika argumen `summary_file` diberikan, wrapper akan menulis JSON machine-readabl
 - Local development: jalankan `php artisan test tests/Feature/Api/MobileApi*Test.php`
 - Pre-deploy manual check: jalankan `scripts/probe-mobile-all.sh ...`
 - Automation/deploy gate: jalankan wrapper dengan `summary_file` agar hasil bisa diparsing tool lain
+
+## GitHub Actions
+
+Workflow GitHub Actions yang ditambahkan sengaja bersifat manual (`workflow_dispatch`) agar tidak mengganggu flow aktif sambil menunggu review Meta.
+
+### Manual Local-Like Suite
+
+File:
+
+- `.github/workflows/mobile-api-test-manual.yml`
+
+Fungsi:
+
+- setup PHP 8.2
+- install Composer dependencies
+- jalankan `php artisan test tests/Feature/Api/MobileApi*Test.php`
+
+### Manual Live Probe
+
+File:
+
+- `.github/workflows/mobile-api-live-probe-manual.yml`
+
+Fungsi:
+
+- menjalankan `scripts/probe-mobile-all.sh`
+- menulis summary JSON ke artifact GitHub Actions
+
+Secrets yang dibutuhkan:
+
+- `MOBILE_PROBE_EMAIL`
+- `MOBILE_PROBE_PASSWORD`
+
+Karena workflow ini manual, ia tidak akan memblokir push, PR, atau deployment yang sedang berjalan sekarang.

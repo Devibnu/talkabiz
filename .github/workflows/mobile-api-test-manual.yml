@@ -1,0 +1,56 @@
+name: Mobile API Test Suite
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-api-tests:
+    name: Run Mobile API Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          extensions: mbstring, sqlite3, pdo_sqlite, dom, curl
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Prepare CI environment
+        run: |
+          cat > .env <<EOF
+          APP_NAME=Talkabiz
+          APP_ENV=testing
+          APP_KEY=base64:$(php -r 'echo base64_encode(random_bytes(32));')
+          APP_DEBUG=true
+          APP_URL=http://localhost
+          LOG_CHANNEL=stack
+          CACHE_DRIVER=array
+          SESSION_DRIVER=array
+          QUEUE_CONNECTION=sync
+          MAIL_MAILER=array
+          DB_CONNECTION=sqlite
+          DB_DATABASE=:memory:
+          TELESCOPE_ENABLED=false
+          EOF
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Run split mobile API suite
+        run: php artisan test tests/Feature/Api/MobileApi*Test.php

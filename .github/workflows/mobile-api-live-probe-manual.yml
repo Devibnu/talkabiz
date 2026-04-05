@@ -1,0 +1,59 @@
+name: Mobile API Live Probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Mobile API base URL
+        required: false
+        default: https://talkabiz.ibnuapps.cloud/api
+      device_name:
+        description: Device name label used during probe login
+        required: false
+        default: GitHub Actions Mobile Probe
+
+permissions:
+  contents: read
+
+jobs:
+  live-probe:
+    name: Run Live Mobile Probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MOBILE_PROBE_EMAIL: ${{ secrets.MOBILE_PROBE_EMAIL }}
+      MOBILE_PROBE_PASSWORD: ${{ secrets.MOBILE_PROBE_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate probe secrets
+        run: |
+          [[ -n "$MOBILE_PROBE_EMAIL" ]]
+          [[ -n "$MOBILE_PROBE_PASSWORD" ]]
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Run live mobile probe wrapper
+        run: |
+          summary_file="$RUNNER_TEMP/mobile-probe-summary.json"
+          scripts/probe-mobile-all.sh \
+            "${{ inputs.base_url }}" \
+            "$MOBILE_PROBE_EMAIL" \
+            "$MOBILE_PROBE_PASSWORD" \
+            "${{ inputs.device_name }}" \
+            "$summary_file"
+          echo "SUMMARY_FILE=$summary_file" >> "$GITHUB_ENV"
+
+      - name: Upload live probe summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-probe-summary
+          path: ${{ env.SUMMARY_FILE }}
+          if-no-files-found: ignore

@@ -105,6 +105,8 @@ The documentation for the Soft UI Dashboard Laravel is hosted at our [website](h
 
 For the mobile API verification workflow used in this repository, see [docs/MOBILE_VERIFICATION_WORKFLOW.md](docs/MOBILE_VERIFICATION_WORKFLOW.md).
 
+The mobile verification GitHub Actions workflows are manual-only so they do not interfere with the current production/review flow.
+
 ### Login
 If you are not logged in you can only access this page or the Sign Up page. The default url takes you to the login page where you use the default credentials **admin@softui.com** with the password **secret**. Logging in is possible only with already existing credentials. For this to work you should have run the migrations.
 
