@@ -246,6 +246,98 @@ class MobileApiSmokeTest extends TestCase
     }
 
     /** @test */
+    public function authenticated_user_can_search_mobile_inbox_conversations(): void
+    {
+        $klien = Klien::factory()->create();
+        $otherKlien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        $matchedConversation = PercakapanInbox::factory()->create([
+            'klien_id' => $klien->id,
+            'nama_customer' => 'Target Buyer',
+            'no_whatsapp' => '628111111111',
+            'pesan_terakhir' => 'Halo keyword mobile',
+            'status' => 'aktif',
+        ]);
+
+        PercakapanInbox::factory()->create([
+            'klien_id' => $klien->id,
+            'nama_customer' => 'Random Contact',
+            'no_whatsapp' => '628222222222',
+            'pesan_terakhir' => 'Pesan lain',
+            'status' => 'aktif',
+        ]);
+
+        PercakapanInbox::factory()->create([
+            'klien_id' => $otherKlien->id,
+            'nama_customer' => 'Target Buyer External',
+            'no_whatsapp' => '628333333333',
+            'pesan_terakhir' => 'Halo keyword mobile',
+            'status' => 'aktif',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/mobile/inbox?search=keyword%20mobile')
+            ->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $matchedConversation->id)
+            ->assertJsonPath('data.0.contact_name', 'Target Buyer');
+    }
+
+    /** @test */
+    public function authenticated_user_can_filter_mobile_inbox_by_status_and_limit_results(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        PercakapanInbox::factory()->create([
+            'klien_id' => $klien->id,
+            'nama_customer' => 'Aktif Pertama',
+            'status' => 'aktif',
+            'waktu_pesan_terakhir' => now()->subMinute(),
+        ]);
+
+        PercakapanInbox::factory()->create([
+            'klien_id' => $klien->id,
+            'nama_customer' => 'Aktif Kedua',
+            'status' => 'aktif',
+            'waktu_pesan_terakhir' => now(),
+        ]);
+
+        PercakapanInbox::factory()->create([
+            'klien_id' => $klien->id,
+            'nama_customer' => 'Selesai Lama',
+            'status' => 'selesai',
+            'waktu_pesan_terakhir' => now()->subMinutes(2),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/mobile/inbox?status=aktif&per_page=1');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.contact_name', 'Aktif Kedua')
+            ->assertJsonPath('data.0.status', 'aktif');
+    }
+
+    /** @test */
     public function mobile_inbox_send_requires_message_payload(): void
     {
         $klien = Klien::factory()->create();
