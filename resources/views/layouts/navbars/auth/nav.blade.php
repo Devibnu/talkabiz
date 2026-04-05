@@ -31,18 +31,20 @@
                                     @endif
                                 </div>
                                 <div class="flex-grow-1 nav-wallet-copy">
-                                    <div class="nav-wallet-inline">
-                                        <span class="nav-wallet-inline-label">Saldo WA</span>
-                                        <span class="nav-wallet-inline-amount {{ $userWallet->status_saldo === 'habis' ? 'text-danger' : 'text-dark' }}">
+                                    <div class="nav-wallet-mobile-inline {{ $userWallet->status_saldo === 'habis' ? 'is-danger' : '' }}">
+                                        <span class="nav-wallet-mobile-label">Saldo WA</span>
+                                        <span class="nav-wallet-mobile-amount">
                                             Rp {{ number_format($userWallet->saldo_tersedia, 0, ',', '.') }}
                                         </span>
                                     </div>
-                                    <div class="text-xs text-secondary mb-0 lh-1 nav-wallet-label">
-                                        <i class="fab fa-whatsapp nav-wallet-label-icon"></i>
-                                        <span class="nav-wallet-label-text">Saldo WA</span>
-                                    </div>
-                                    <div class="font-weight-bold text-sm lh-1 nav-wallet-amount {{ $userWallet->status_saldo === 'habis' ? 'text-danger' : 'text-dark' }}">
-                                        Rp {{ number_format($userWallet->saldo_tersedia, 0, ',', '.') }}
+                                    <div class="nav-wallet-desktop-copy">
+                                        <div class="text-xs text-secondary mb-0 lh-1 nav-wallet-label">
+                                            <i class="fab fa-whatsapp nav-wallet-label-icon"></i>
+                                            <span class="nav-wallet-label-text">Saldo WA</span>
+                                        </div>
+                                        <div class="font-weight-bold text-sm lh-1 nav-wallet-amount {{ $userWallet->status_saldo === 'habis' ? 'text-danger' : 'text-dark' }}">
+                                            Rp {{ number_format($userWallet->saldo_tersedia, 0, ',', '.') }}
+                                        </div>
                                     </div>
                                 </div>
                                 @if(request()->routeIs('billing') || request()->is('billing*'))

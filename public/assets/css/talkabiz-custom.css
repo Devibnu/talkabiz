@@ -421,8 +421,12 @@
     min-width: 0;
 }
 
-.nav-wallet-inline {
+.nav-wallet-mobile-inline {
     display: none;
+}
+
+.nav-wallet-desktop-copy {
+    min-width: 0;
 }
 
 .nav-wallet-label {
@@ -437,7 +441,9 @@
     font-size: 0.65rem;
 }
 
-.nav-wallet-label-text {
+.nav-wallet-label-text,
+.nav-wallet-mobile-label,
+.nav-wallet-mobile-amount {
     white-space: nowrap;
 }
 
@@ -1023,67 +1029,56 @@
         min-width: 0 !important;
         width: 100% !important;
         max-width: none !important;
-        display: grid !important;
-        grid-template-columns: auto minmax(0, 1fr) auto !important;
-        grid-template-areas: "icon inline action" !important;
+        display: flex !important;
         align-items: center !important;
-        justify-content: normal !important;
+        justify-content: space-between !important;
         padding: 0.6rem 0.8rem !important;
         gap: 0.55rem !important;
     }
 
     .navbar-main .nav-wallet-copy {
-        display: contents !important;
-    }
-
-    .navbar-main .nav-wallet-icon {
-        grid-area: icon;
-    }
-
-    .navbar-main .nav-wallet-inline {
-        grid-area: inline;
-        display: inline-flex !important;
-        align-items: baseline !important;
-        gap: 0.35rem !important;
+        display: flex !important;
+        align-items: center !important;
         min-width: 0 !important;
+        flex: 1 1 auto !important;
+    }
+
+    .navbar-main .nav-wallet-mobile-inline {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.4rem !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
         white-space: nowrap !important;
         overflow: hidden !important;
     }
 
-    .navbar-main .nav-wallet-inline-label {
+    .navbar-main .nav-wallet-mobile-label {
         font-size: 0.82rem !important;
         color: var(--soft-secondary) !important;
-        white-space: nowrap !important;
         flex-shrink: 0 !important;
     }
 
-    .navbar-main .nav-wallet-inline-amount {
+    .navbar-main .nav-wallet-mobile-amount {
         font-size: 0.96rem !important;
         font-weight: 700 !important;
         line-height: 1 !important;
-        white-space: nowrap !important;
         letter-spacing: -0.01em !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }
 
-    .navbar-main .nav-wallet-label {
+    .navbar-main .nav-wallet-desktop-copy {
         display: none !important;
     }
 
-    .navbar-main .nav-wallet-amount {
-        display: none !important;
+    .navbar-main .nav-wallet-mobile-inline.is-danger,
+    .navbar-main .nav-wallet-mobile-inline.is-danger .nav-wallet-mobile-amount {
+        color: var(--soft-danger) !important;
     }
 
     .navbar-main .nav-wallet-action {
-        grid-area: action;
-        align-self: center;
-        justify-self: end;
-    }
-
-    .nav-wallet-copy {
-        flex: 1 1 auto !important;
-        min-width: 0 !important;
+        flex-shrink: 0 !important;
     }
 
     .nav-wallet-icon {
@@ -1092,22 +1087,6 @@
         height: 1.75rem;
         border-radius: 0.6rem;
         margin-right: 0 !important;
-    }
-
-    .nav-wallet-label {
-        font-size: 0.82rem !important;
-        line-height: 1 !important;
-        white-space: nowrap !important;
-        display: inline-flex !important;
-        width: auto !important;
-        gap: 0.3rem !important;
-    }
-
-    .nav-wallet-amount {
-        font-size: 0.92rem !important;
-        line-height: 1.05 !important;
-        white-space: nowrap !important;
-        margin-top: 0.08rem !important;
     }
 
     .nav-wallet-action {
@@ -1155,25 +1134,15 @@
         gap: 0.45rem !important;
     }
 
-    .navbar-main .nav-wallet-inline {
+    .navbar-main .nav-wallet-mobile-inline {
         gap: 0.28rem !important;
     }
 
-    .navbar-main .nav-wallet-inline-label {
+    .navbar-main .nav-wallet-mobile-label {
         font-size: 0.76rem !important;
     }
 
-    .navbar-main .nav-wallet-inline-amount {
+    .navbar-main .nav-wallet-mobile-amount {
         font-size: 0.9rem !important;
-    }
-
-    .nav-wallet-label {
-        font-size: 0.8rem !important;
-        white-space: nowrap !important;
-    }
-
-    .nav-wallet-amount {
-        font-size: 0.9rem !important;
-        white-space: nowrap !important;
     }
 }
