@@ -112,7 +112,8 @@ Route::match(['get', 'post'], '/logout', [SessionsController::class, 'destroy'])
 
 // Mobile Google OAuth (web-based flow – needs session for OAuth state)
 Route::get('/mobile/auth/google', [MobileAuthController::class, 'googleRedirect'])->name('mobile.auth.google.redirect');
-Route::get('/mobile/auth/google/callback', [MobileAuthController::class, 'googleCallback'])->name('mobile.auth.google.callback');
+// Callback goes through the existing /auth/google/callback (registered in Google Console)
+// SocialLoginController detects mobile flow via session flag
 
 // Mobile payment result page (no auth – shown inside in-app browser after Midtrans redirect)
 Route::get('/mobile/payment-result', function (\Illuminate\Http\Request $request) {

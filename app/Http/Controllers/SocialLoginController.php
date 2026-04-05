@@ -51,10 +51,17 @@ class SocialLoginController extends Controller
      */
     public function handleGoogleCallback()
     {
+        // Check if this is a mobile app flow
+        $isMobileFlow = session('mobile_google_flow', false);
+
         try {
             $googleUser = Socialite::driver('google')->user();
         } catch (\Exception $e) {
             Log::warning('Google OAuth callback failed', ['error' => $e->getMessage()]);
+            if ($isMobileFlow) {
+                session()->forget(['mobile_google_flow', 'mobile_google_device_name']);
+                return $this->mobileAuthRedirect('error', 'Login Google gagal.');
+            }
             return redirect()->route('login')
                 ->with('error', 'Login Google gagal. Silakan coba lagi.');
         }
@@ -114,6 +121,14 @@ class SocialLoginController extends Controller
 
             Auth::login($user);
 
+            // Handle mobile app flow: create Sanctum token and redirect to deep link
+            if ($isMobileFlow) {
+                $deviceName = session('mobile_google_device_name', 'Flutter Mobile');
+                $token = $user->createToken($deviceName)->plainTextToken;
+                session()->forget(['mobile_google_flow', 'mobile_google_device_name']);
+                return $this->mobileAuthRedirect('success', null, $token);
+            }
+
             return redirect()->route('onboarding.index')
                 ->with('success', 'Akun berhasil dibuat via Google! Silakan lengkapi profil bisnis Anda.');
         }
@@ -129,6 +144,14 @@ class SocialLoginController extends Controller
             'user_id' => $user->id,
             'email' => $user->email,
         ]);
+
+        // Handle mobile app flow: create Sanctum token and redirect to deep link
+        if ($isMobileFlow) {
+            $deviceName = session('mobile_google_device_name', 'Flutter Mobile');
+            $token = $user->createToken($deviceName)->plainTextToken;
+            session()->forget(['mobile_google_flow', 'mobile_google_device_name']);
+            return $this->mobileAuthRedirect('success', null, $token);
+        }
 
         if ($selectedPlan && $user->onboarding_complete && $user->klien_id && !$this->userHasSuccessfulPlanPayment($user)) {
             return redirect()->route('subscription.index', [
@@ -190,5 +213,31 @@ class SocialLoginController extends Controller
             'plan_id' => $plan->id,
             'plan_code' => $plan->code,
         ]);
+    }
+
+    /**
+     * Redirect mobile app via deep link after Google OAuth.
+     */
+    private function mobileAuthRedirect(string $status, ?string $error = null, ?string $token = null)
+    {
+        $params = ['status' => $status];
+        if ($token) {
+            $params['token'] = $token;
+        }
+        if ($error) {
+            $params['error'] = $error;
+        }
+
+        $deepLink = 'talkabiz://auth/google/callback?' . http_build_query($params);
+
+        return response()->make(
+            '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            . '<title>Mengalihkan...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif">'
+            . '<div style="text-align:center"><p>Mengalihkan ke aplikasi...</p></div>'
+            . '<script>window.location.replace(' . json_encode($deepLink) . ');</script>'
+            . '</body></html>',
+            200,
+            ['Content-Type' => 'text/html']
+        );
     }
 }

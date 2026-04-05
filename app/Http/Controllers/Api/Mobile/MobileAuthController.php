@@ -204,11 +204,14 @@ class MobileAuthController extends Controller
     {
         $deviceName = $request->query('device_name', 'Flutter Mobile');
 
-        session(['mobile_google_device_name' => $deviceName]);
+        session([
+            'mobile_google_flow' => true,
+            'mobile_google_device_name' => $deviceName,
+        ]);
 
-        return Socialite::driver('google')
-            ->redirectUrl(url('/mobile/auth/google/callback'))
-            ->redirect();
+        // Use the default registered redirect URL (same as web)
+        // The callback handler will detect mobile flow via session flag
+        return Socialite::driver('google')->redirect();
     }
 
     /**
