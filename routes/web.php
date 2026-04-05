@@ -106,7 +106,7 @@ Route::group(['middleware' => 'auth'], function () {
 	Route::post('/user-profile', [InfoUserController::class, 'store']);
 	
 	// Logout (always accessible)
-    Route::post('/logout', [SessionsController::class, 'destroy'])->name('logout');
+    Route::match(['get', 'post'], '/logout', [SessionsController::class, 'destroy'])->name('logout');
 });
 
 // ==================== CLIENT ACCESS ROUTES (PROTECTED) ====================
