@@ -109,6 +109,58 @@ Route::group(['middleware' => 'auth'], function () {
 // Logout – OUTSIDE auth middleware so it works even with expired sessions
 Route::match(['get', 'post'], '/logout', [SessionsController::class, 'destroy'])->name('logout');
 
+// Mobile payment result page (no auth – shown inside in-app browser after Midtrans redirect)
+Route::get('/mobile/payment-result', function (\Illuminate\Http\Request $request) {
+    $status = $request->query('status', 'finish');
+    $title = match ($status) {
+        'finish'   => 'Pembayaran Diproses',
+        'unfinish' => 'Pembayaran Belum Selesai',
+        'error'    => 'Pembayaran Gagal',
+        default    => 'Status Pembayaran',
+    };
+    $message = match ($status) {
+        'finish'   => 'Pembayaran Anda sedang diproses. Silakan tutup halaman ini untuk kembali ke aplikasi.',
+        'unfinish' => 'Pembayaran belum selesai. Silakan tutup halaman ini dan coba lagi.',
+        'error'    => 'Pembayaran gagal. Silakan tutup halaman ini dan coba lagi.',
+        default    => 'Silakan tutup halaman ini untuk kembali ke aplikasi.',
+    };
+    $icon = match ($status) {
+        'finish'   => '✅',
+        'unfinish' => '⏳',
+        'error'    => '❌',
+        default    => 'ℹ️',
+    };
+    return response(<<<HTML
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{$title}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+background:#f8f9fa;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+.card{background:#fff;border-radius:24px;padding:40px 24px;max-width:380px;width:100%;text-align:center;
+box-shadow:0 2px 16px rgba(0,0,0,.08)}
+.icon{font-size:64px;margin-bottom:16px}
+h1{font-size:22px;color:#1a1a1a;margin-bottom:12px}
+p{font-size:15px;color:#666;line-height:1.5;margin-bottom:24px}
+.btn{display:inline-block;background:#25D366;color:#fff;border:none;border-radius:14px;
+padding:14px 32px;font-size:16px;font-weight:600;cursor:pointer;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="icon">{$icon}</div>
+<h1>{$title}</h1>
+<p>{$message}</p>
+<a class="btn" href="javascript:window.close()">Tutup</a>
+</div>
+</body>
+</html>
+HTML)->header('Content-Type', 'text/html');
+})->name('mobile.payment.result');
+
 // ==================== CLIENT ACCESS ROUTES (PROTECTED) ====================
 // Requires complete onboarding (OWNER/ADMIN bypass automatic)
 // Middleware: auth → domain.setup (locked order)

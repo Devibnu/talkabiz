@@ -118,7 +118,11 @@ class MobileBillingController extends Controller
         );
 
         $midtrans = app(MidtransPlanService::class);
-        $result = $midtrans->createSnapTransaction($transaction, $user);
+        $result = $midtrans->createSnapTransaction($transaction, $user, [
+            'finish'   => url('/mobile/payment-result?status=finish'),
+            'unfinish' => url('/mobile/payment-result?status=unfinish'),
+            'error'    => url('/mobile/payment-result?status=error'),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -156,7 +160,12 @@ class MobileBillingController extends Controller
         $amount = (int) $request->amount;
 
         $service = app(MidtransService::class);
-        $result = $service->createSnapTransaction($amount, $user, $user->klien_id);
+        $mobileCallbacks = [
+            'finish'   => url('/mobile/payment-result?status=finish'),
+            'unfinish' => url('/mobile/payment-result?status=unfinish'),
+            'error'    => url('/mobile/payment-result?status=error'),
+        ];
+        $result = $service->createSnapTransaction($amount, $user, $user->klien_id, null, $mobileCallbacks);
 
         return response()->json([
             'success' => true,

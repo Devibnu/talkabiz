@@ -123,7 +123,8 @@ class MidtransPlanService
      */
     public function createSnapTransaction(
         PlanTransaction $transaction,
-        User $user
+        User $user,
+        array $callbackOverrides = []
     ): array {
         $plan = $transaction->plan;
 
@@ -219,11 +220,11 @@ class MidtransPlanService
                     'name' => "Paket {$plan->name} - {$plan->quota_messages} pesan",
                 ]
             ],
-            'callbacks' => [
+            'callbacks' => array_merge([
                 'finish' => $appUrl . '/billing/plan/finish',
                 'unfinish' => $appUrl . '/billing/plan/unfinish',
                 'error' => $appUrl . '/billing/plan/error',
-            ],
+            ], $callbackOverrides),
             // Enable credit card tokenization for recurring payments
             'credit_card' => [
                 'secure' => true,

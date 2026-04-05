@@ -66,7 +66,8 @@ class MidtransService
         int $amount,
         $user,
         int $klienId,
-        string $orderId = null
+        string $orderId = null,
+        array $callbackOverrides = []
     ): array {
         $orderId = $orderId ?? $this->generateOrderId();
 
@@ -117,11 +118,11 @@ class MidtransService
                     'name' => 'Top Up Saldo WhatsApp Talkabiz',
                 ]
             ],
-            'callbacks' => [
+            'callbacks' => array_merge([
                 'finish' => url(config('midtrans.finish_url')),
                 'unfinish' => url(config('midtrans.unfinish_url')),
                 'error' => url(config('midtrans.error_url')),
-            ],
+            ], $callbackOverrides),
             'expiry' => [
                 'start_time' => now()->format('Y-m-d H:i:s O'),
                 'unit' => 'minutes',
