@@ -299,4 +299,61 @@ class MobileApiSmokeTest extends TestCase
             ->assertJsonPath('message', 'Pesan berhasil diproses')
             ->assertJsonPath('data.status', 'queued');
     }
+
+    /** @test */
+    public function mobile_inbox_send_returns_not_found_for_conversation_outside_user_tenant(): void
+    {
+        $userKlien = Klien::factory()->create();
+        $otherKlien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $userKlien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        $otherConversation = PercakapanInbox::factory()->create([
+            'klien_id' => $otherKlien->id,
+            'ditangani_oleh' => null,
+            'status' => 'aktif',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/mobile/inbox/{$otherConversation->id}/send", [
+            'message' => 'Harus gagal beda tenant',
+        ])
+            ->assertStatus(404)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Percakapan tidak ditemukan')
+            ->assertJsonPath('data.status', 'failed');
+    }
+
+    /** @test */
+    public function mobile_inbox_send_returns_forbidden_when_conversation_is_not_assigned_to_user(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        $conversation = PercakapanInbox::factory()->create([
+            'klien_id' => $klien->id,
+            'ditangani_oleh' => null,
+            'status' => 'aktif',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/mobile/inbox/{$conversation->id}/send", [
+            'message' => 'Harus gagal belum diambil',
+        ])
+            ->assertStatus(403)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Anda harus mengambil percakapan ini terlebih dahulu')
+            ->assertJsonPath('data.status', 'failed');
+    }
 }
