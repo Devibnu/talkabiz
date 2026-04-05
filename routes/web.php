@@ -104,10 +104,10 @@ Route::group(['middleware' => 'auth'], function () {
 	})->name('profile');
 	Route::get('/user-profile', [InfoUserController::class, 'create']);
 	Route::post('/user-profile', [InfoUserController::class, 'store']);
-	
-	// Logout (always accessible)
-    Route::match(['get', 'post'], '/logout', [SessionsController::class, 'destroy'])->name('logout');
 });
+
+// Logout – OUTSIDE auth middleware so it works even with expired sessions
+Route::match(['get', 'post'], '/logout', [SessionsController::class, 'destroy'])->name('logout');
 
 // ==================== CLIENT ACCESS ROUTES (PROTECTED) ====================
 // Requires complete onboarding (OWNER/ADMIN bypass automatic)
