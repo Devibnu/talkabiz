@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Laravel\Socialite\Facades\Socialite;
 
 class MobileAuthController extends Controller
 {
@@ -194,6 +195,98 @@ class MobileAuthController extends Controller
                 'user' => $this->transformUser($user->fresh(['klien'])),
             ],
         ]);
+    }
+
+    /**
+     * Redirect to Google OAuth for mobile app (web-based flow).
+     */
+    public function googleRedirect(Request $request)
+    {
+        $deviceName = $request->query('device_name', 'Flutter Mobile');
+
+        session(['mobile_google_device_name' => $deviceName]);
+
+        return Socialite::driver('google')
+            ->redirectUrl(url('/mobile/auth/google/callback'))
+            ->redirect();
+    }
+
+    /**
+     * Handle Google OAuth callback for mobile app.
+     * Creates Sanctum token and redirects to talkabiz:// deep link.
+     */
+    public function googleCallback(Request $request)
+    {
+        try {
+            $googleUser = Socialite::driver('google')
+                ->redirectUrl(url('/mobile/auth/google/callback'))
+                ->user();
+        } catch (\Exception $e) {
+            return $this->mobileAuthRedirect('error', 'Login Google gagal.');
+        }
+
+        $googleId = $googleUser->getId();
+        $email = $googleUser->getEmail();
+        $name = $googleUser->getName() ?? $email;
+
+        if (!$email) {
+            return $this->mobileAuthRedirect('error', 'Email tidak tersedia dari akun Google.');
+        }
+
+        $user = User::where('google_id', $googleId)->first();
+
+        if (!$user) {
+            $user = User::where('email', $email)->first();
+            if ($user) {
+                $user->update(['google_id' => $googleId]);
+            } else {
+                $user = User::create([
+                    'name' => $name,
+                    'email' => $email,
+                    'google_id' => $googleId,
+                    'password' => Hash::make(Str::random(32)),
+                    'role' => 'umkm',
+                    'onboarding_complete' => false,
+                ]);
+            }
+        }
+
+        $lockStatus = $this->security->checkLockStatus($user);
+        if ($lockStatus['locked']) {
+            return $this->mobileAuthRedirect('error', 'Akun sedang terkunci sementara.');
+        }
+
+        $this->security->recordSuccessfulLogin($user, $request->ip());
+
+        $deviceName = session('mobile_google_device_name', 'Flutter Mobile');
+        $token = $user->createToken($deviceName)->plainTextToken;
+
+        session()->forget('mobile_google_device_name');
+
+        return $this->mobileAuthRedirect('success', null, $token);
+    }
+
+    private function mobileAuthRedirect(string $status, ?string $error = null, ?string $token = null)
+    {
+        $params = ['status' => $status];
+        if ($token) {
+            $params['token'] = $token;
+        }
+        if ($error) {
+            $params['error'] = $error;
+        }
+
+        $deepLink = 'talkabiz://auth/google/callback?' . http_build_query($params);
+
+        return response()->make(
+            '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            . '<title>Mengalihkan...</title></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif">'
+            . '<div style="text-align:center"><p>Mengalihkan ke aplikasi...</p></div>'
+            . '<script>window.location.replace(' . json_encode($deepLink) . ');</script>'
+            . '</body></html>',
+            200,
+            ['Content-Type' => 'text/html']
+        );
     }
 
     public function me(Request $request): JsonResponse

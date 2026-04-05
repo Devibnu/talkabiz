@@ -21,6 +21,7 @@ use App\Http\Controllers\WhatsAppController;
 use App\Http\Controllers\AccountUnlockController;
 use App\Http\Controllers\ForcePasswordChangeController;
 use App\Http\Controllers\SocialLoginController;
+use App\Http\Controllers\Api\Mobile\MobileAuthController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\TopupInvoiceController;
 use App\Http\Controllers\InvoiceWebController;
@@ -108,6 +109,10 @@ Route::group(['middleware' => 'auth'], function () {
 
 // Logout – OUTSIDE auth middleware so it works even with expired sessions
 Route::match(['get', 'post'], '/logout', [SessionsController::class, 'destroy'])->name('logout');
+
+// Mobile Google OAuth (web-based flow – needs session for OAuth state)
+Route::get('/mobile/auth/google', [MobileAuthController::class, 'googleRedirect'])->name('mobile.auth.google.redirect');
+Route::get('/mobile/auth/google/callback', [MobileAuthController::class, 'googleCallback'])->name('mobile.auth.google.callback');
 
 // Mobile payment result page (no auth – shown inside in-app browser after Midtrans redirect)
 Route::get('/mobile/payment-result', function (\Illuminate\Http\Request $request) {
