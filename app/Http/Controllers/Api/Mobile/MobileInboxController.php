@@ -82,9 +82,9 @@ class MobileInboxController extends Controller
             ->get()
             ->map(fn (PesanInbox $item) => [
                 'id' => $item->id,
-                'direction' => $item->arah_pesan === 'masuk' ? 'inbound' : 'outbound',
-                'type' => $item->tipe_pesan ?? 'text',
-                'content' => $item->isi_pesan ?? '',
+                'direction' => $item->arah === 'masuk' ? 'inbound' : 'outbound',
+                'type' => $item->tipe ?? 'teks',
+                'content' => $item->preview,
                 'timestamp' => optional($item->waktu_pesan)?->toIso8601String(),
                 'status' => $item->status ?? 'unknown',
             ])->values();
