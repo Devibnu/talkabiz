@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Http\Controllers\Api\InboxController;
 use App\Models\Klien;
 use App\Models\Kontak;
 use App\Models\PercakapanInbox;
@@ -9,13 +10,22 @@ use App\Models\PesanInbox;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
+use Mockery;
 use Tests\TestCase;
 
 class MobileApiSmokeTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        Mockery::close();
+
+        parent::tearDown();
+    }
 
     /** @test */
     public function mobile_login_returns_token_and_user_profile(): void
@@ -231,5 +241,62 @@ class MobileApiSmokeTest extends TestCase
             'arah' => 'masuk',
             'dibaca_sales' => false,
         ]);
+    }
+
+    /** @test */
+    public function mobile_inbox_send_requires_message_payload(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/mobile/inbox/123/send', [])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Validasi gagal');
+    }
+
+    /** @test */
+    public function mobile_inbox_send_delegates_to_legacy_controller_and_normalizes_response(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        $legacyInboxController = Mockery::mock(InboxController::class);
+        $legacyInboxController->shouldReceive('kirimPesan')
+            ->once()
+            ->withArgs(function (int $percakapanId, Request $request) {
+                return $percakapanId === 77
+                    && $request->input('message') === 'Halo dari mobile send'
+                    && $request->input('tipe') === 'teks'
+                    && $request->input('isi_pesan') === 'Halo dari mobile send';
+            })
+            ->andReturn(response()->json([
+                'sukses' => true,
+                'pesan' => 'Pesan berhasil diproses',
+            ], 200));
+
+        $this->app->instance(InboxController::class, $legacyInboxController);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/mobile/inbox/77/send', [
+            'message' => 'Halo dari mobile send',
+        ])
+            ->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Pesan berhasil diproses')
+            ->assertJsonPath('data.status', 'queued');
     }
 }
