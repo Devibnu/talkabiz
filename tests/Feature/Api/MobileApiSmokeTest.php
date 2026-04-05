@@ -338,6 +338,51 @@ class MobileApiSmokeTest extends TestCase
     }
 
     /** @test */
+    public function mobile_inbox_detail_returns_not_found_for_missing_conversation(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/mobile/inbox/999999')
+            ->assertStatus(404)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Percakapan tidak ditemukan');
+    }
+
+    /** @test */
+    public function mobile_inbox_list_caps_per_page_at_one_hundred(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+        ]);
+
+        PercakapanInbox::factory()->count(105)->create([
+            'klien_id' => $klien->id,
+            'status' => 'aktif',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/mobile/inbox?per_page=999')
+            ->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('meta.total', 105)
+            ->assertJsonPath('meta.per_page', 100)
+            ->assertJsonCount(100, 'data');
+    }
+
+    /** @test */
     public function mobile_inbox_send_requires_message_payload(): void
     {
         $klien = Klien::factory()->create();
