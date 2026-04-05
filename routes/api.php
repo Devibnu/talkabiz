@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\SlaDashboardController;
 use App\Http\Controllers\Api\Mobile\MobileAuthController;
 use App\Http\Controllers\Api\Mobile\MobileContactsController;
 use App\Http\Controllers\Api\Mobile\MobileDashboardController;
+use App\Http\Controllers\Api\Mobile\MobileBillingController;
 use App\Http\Controllers\Api\Mobile\MobileInboxController;
 
 /*
@@ -55,6 +56,7 @@ Route::prefix('mobile/auth')->group(function () {
 
 Route::middleware('auth:sanctum')->prefix('mobile')->group(function () {
     Route::get('/dashboard', [MobileDashboardController::class, 'show'])->name('mobile.dashboard.show');
+    Route::post('/device-token', [MobileAuthController::class, 'storeDeviceToken'])->name('mobile.device-token.store');
 
     Route::prefix('contacts')->group(function () {
         Route::get('/', [MobileContactsController::class, 'index'])->name('mobile.contacts.index');
@@ -69,6 +71,15 @@ Route::middleware('auth:sanctum')->prefix('mobile')->group(function () {
         Route::get('/{percakapanId}', [MobileInboxController::class, 'show'])->name('mobile.inbox.show');
         Route::post('/{percakapanId}/send', [MobileInboxController::class, 'send'])->name('mobile.inbox.send');
         Route::post('/{percakapanId}/read', [MobileInboxController::class, 'read'])->name('mobile.inbox.read');
+    });
+
+    Route::prefix('billing')->group(function () {
+        Route::get('/overview', [MobileBillingController::class, 'overview'])->name('mobile.billing.overview');
+        Route::get('/plans', [MobileBillingController::class, 'plans'])->name('mobile.billing.plans');
+        Route::post('/checkout-plan', [MobileBillingController::class, 'checkoutPlan'])->name('mobile.billing.checkout-plan');
+        Route::get('/topup-options', [MobileBillingController::class, 'topUpOptions'])->name('mobile.billing.topup-options');
+        Route::post('/topup', [MobileBillingController::class, 'topUp'])->name('mobile.billing.topup');
+        Route::get('/transactions', [MobileBillingController::class, 'transactions'])->name('mobile.billing.transactions');
     });
 });
 
@@ -1712,7 +1723,7 @@ Route::middleware('auth:sanctum')->prefix('alerts')->group(function () {
     
     // Acknowledge specific alert
     Route::post('/{alertId}/acknowledge', [AlertController::class, 'acknowledgeAlert'])
-        ->name('alerts.acknowledge');
+        ->name('alerts.notification.acknowledge');
     
     // Mark all notifications as read
     Route::post('/mark-all-read', [AlertController::class, 'markAllAsRead'])
