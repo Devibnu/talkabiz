@@ -58,6 +58,83 @@ class MobileApiSmokeTest extends TestCase
     }
 
     /** @test */
+    public function mobile_login_validates_required_fields(): void
+    {
+        $this->postJson('/api/mobile/auth/login', [])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Validasi gagal')
+            ->assertJsonStructure([
+                'errors' => ['email', 'password', 'device_name'],
+            ]);
+    }
+
+    /** @test */
+    public function mobile_login_rejects_invalid_credentials_and_tracks_attempts(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+            'password' => Hash::make('secret123'),
+            'failed_login_attempts' => 0,
+        ]);
+
+        $this->postJson('/api/mobile/auth/login', [
+            'email' => $user->email,
+            'password' => 'wrong-password',
+            'device_name' => 'PHPUnit Device',
+        ])
+            ->assertStatus(401)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Email atau password salah.')
+            ->assertJsonPath('data.failed_attempts', 1)
+            ->assertJsonPath('data.show_captcha', false);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'failed_login_attempts' => 1,
+        ]);
+    }
+
+    /** @test */
+    public function mobile_login_returns_locked_response_for_temporarily_locked_account(): void
+    {
+        $klien = Klien::factory()->create();
+
+        $user = User::factory()->create([
+            'klien_id' => $klien->id,
+            'role' => 'owner',
+            'onboarding_complete' => true,
+            'password' => Hash::make('secret123'),
+            'locked_until' => now()->addMinutes(5),
+        ]);
+
+        $response = $this->postJson('/api/mobile/auth/login', [
+            'email' => $user->email,
+            'password' => 'secret123',
+            'device_name' => 'PHPUnit Device',
+        ]);
+
+        $response->assertStatus(423)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Akun sedang terkunci sementara.');
+
+        $this->assertNotNull($response->json('data.locked_until'));
+        $this->assertGreaterThan(0, (int) $response->json('data.seconds_remaining'));
+    }
+
+    /** @test */
+    public function mobile_protected_endpoints_require_authentication(): void
+    {
+        $this->getJson('/api/mobile/auth/me')->assertStatus(401);
+        $this->getJson('/api/mobile/dashboard')->assertStatus(401);
+        $this->getJson('/api/mobile/inbox')->assertStatus(401);
+    }
+
+    /** @test */
     public function authenticated_user_can_access_core_mobile_endpoints(): void
     {
         $klien = Klien::factory()->create([
