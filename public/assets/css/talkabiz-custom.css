@@ -987,7 +987,8 @@
 
     .nav-wallet-item {
         margin-right: 0 !important;
-        max-width: min(100%, 300px);
+        width: min(100%, 340px);
+        max-width: min(100%, 340px);
     }
 
     .nav-wallet-chip {
@@ -1040,7 +1041,8 @@
     }
 
     .nav-wallet-item {
-        max-width: calc(100vw - 8.5rem);
+        width: calc(100vw - 7rem);
+        max-width: calc(100vw - 7rem);
     }
 
     .nav-wallet-chip {
