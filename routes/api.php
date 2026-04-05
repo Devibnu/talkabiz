@@ -14,6 +14,10 @@ use App\Http\Controllers\Api\ReportingController;
 use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\SlaAwareSupportController;
 use App\Http\Controllers\Api\SlaDashboardController;
+use App\Http\Controllers\Api\Mobile\MobileAuthController;
+use App\Http\Controllers\Api\Mobile\MobileContactsController;
+use App\Http\Controllers\Api\Mobile\MobileDashboardController;
+use App\Http\Controllers\Api\Mobile\MobileInboxController;
 
 /*
 |--------------------------------------------------------------------------
@@ -28,6 +32,44 @@ use App\Http\Controllers\Api\SlaDashboardController;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Mobile Starter API Routes
+|--------------------------------------------------------------------------
+|
+| Endpoint minimum untuk Flutter V1 starter (auth + dashboard).
+| Dipisah dengan prefix /mobile agar tidak mengganggu API web/client lama.
+|
+*/
+
+Route::prefix('mobile/auth')->group(function () {
+    Route::post('/login', [MobileAuthController::class, 'login'])->name('mobile.auth.login');
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/me', [MobileAuthController::class, 'me'])->name('mobile.auth.me');
+        Route::post('/logout', [MobileAuthController::class, 'logout'])->name('mobile.auth.logout');
+    });
+});
+
+Route::middleware('auth:sanctum')->prefix('mobile')->group(function () {
+    Route::get('/dashboard', [MobileDashboardController::class, 'show'])->name('mobile.dashboard.show');
+
+    Route::prefix('contacts')->group(function () {
+        Route::get('/', [MobileContactsController::class, 'index'])->name('mobile.contacts.index');
+        Route::post('/', [MobileContactsController::class, 'store'])->name('mobile.contacts.store');
+        Route::get('/{id}', [MobileContactsController::class, 'show'])->name('mobile.contacts.show');
+        Route::put('/{id}', [MobileContactsController::class, 'update'])->name('mobile.contacts.update');
+        Route::delete('/{id}', [MobileContactsController::class, 'destroy'])->name('mobile.contacts.destroy');
+    });
+
+    Route::middleware('subscription.active')->prefix('inbox')->group(function () {
+        Route::get('/', [MobileInboxController::class, 'index'])->name('mobile.inbox.index');
+        Route::get('/{percakapanId}', [MobileInboxController::class, 'show'])->name('mobile.inbox.show');
+        Route::post('/{percakapanId}/send', [MobileInboxController::class, 'send'])->name('mobile.inbox.send');
+        Route::post('/{percakapanId}/read', [MobileInboxController::class, 'read'])->name('mobile.inbox.read');
+    });
 });
 
 /*
