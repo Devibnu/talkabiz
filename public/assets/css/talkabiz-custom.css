@@ -1020,6 +1020,15 @@
         gap: 0.55rem !important;
     }
 
+    .navbar-main .nav-wallet-copy {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: flex-start !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+
     .nav-wallet-icon {
         width: 1.75rem;
         min-width: 1.75rem;
@@ -1029,13 +1038,17 @@
     }
 
     .nav-wallet-label {
-        font-size: 0.68rem !important;
-        line-height: 1;
+        font-size: 0.82rem !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        display: inline-flex !important;
+        width: auto !important;
     }
 
     .nav-wallet-amount {
-        font-size: 0.86rem !important;
-        line-height: 1.05;
+        font-size: 0.92rem !important;
+        line-height: 1.05 !important;
+        white-space: nowrap !important;
     }
 
     .nav-wallet-action {
@@ -1083,10 +1096,12 @@
     }
 
     .nav-wallet-label {
-        font-size: 0.64rem !important;
+        font-size: 0.8rem !important;
+        white-space: nowrap !important;
     }
 
     .nav-wallet-amount {
-        font-size: 0.8rem !important;
+        font-size: 0.9rem !important;
+        white-space: nowrap !important;
     }
 }
