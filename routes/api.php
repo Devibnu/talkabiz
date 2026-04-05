@@ -507,34 +507,34 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->prefix('subscription')->gr
 |
 */
 
-Route::middleware('auth:sanctum')->prefix('invoices')->group(function () {
+Route::middleware('auth:sanctum')->prefix('invoices')->name('api.invoices.')->group(function () {
     // List invoices
     Route::get('/', [\App\Http\Controllers\Api\InvoiceController::class, 'index'])
-        ->name('invoices.index');
+        ->name('index');
     
     // Get invoice detail
     Route::get('/{id}', [\App\Http\Controllers\Api\InvoiceController::class, 'show'])
-        ->name('invoices.show');
+        ->name('show');
     
     // Check invoice/payment status
     Route::get('/{id}/status', [\App\Http\Controllers\Api\InvoiceController::class, 'status'])
-        ->name('invoices.status');
+        ->name('status');
     
     // Create payment link (get snap token)
     Route::post('/{id}/pay', [\App\Http\Controllers\Api\InvoiceController::class, 'pay'])
-        ->name('invoices.pay');
+        ->name('pay');
     
     // Create new subscription invoice
     Route::post('/subscription', [\App\Http\Controllers\Api\InvoiceController::class, 'createSubscription'])
-        ->name('invoices.subscription');
+        ->name('subscription');
     
     // Create upgrade invoice
     Route::post('/upgrade', [\App\Http\Controllers\Api\InvoiceController::class, 'createUpgrade'])
-        ->name('invoices.upgrade');
+        ->name('upgrade');
     
     // Create renewal invoice
     Route::post('/renewal', [\App\Http\Controllers\Api\InvoiceController::class, 'createRenewal'])
-        ->name('invoices.renewal');
+        ->name('renewal');
 });
 
 /*
@@ -1006,9 +1006,9 @@ Route::prefix('webhook')->group(function () {
     
     // Legacy route for backward compatibility
     Route::post('/gupshup', [WebhookController::class, 'handle'])
-        ->name('webhook.gupshup');
+        ->name('api.webhook.gupshup');
     Route::get('/gupshup', [WebhookController::class, 'healthCheck'])
-        ->name('webhook.gupshup.verify');
+        ->name('api.webhook.gupshup.verify');
 
     // ==================== Recipient Complaint Webhooks ====================
     // Endpoints untuk menerima laporan spam/abuse dari recipients
