@@ -486,6 +486,203 @@
     background: #e9ecef;
     color: #344767;
 }
+
+@media (max-width: 991.98px) {
+    .container-fluid.py-4 {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+
+    .page-header-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .page-title {
+        font-size: 1.35rem;
+    }
+
+    .btn-soft-primary {
+        justify-content: center;
+        width: 100%;
+        padding: 0.85rem 1rem;
+    }
+
+    .info-banner {
+        padding: 1rem;
+        border-radius: 1rem;
+    }
+
+    .info-banner h6 {
+        font-size: 1rem;
+        line-height: 1.4;
+    }
+
+    .info-banner p,
+    .info-banner .steps li {
+        font-size: 0.85rem;
+        line-height: 1.7;
+    }
+
+    .template-card {
+        border-radius: 1.1rem;
+    }
+
+    .template-card-header,
+    .template-card-body {
+        padding: 1rem;
+    }
+
+    .template-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .template-card-header .badge {
+        align-self: flex-start;
+        padding: 0.5rem 0.85rem;
+        border-radius: 0.75rem;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+
+    .template-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .template-item {
+        border-radius: 1rem;
+    }
+
+    .template-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+
+    .template-item-name {
+        max-width: 100%;
+        white-space: normal;
+        line-height: 1.4;
+    }
+
+    .template-item-category {
+        font-size: 0.7rem;
+        letter-spacing: 0.04em;
+    }
+
+    .template-item-body {
+        padding: 1rem;
+    }
+
+    .template-item-preview {
+        -webkit-line-clamp: 3;
+        min-height: auto;
+        font-size: 0.88rem;
+    }
+
+    .template-item-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.85rem;
+        padding: 1rem;
+    }
+
+    .status-badge {
+        justify-content: center;
+        width: 100%;
+        padding: 0.65rem 0.9rem;
+        border-radius: 0.85rem;
+    }
+
+    .template-item-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem;
+        width: 100%;
+    }
+
+    .btn-template-action {
+        justify-content: center;
+        min-height: 2.75rem;
+        padding: 0.7rem 0.75rem;
+        font-size: 0.78rem;
+        border-radius: 0.75rem;
+        width: 100%;
+    }
+
+    .btn-template-action i {
+        font-size: 0.85rem;
+    }
+
+    .empty-state-container {
+        padding: 2.5rem 1.25rem;
+    }
+
+    .empty-state-icon {
+        width: 5rem;
+        height: 5rem;
+        border-radius: 1.25rem;
+    }
+
+    .empty-state-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .page-title {
+        font-size: 1.2rem;
+    }
+
+    .page-subtitle {
+        font-size: 0.82rem;
+        line-height: 1.6;
+    }
+
+    .info-banner {
+        margin-left: -0.1rem;
+        margin-right: -0.1rem;
+    }
+
+    .info-banner .steps {
+        padding-left: 1rem;
+    }
+
+    .template-card-title {
+        font-size: 1.2rem;
+    }
+
+    .template-item-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .btn-template-action {
+        font-size: 0.82rem;
+    }
+
+    .modal-soft .modal-body,
+    .modal-soft .modal-header,
+    .modal-soft .modal-footer {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .variable-tags {
+        gap: 0.4rem;
+    }
+
+    .variable-tag {
+        width: 100%;
+        justify-content: center;
+    }
+}
 </style>
 @endpush
 
