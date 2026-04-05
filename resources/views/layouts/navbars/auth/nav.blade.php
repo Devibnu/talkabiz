@@ -19,9 +19,9 @@
                         $pricePerMessage = $messageRateService->getRate('utility');
                     @endphp
                     @if($userWallet)
-                        <div class="nav-item me-3 nav-wallet-item">
-                            <div class="nav-wallet-chip d-flex align-items-center bg-white rounded-pill px-3 py-2 shadow-sm border">
-                                <div class="me-2 nav-wallet-icon">
+                        <div class="nav-item me-3">
+                            <div class="d-flex align-items-center bg-white rounded-pill px-3 py-2 shadow-sm border" style="min-width: 160px;">
+                                <div class="me-2">
                                     @if($userWallet->status_saldo === 'habis')
                                         <i class="fas fa-exclamation-triangle text-danger"></i>
                                     @elseif($userWallet->status_saldo === 'kritis')
@@ -30,25 +30,16 @@
                                         <i class="fas fa-wallet text-success"></i>
                                     @endif
                                 </div>
-                                <div class="flex-grow-1 nav-wallet-copy">
-                                    <div class="nav-wallet-mobile-inline {{ $userWallet->status_saldo === 'habis' ? 'is-danger' : '' }}">
-                                        <span class="nav-wallet-mobile-label">Saldo WA</span>
-                                        <span class="nav-wallet-mobile-amount">
-                                            Rp {{ number_format($userWallet->saldo_tersedia, 0, ',', '.') }}
-                                        </span>
+                                <div class="flex-grow-1">
+                                    <div class="text-xs text-secondary mb-0 lh-1">
+                                        <i class="fab fa-whatsapp me-1" style="font-size: 0.65rem;"></i>Saldo WA
                                     </div>
-                                    <div class="nav-wallet-desktop-copy">
-                                        <div class="text-xs text-secondary mb-0 lh-1 nav-wallet-label">
-                                            <i class="fab fa-whatsapp nav-wallet-label-icon"></i>
-                                            <span class="nav-wallet-label-text">Saldo WA</span>
-                                        </div>
-                                        <div class="font-weight-bold text-sm lh-1 nav-wallet-amount {{ $userWallet->status_saldo === 'habis' ? 'text-danger' : 'text-dark' }}">
-                                            Rp {{ number_format($userWallet->saldo_tersedia, 0, ',', '.') }}
-                                        </div>
+                                    <div class="font-weight-bold text-sm lh-1 {{ $userWallet->status_saldo === 'habis' ? 'text-danger' : 'text-dark' }}">
+                                        Rp {{ number_format($userWallet->saldo_tersedia, 0, ',', '.') }}
                                     </div>
                                 </div>
                                 @if(request()->routeIs('billing') || request()->is('billing*'))
-                                    <button class="btn btn-sm bg-gradient-success ms-2 mb-0 px-2 py-1 nav-wallet-action" 
+                                    <button class="btn btn-sm bg-gradient-success ms-2 mb-0 px-2 py-1" 
                                             onclick="showTopupModal()" 
                                             data-bs-toggle="tooltip"
                                             data-bs-placement="bottom"
@@ -57,7 +48,7 @@
                                     </button>
                                 @else
                                     <a href="{{ route('billing') }}" 
-                                       class="btn btn-sm bg-gradient-success ms-2 mb-0 px-2 py-1 nav-wallet-action" 
+                                       class="btn btn-sm bg-gradient-success ms-2 mb-0 px-2 py-1" 
                                        data-bs-toggle="tooltip"
                                        data-bs-placement="bottom"
                                        title="Topup Saldo WhatsApp">
@@ -69,7 +60,7 @@
                     @endif
                 @endif
             </div>
-            <ul class="navbar-nav justify-content-end nav-mobile-actions">
+            <ul class="navbar-nav justify-content-end">
                 {{-- Mobile Sidenav Toggle --}}
                 <li class="nav-item d-xl-none ps-3 d-flex align-items-center">
                     <a href="javascript:;" class="nav-link text-body p-0" id="iconNavbarSidenav">
