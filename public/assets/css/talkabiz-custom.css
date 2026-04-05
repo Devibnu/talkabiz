@@ -977,6 +977,26 @@
 }
 
 @media (max-width: 991.98px) {
+    .navbar-main #navbar {
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        margin-top: 0 !important;
+    }
+
+    .nav-wallet-wrap {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: calc(100% - 4.25rem);
+        padding-right: 0 !important;
+    }
+
+    .nav-mobile-actions {
+        flex: 0 0 auto;
+        margin-left: 0.75rem;
+    }
+
     .navbar-main {
         padding-top: 0.15rem !important;
     }
@@ -987,8 +1007,8 @@
 
     .nav-wallet-item {
         margin-right: 0 !important;
-        width: min(100%, 340px);
-        max-width: min(100%, 340px);
+        width: 100%;
+        max-width: none;
     }
 
     .nav-wallet-chip {
@@ -1040,9 +1060,17 @@
         font-size: 0.8rem !important;
     }
 
+    .nav-wallet-wrap {
+        max-width: calc(100% - 3.9rem);
+    }
+
+    .nav-mobile-actions {
+        margin-left: 0.5rem;
+    }
+
     .nav-wallet-item {
-        width: calc(100vw - 7rem);
-        max-width: calc(100vw - 7rem);
+        width: 100%;
+        max-width: none;
     }
 
     .nav-wallet-chip {
