@@ -130,6 +130,7 @@ Route::get('/mobile/payment-result', function (\Illuminate\Http\Request $request
         'error'    => '❌',
         default    => 'ℹ️',
     };
+    $deepLink = "talkabiz://payment-done?status={$status}";
     return response(<<<HTML
 <!DOCTYPE html>
 <html lang="id">
@@ -142,26 +143,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
 background:#f8f9fa;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
 .card{background:#fff;border-radius:24px;padding:40px 24px;max-width:380px;width:100%;text-align:center;
 box-shadow:0 2px 16px rgba(0,0,0,.08)}
-.icon{font-size:64px;margin-bottom:16px}
-h1{font-size:22px;color:#1a1a1a;margin-bottom:12px}
-p{font-size:15px;color:#666;line-height:1.5;margin-bottom:16px}
-.hint{display:flex;align-items:center;justify-content:center;gap:8px;
-background:#f0faf4;border-radius:12px;padding:14px 16px;margin-bottom:8px}
-.hint .x-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;
-background:#e5e7eb;border-radius:50%;font-size:14px;font-weight:700;color:#374151;flex-shrink:0}
-.hint span{font-size:14px;color:#1a1a1a;text-align:left;line-height:1.4}
+.spinner{width:40px;height:40px;border:4px solid #e5e7eb;border-top-color:#25D366;
+border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px}
+@keyframes spin{to{transform:rotate(360deg)}}
+p{font-size:15px;color:#666;line-height:1.5}
 </style>
 </head>
 <body>
 <div class="card">
-<div class="icon">{$icon}</div>
-<h1>{$title}</h1>
-<p>{$message}</p>
-<div class="hint">
-<div class="x-icon">✕</div>
-<span>Tekan tombol <b>✕</b> di <b>pojok kiri atas</b> untuk kembali ke aplikasi</span>
+<div class="spinner"></div>
+<p>Mengalihkan ke aplikasi...</p>
 </div>
-</div>
+<script>
+window.location.replace("{$deepLink}");
+</script>
 </body>
 </html>
 HTML)->header('Content-Type', 'text/html');
