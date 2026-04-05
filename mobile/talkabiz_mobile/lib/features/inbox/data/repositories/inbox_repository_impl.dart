@@ -28,4 +28,15 @@ class InboxRepositoryImpl implements InboxRepository {
   Future<InboxConversationDetail> getConversationDetail(int conversationId) {
     return _remoteDatasource.getConversationDetail(conversationId);
   }
+
+  @override
+  Future<void> sendMessage({
+    required int conversationId,
+    required String message,
+  }) {
+    return _remoteDatasource.sendMessage(
+      conversationId: conversationId,
+      message: message,
+    );
+  }
 }

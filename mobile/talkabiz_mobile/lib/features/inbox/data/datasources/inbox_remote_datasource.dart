@@ -36,4 +36,14 @@ class InboxRemoteDatasource {
     );
     return InboxConversationDetailModel.fromJson(response.data ?? {});
   }
+
+  Future<void> sendMessage({
+    required int conversationId,
+    required String message,
+  }) async {
+    await _dio.post<Map<String, dynamic>>(
+      '/mobile/inbox/$conversationId/send',
+      data: {'message': message},
+    );
+  }
 }

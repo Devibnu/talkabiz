@@ -5,4 +5,9 @@ abstract class InboxRepository {
   Future<List<InboxConversationItem>> getConversations({String? search});
 
   Future<InboxConversationDetail> getConversationDetail(int conversationId);
+
+  Future<void> sendMessage({
+    required int conversationId,
+    required String message,
+  });
 }

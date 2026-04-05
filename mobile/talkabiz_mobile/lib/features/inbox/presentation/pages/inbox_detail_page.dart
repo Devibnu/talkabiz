@@ -4,15 +4,37 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/inbox_message_item.dart';
 import '../providers/inbox_provider.dart';
 
-class InboxDetailPage extends ConsumerWidget {
+class InboxDetailPage extends ConsumerStatefulWidget {
   const InboxDetailPage({required this.conversationId, super.key});
 
   final int conversationId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InboxDetailPage> createState() => _InboxDetailPageState();
+}
+
+class _InboxDetailPageState extends ConsumerState<InboxDetailPage> {
+  late final TextEditingController _messageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _messageController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final detailAsync = ref.watch(
-      inboxConversationDetailProvider(conversationId),
+      inboxConversationDetailProvider(widget.conversationId),
+    );
+    final composerState = ref.watch(
+      inboxComposerProvider(widget.conversationId),
     );
 
     return Scaffold(
@@ -54,6 +76,70 @@ class InboxDetailPage extends ConsumerWidget {
                   },
                 ),
               ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (composerState.errorMessage != null) ...[
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(composerState.errorMessage!),
+                        ),
+                      ],
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _messageController,
+                              minLines: 1,
+                              maxLines: 4,
+                              textInputAction: TextInputAction.send,
+                              onSubmitted: composerState.isSubmitting
+                                  ? null
+                                  : (_) => _submitMessage(),
+                              decoration: const InputDecoration(
+                                hintText: 'Ketik balasan...',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 52,
+                            child: ElevatedButton(
+                              onPressed: composerState.isSubmitting
+                                  ? null
+                                  : _submitMessage,
+                              child: composerState.isSubmitting
+                                  ? const SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.send_rounded),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           );
         },
@@ -67,6 +153,26 @@ class InboxDetailPage extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
+    );
+  }
+
+  Future<void> _submitMessage() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final message = _messageController.text;
+    final success = await ref
+        .read(inboxComposerProvider(widget.conversationId).notifier)
+        .sendMessage(message);
+
+    if (!mounted || !success) {
+      return;
+    }
+
+    _messageController.clear();
+    ref.invalidate(inboxConversationDetailProvider(widget.conversationId));
+    ref.invalidate(inboxProvider);
+
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Pesan berhasil dikirim.')),
     );
   }
 }
