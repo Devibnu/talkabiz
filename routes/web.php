@@ -144,9 +144,12 @@ background:#f8f9fa;display:flex;align-items:center;justify-content:center;min-he
 box-shadow:0 2px 16px rgba(0,0,0,.08)}
 .icon{font-size:64px;margin-bottom:16px}
 h1{font-size:22px;color:#1a1a1a;margin-bottom:12px}
-p{font-size:15px;color:#666;line-height:1.5;margin-bottom:24px}
-.btn{display:inline-block;background:#25D366;color:#fff;border:none;border-radius:14px;
-padding:14px 32px;font-size:16px;font-weight:600;cursor:pointer;text-decoration:none}
+p{font-size:15px;color:#666;line-height:1.5;margin-bottom:16px}
+.hint{display:flex;align-items:center;justify-content:center;gap:8px;
+background:#f0faf4;border-radius:12px;padding:14px 16px;margin-bottom:8px}
+.hint .x-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;
+background:#e5e7eb;border-radius:50%;font-size:14px;font-weight:700;color:#374151;flex-shrink:0}
+.hint span{font-size:14px;color:#1a1a1a;text-align:left;line-height:1.4}
 </style>
 </head>
 <body>
@@ -154,7 +157,10 @@ padding:14px 32px;font-size:16px;font-weight:600;cursor:pointer;text-decoration:
 <div class="icon">{$icon}</div>
 <h1>{$title}</h1>
 <p>{$message}</p>
-<a class="btn" href="javascript:window.close()">Tutup</a>
+<div class="hint">
+<div class="x-icon">✕</div>
+<span>Tekan tombol <b>✕</b> di <b>pojok kiri atas</b> untuk kembali ke aplikasi</span>
+</div>
 </div>
 </body>
 </html>
