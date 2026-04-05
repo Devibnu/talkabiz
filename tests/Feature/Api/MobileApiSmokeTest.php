@@ -14,6 +14,7 @@ use App\Services\RevenueGuardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
@@ -127,11 +128,65 @@ class MobileApiSmokeTest extends TestCase
     }
 
     /** @test */
+    public function mobile_login_rate_limits_repeated_requests_from_same_ip(): void
+    {
+        config([
+            'auth_security.rate_limit_per_minute' => 1,
+            'auth_security.rate_limit_decay_seconds' => 60,
+        ]);
+
+        $ipAddress = '10.10.10.10';
+        $rateLimitKey = 'mobile_login_ip:' . $ipAddress;
+        RateLimiter::clear($rateLimitKey);
+
+        $requestPayload = [
+            'email' => 'missing@example.test',
+            'password' => 'wrong-password',
+            'device_name' => 'PHPUnit Device',
+        ];
+
+        $this->withServerVariables(['REMOTE_ADDR' => $ipAddress])
+            ->postJson('/api/mobile/auth/login', $requestPayload)
+            ->assertStatus(401)
+            ->assertJsonPath('success', false);
+
+        $rateLimitedResponse = $this->withServerVariables(['REMOTE_ADDR' => $ipAddress])
+            ->postJson('/api/mobile/auth/login', $requestPayload);
+
+        $rateLimitedResponse->assertStatus(429)
+            ->assertJsonPath('success', false);
+
+        $this->assertStringContainsString(
+            'Terlalu banyak request dari IP Anda.',
+            (string) $rateLimitedResponse->json('message')
+        );
+
+        RateLimiter::clear($rateLimitKey);
+    }
+
+    /** @test */
     public function mobile_protected_endpoints_require_authentication(): void
     {
         $this->getJson('/api/mobile/auth/me')->assertStatus(401);
         $this->getJson('/api/mobile/dashboard')->assertStatus(401);
         $this->getJson('/api/mobile/inbox')->assertStatus(401);
+    }
+
+    /** @test */
+    public function mobile_write_endpoints_require_authentication(): void
+    {
+        $this->postJson('/api/mobile/contacts', [
+            'name' => 'Unauthorized Contact',
+            'phone' => '628123450001',
+        ])->assertStatus(401);
+
+        $this->postJson('/api/mobile/inbox/1/read')->assertStatus(401);
+
+        $this->postJson('/api/mobile/inbox/1/send', [
+            'message' => 'Unauthorized message',
+        ])->assertStatus(401);
+
+        $this->postJson('/api/mobile/auth/logout')->assertStatus(401);
     }
 
     /** @test */
