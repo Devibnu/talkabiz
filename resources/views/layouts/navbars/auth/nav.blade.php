@@ -31,6 +31,12 @@
                                     @endif
                                 </div>
                                 <div class="flex-grow-1 nav-wallet-copy">
+                                    <div class="nav-wallet-inline">
+                                        <span class="nav-wallet-inline-label">Saldo WA</span>
+                                        <span class="nav-wallet-inline-amount {{ $userWallet->status_saldo === 'habis' ? 'text-danger' : 'text-dark' }}">
+                                            Rp {{ number_format($userWallet->saldo_tersedia, 0, ',', '.') }}
+                                        </span>
+                                    </div>
                                     <div class="text-xs text-secondary mb-0 lh-1 nav-wallet-label">
                                         <i class="fab fa-whatsapp nav-wallet-label-icon"></i>
                                         <span class="nav-wallet-label-text">Saldo WA</span>
