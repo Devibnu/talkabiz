@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeviceToken;
 use App\Models\User;
 use App\Services\LoginSecurityService;
 use Illuminate\Http\JsonResponse;
@@ -134,5 +135,24 @@ class MobileAuthController extends Controller
             'phone' => $user->phone ? (string) $user->phone : null,
             'onboarding_complete' => (bool) $user->onboarding_complete,
         ];
+    }
+
+    public function storeDeviceToken(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'token' => ['required', 'string', 'max:500'],
+            'platform' => ['required', 'string', 'in:ios,android'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => 'Validasi gagal', 'errors' => $validator->errors()], 422);
+        }
+
+        DeviceToken::updateOrCreate(
+            ['user_id' => $request->user()->id, 'token' => $request->string('token')],
+            ['platform' => $request->string('platform')],
+        );
+
+        return response()->json(['success' => true, 'message' => 'Device token stored']);
     }
 }

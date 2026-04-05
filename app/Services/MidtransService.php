@@ -64,7 +64,7 @@ class MidtransService
      */
     public function createSnapTransaction(
         int $amount,
-        Pengguna $user,
+        $user,
         int $klienId,
         string $orderId = null
     ): array {

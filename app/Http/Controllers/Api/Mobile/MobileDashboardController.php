@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Mobile;
 
 use App\Http\Controllers\Controller;
 use App\Models\Kontak;
+use App\Models\Subscription;
 use App\Models\TemplatePesan;
 use App\Models\User;
 use App\Models\WhatsappCampaign;
@@ -28,6 +29,7 @@ class MobileDashboardController extends Controller
         $contactsTotal = 0;
         $campaignsActive = 0;
         $templatesActive = 0;
+        $subscription = null;
 
         if ($klienId) {
             $connection = WhatsappConnection::where('klien_id', $klienId)
@@ -52,7 +54,17 @@ class MobileDashboardController extends Controller
                 WhatsappTemplate::where('klien_id', $klienId)
                     ->where('status', WhatsappTemplate::STATUS_APPROVED)
                     ->count();
+
+            $subscription = Subscription::where('klien_id', $klienId)
+                ->whereIn('status', ['active', 'grace', 'trial_selected'])
+                ->latest('id')
+                ->first();
         }
+
+        $planName = $subscription?->plan?->name ?? $user->currentPlan?->name ?? '-';
+        $subStatus = $subscription?->status ?? 'inactive';
+        $expiresAt = $subscription?->expires_at;
+        $daysRemaining = $expiresAt ? (int) max(0, now()->diffInDays($expiresAt, false)) : 0;
 
         return response()->json([
             'success' => true,
@@ -81,6 +93,12 @@ class MobileDashboardController extends Controller
                     'contacts',
                     'campaign_create',
                     'topup',
+                ],
+                'subscription' => [
+                    'plan_name' => $planName,
+                    'status' => $subStatus,
+                    'expires_at' => $expiresAt?->toIso8601String(),
+                    'days_remaining' => $daysRemaining,
                 ],
             ],
         ]);
