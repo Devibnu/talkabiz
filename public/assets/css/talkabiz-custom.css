@@ -988,7 +988,7 @@
     .nav-wallet-wrap {
         flex: 1 1 auto !important;
         min-width: 0 !important;
-        max-width: calc(100% - 4.25rem) !important;
+        max-width: calc(100% - 3.5rem) !important;
         padding-right: 0 !important;
     }
 
@@ -1012,9 +1012,9 @@
     }
 
     .navbar-main .nav-wallet-chip {
-        min-width: 15.75rem !important;
-        width: calc(100vw - 6.5rem) !important;
-        max-width: 19rem !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
         justify-content: space-between !important;
         padding: 0.6rem 0.8rem !important;
         gap: 0.55rem !important;
@@ -1063,7 +1063,7 @@
     }
 
     .nav-wallet-wrap {
-        max-width: calc(100% - 3.9rem) !important;
+        max-width: calc(100% - 3.25rem) !important;
     }
 
     .nav-mobile-actions {
@@ -1076,9 +1076,9 @@
     }
 
     .navbar-main .nav-wallet-chip {
-        min-width: 15.25rem !important;
-        width: calc(100vw - 6.25rem) !important;
-        max-width: 18.5rem !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
         padding: 0.5rem 0.65rem !important;
     }
 
