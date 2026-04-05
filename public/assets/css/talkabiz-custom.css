@@ -986,15 +986,15 @@
     }
 
     .nav-wallet-wrap {
-        flex: 1 1 auto;
-        min-width: 0;
-        max-width: calc(100% - 4.25rem);
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        max-width: calc(100% - 4.25rem) !important;
         padding-right: 0 !important;
     }
 
     .nav-mobile-actions {
-        flex: 0 0 auto;
-        margin-left: 0.75rem;
+        flex: 0 0 auto !important;
+        margin-left: 0.75rem !important;
     }
 
     .navbar-main {
@@ -1005,17 +1005,19 @@
         padding: 0.35rem 1rem 0.5rem !important;
     }
 
-    .nav-wallet-item {
+    .navbar-main .nav-wallet-item {
         margin-right: 0 !important;
-        width: 100%;
-        max-width: none;
+        width: 100% !important;
+        max-width: none !important;
     }
 
-    .nav-wallet-chip {
-        min-width: 0;
-        width: 100%;
-        padding: 0.55rem 0.7rem !important;
-        gap: 0.45rem;
+    .navbar-main .nav-wallet-chip {
+        min-width: 15.75rem !important;
+        width: calc(100vw - 6.5rem) !important;
+        max-width: 19rem !important;
+        justify-content: space-between !important;
+        padding: 0.6rem 0.8rem !important;
+        gap: 0.55rem !important;
     }
 
     .nav-wallet-icon {
@@ -1037,9 +1039,9 @@
     }
 
     .nav-wallet-action {
-        min-width: 2rem;
-        width: 2rem;
-        height: 2rem;
+        min-width: 2rem !important;
+        width: 2rem !important;
+        height: 2rem !important;
         margin-left: 0.35rem !important;
         border-radius: 0.7rem !important;
     }
@@ -1061,19 +1063,22 @@
     }
 
     .nav-wallet-wrap {
-        max-width: calc(100% - 3.9rem);
+        max-width: calc(100% - 3.9rem) !important;
     }
 
     .nav-mobile-actions {
-        margin-left: 0.5rem;
+        margin-left: 0.5rem !important;
     }
 
-    .nav-wallet-item {
-        width: 100%;
-        max-width: none;
+    .navbar-main .nav-wallet-item {
+        width: 100% !important;
+        max-width: none !important;
     }
 
-    .nav-wallet-chip {
+    .navbar-main .nav-wallet-chip {
+        min-width: 15.25rem !important;
+        width: calc(100vw - 6.25rem) !important;
+        max-width: 18.5rem !important;
         padding: 0.5rem 0.65rem !important;
     }
 
