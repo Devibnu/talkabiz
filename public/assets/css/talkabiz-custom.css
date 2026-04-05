@@ -433,6 +433,10 @@
     font-size: 0.65rem;
 }
 
+.nav-wallet-label-text {
+    white-space: nowrap;
+}
+
 .nav-wallet-amount {
     margin-top: 0.15rem;
     font-size: 0.95rem !important;
@@ -1015,16 +1019,42 @@
         min-width: 0 !important;
         width: 100% !important;
         max-width: none !important;
-        justify-content: space-between !important;
+        display: grid !important;
+        grid-template-columns: auto minmax(0, 1fr) auto !important;
+        grid-template-areas:
+            "icon label action"
+            "icon amount action" !important;
+        align-items: center !important;
+        justify-content: normal !important;
         padding: 0.6rem 0.8rem !important;
         gap: 0.55rem !important;
     }
 
     .navbar-main .nav-wallet-copy {
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: center !important;
-        align-items: flex-start !important;
+        display: contents !important;
+    }
+
+    .navbar-main .nav-wallet-icon {
+        grid-area: icon;
+    }
+
+    .navbar-main .nav-wallet-label {
+        grid-area: label;
+        align-self: end;
+    }
+
+    .navbar-main .nav-wallet-amount {
+        grid-area: amount;
+        align-self: start;
+    }
+
+    .navbar-main .nav-wallet-action {
+        grid-area: action;
+        align-self: center;
+        justify-self: end;
+    }
+
+    .nav-wallet-copy {
         flex: 1 1 auto !important;
         min-width: 0 !important;
     }
@@ -1043,12 +1073,14 @@
         white-space: nowrap !important;
         display: inline-flex !important;
         width: auto !important;
+        gap: 0.3rem !important;
     }
 
     .nav-wallet-amount {
         font-size: 0.92rem !important;
         line-height: 1.05 !important;
         white-space: nowrap !important;
+        margin-top: 0.08rem !important;
     }
 
     .nav-wallet-action {
@@ -1093,6 +1125,7 @@
         width: 100% !important;
         max-width: none !important;
         padding: 0.5rem 0.65rem !important;
+        gap: 0.45rem !important;
     }
 
     .nav-wallet-label {
