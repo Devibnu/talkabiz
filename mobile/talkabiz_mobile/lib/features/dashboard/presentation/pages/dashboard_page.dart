@@ -149,7 +149,7 @@ class _QuickActionTile extends StatelessWidget {
                 height: 48,
                 width: 48,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(icon, color: color),
@@ -204,7 +204,7 @@ class _InfoCard extends StatelessWidget {
               height: 52,
               width: 52,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(icon, color: color),
