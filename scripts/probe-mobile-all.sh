@@ -17,17 +17,36 @@ if [[ -z "$EMAIL" || -z "$PASSWORD" ]]; then
   exit 1
 fi
 
+PROBE_RESULTS=()
+FAIL_COUNT=0
+
 run_probe() {
   local label="$1"
   local script_name="$2"
   local device_suffix="$3"
 
   printf '\n===== %s =====\n' "$label"
-  "$BASE_DIR/$script_name" "$BASE_URL" "$EMAIL" "$PASSWORD" "$DEVICE_NAME - $device_suffix"
+
+  if "$BASE_DIR/$script_name" "$BASE_URL" "$EMAIL" "$PASSWORD" "$DEVICE_NAME - $device_suffix"; then
+    PROBE_RESULTS+=("PASS | $label")
+  else
+    PROBE_RESULTS+=("FAIL | $label")
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
 }
 
 run_probe 'AUTH PROBE' 'probe-mobile-auth.sh' 'Auth'
 run_probe 'CONTACTS PROBE' 'probe-mobile-contacts.sh' 'Contacts'
 run_probe 'INBOX PROBE' 'probe-mobile-inbox.sh' 'Inbox'
+
+printf '\n===== SUMMARY =====\n'
+for result in "${PROBE_RESULTS[@]}"; do
+  printf '%s\n' "$result"
+done
+
+if [[ "$FAIL_COUNT" -gt 0 ]]; then
+  printf '\nMobile probes finished with %s failure(s).\n' "$FAIL_COUNT" >&2
+  exit 1
+fi
 
 printf '\nAll mobile probes completed successfully.\n'
