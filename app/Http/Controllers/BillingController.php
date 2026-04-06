@@ -257,8 +257,8 @@ class BillingController extends Controller
             ], 403);
         }
         
-        // GUARD: Only owner and admin can top up
-        if (!in_array($user->role, ['owner', 'admin'])) {
+        // GUARD: Only owner, admin, and umkm can top up
+        if (!in_array($user->role, ['owner', 'admin', 'umkm'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Hanya Owner atau Admin yang dapat melakukan top up.'
@@ -382,8 +382,8 @@ class BillingController extends Controller
             ], 403);
         }
         
-        // GUARD: Only owner and admin can top up
-        if (!in_array($user->role, ['owner', 'admin'])) {
+        // GUARD: Only owner, admin, and umkm can top up
+        if (!in_array($user->role, ['owner', 'admin', 'umkm'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Hanya Owner atau Admin yang dapat melakukan top up.'
@@ -510,8 +510,8 @@ class BillingController extends Controller
             ], 403);
         }
         
-        // GUARD: Only owner and admin can top up
-        if (!in_array($user->role, ['owner', 'admin'])) {
+        // GUARD: Only owner, admin, and umkm can top up
+        if (!in_array($user->role, ['owner', 'admin', 'umkm'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Hanya Owner atau Admin yang dapat melakukan top up.'
