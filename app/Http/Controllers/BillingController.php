@@ -249,6 +249,8 @@ class BillingController extends Controller
     {
         $user = Auth::user();
         
+        \Log::info('topUpMidtrans HIT', ['user_id' => $user?->id, 'role' => $user?->role]);
+        
         // GUARD: Super Admin cannot use Midtrans top up
         if ($user->is_super_admin || $user->role === 'super_admin' || $user->role === 'superadmin') {
             return response()->json([
@@ -501,6 +503,8 @@ class BillingController extends Controller
     public function topUpUnified(Request $request)
     {
         $user = Auth::user();
+        
+        \Log::info('topUpUnified HIT', ['user_id' => $user?->id, 'role' => $user?->role, 'email' => $user?->email]);
         
         // GUARD: Super Admin cannot use top up
         if ($user->is_super_admin || $user->role === 'super_admin' || $user->role === 'superadmin') {
