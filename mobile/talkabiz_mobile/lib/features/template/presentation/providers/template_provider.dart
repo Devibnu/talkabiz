@@ -43,7 +43,6 @@ class TemplateActionController extends StateNotifier<AsyncValue<void>> {
     required String nama,
     required String kategori,
     required String konten,
-    String bahasa = 'id',
   }) async {
     state = const AsyncLoading();
     try {
@@ -52,7 +51,6 @@ class TemplateActionController extends StateNotifier<AsyncValue<void>> {
                 nama: nama,
                 kategori: kategori,
                 konten: konten,
-                bahasa: bahasa,
               );
       state = const AsyncData(null);
       _ref.invalidate(templatesProvider);

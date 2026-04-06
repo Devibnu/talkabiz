@@ -14,7 +14,6 @@ abstract class TemplateRepository {
     required String nama,
     required String kategori,
     required String konten,
-    String bahasa = 'id',
   });
 
   Future<TemplateDetail> updateTemplate(

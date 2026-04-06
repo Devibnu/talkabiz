@@ -62,7 +62,6 @@ class TemplatePesanController extends Controller
             'nama' => 'required|string|max:255',
             'kategori' => 'required|string|in:marketing,utility,authentication',
             'konten' => 'required|string|max:4096',
-            'bahasa' => 'nullable|string|in:id,en_US',
         ], [
             'nama.required' => 'Nama template wajib diisi',
             'kategori.required' => 'Kategori wajib dipilih',
@@ -83,7 +82,7 @@ class TemplatePesanController extends Controller
             'nama_template' => $request->nama,
             'nama_tampilan' => $request->nama,
             'kategori' => $request->kategori,
-            'bahasa' => $request->bahasa ?? 'id',
+            'bahasa' => 'id',
             'body' => $request->konten,
             'status' => TemplatePesan::STATUS_DRAFT,
             'klien_id' => Auth::user()->klien_id,

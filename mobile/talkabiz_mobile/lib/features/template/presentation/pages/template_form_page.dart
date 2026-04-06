@@ -172,7 +172,6 @@ class _TemplateFormPageState extends ConsumerState<TemplateFormPage> {
   late final TextEditingController _kontenController;
 
   String _kategori = 'marketing';
-  String _bahasa = 'id';
   String? _selectedQuickTemplate;
   bool _isLoading = false;
   bool _isInitialized = false;
@@ -198,7 +197,6 @@ class _TemplateFormPageState extends ConsumerState<TemplateFormPage> {
     _namaController.text = t.displayName;
     _kontenController.text = t.body;
     _kategori = t.category;
-    _bahasa = t.language;
   }
 
   void _applyQuickTemplate(String? key) {
@@ -384,18 +382,6 @@ class _TemplateFormPageState extends ConsumerState<TemplateFormPage> {
             ),
             const SizedBox(height: 16),
 
-            // Bahasa
-            DropdownButtonFormField<String>(
-              value: _bahasa,
-              decoration: const InputDecoration(labelText: 'Bahasa'),
-              items: const [
-                DropdownMenuItem(value: 'id', child: Text('Indonesia')),
-                DropdownMenuItem(value: 'en', child: Text('English')),
-              ],
-              onChanged: (v) => setState(() => _bahasa = v ?? 'id'),
-            ),
-            const SizedBox(height: 16),
-
             // Variable insert buttons (same as web)
             Text('Sisipkan Variabel',
                 style: theme.textTheme.titleSmall),
@@ -518,7 +504,6 @@ class _TemplateFormPageState extends ConsumerState<TemplateFormPage> {
           nama: _namaController.text.trim(),
           kategori: _kategori,
           konten: _kontenController.text,
-          bahasa: _bahasa,
         );
 
         if (mounted) {

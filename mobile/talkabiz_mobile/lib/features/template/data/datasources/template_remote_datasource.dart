@@ -41,7 +41,6 @@ class TemplateRemoteDatasource {
     required String nama,
     required String kategori,
     required String konten,
-    String bahasa = 'id',
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/mobile/templates',
@@ -49,7 +48,6 @@ class TemplateRemoteDatasource {
         'nama': nama,
         'kategori': kategori,
         'konten': konten,
-        'bahasa': bahasa,
       },
     );
 

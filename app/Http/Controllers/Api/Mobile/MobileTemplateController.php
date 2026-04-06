@@ -67,7 +67,6 @@ class MobileTemplateController extends Controller
             'nama' => 'required|string|max:255',
             'kategori' => 'required|in:marketing,utility,authentication',
             'konten' => 'required|string|max:4096',
-            'bahasa' => 'nullable|string|in:id,en_US',
         ]);
 
         if ($validator->fails()) {
@@ -86,7 +85,7 @@ class MobileTemplateController extends Controller
             'nama_template' => $request->input('nama'),
             'nama_tampilan' => $request->input('nama'),
             'kategori' => $request->input('kategori'),
-            'bahasa' => $request->input('bahasa', 'id'),
+            'bahasa' => 'id',
             'body' => $request->input('konten'),
             'status' => \App\Models\TemplatePesan::STATUS_DRAFT,
         ]);

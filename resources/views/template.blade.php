@@ -874,15 +874,6 @@
                         </select>
                     </div>
 
-                    {{-- Bahasa --}}
-                    <div class="mb-3">
-                        <label class="form-label-soft">Bahasa</label>
-                        <select name="bahasa" class="form-select form-select-soft" required>
-                            <option value="id">Indonesia</option>
-                            <option value="en_US">English (US)</option>
-                        </select>
-                    </div>
-
                     {{-- Isi Pesan --}}
                     <div class="mb-3">
                         <label class="form-label-soft">Isi Pesan</label>

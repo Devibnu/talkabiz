@@ -41,13 +41,11 @@ class TemplateRepositoryImpl implements TemplateRepository {
     required String nama,
     required String kategori,
     required String konten,
-    String bahasa = 'id',
   }) =>
       _datasource.createTemplate(
         nama: nama,
         kategori: kategori,
         konten: konten,
-        bahasa: bahasa,
       );
 
   @override
@@ -134,14 +132,13 @@ class PreviewTemplateRepository implements TemplateRepository {
     required String nama,
     required String kategori,
     required String konten,
-    String bahasa = 'id',
   }) async =>
       TemplateDetail(
         id: 99,
         name: nama,
         displayName: nama,
         category: kategori,
-        language: bahasa,
+        language: 'id',
         status: 'draft',
         body: konten,
         isUsable: false,
