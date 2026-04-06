@@ -145,6 +145,32 @@ class MidtransWebhookController extends Controller
             }
         }
 
+        // ── 3d. Route TOPUP- orders to DompetSaldo (SSOT) ──────────
+        if (str_starts_with($orderId, 'TOPUP-')) {
+            Log::info('[Midtrans Webhook] TOPUP- prefix detected', [
+                'order_id' => $orderId,
+                'status'   => $transactionStatus,
+                'ip'       => $ip,
+            ]);
+
+            try {
+                $result = $this->handleTopupWebhook($payload, $webhookLog);
+                return response()->json($result, 200);
+            } catch (\Throwable $e) {
+                Log::error('[Midtrans Webhook] TOPUP routing error', [
+                    'order_id' => $orderId,
+                    'error'    => $e->getMessage(),
+                    'trace'    => $e->getTraceAsString(),
+                ]);
+
+                if ($webhookLog) {
+                    $webhookLog->markFailed('Topup routing error: ' . $e->getMessage());
+                }
+
+                return response()->json(['message' => 'Webhook processed'], 200);
+            }
+        }
+
         // ── 4. Verify signature (non-PLAN orders) ───────────────────
         // Server key: try DB first (PaymentGateway), fall back to .env
         $serverKey = null;
@@ -380,5 +406,164 @@ class MidtransWebhookController extends Controller
             // Return 200 to prevent Midtrans retry-storm
             return response()->json(['message' => 'Webhook processed'], 200);
         }
+    }
+
+    /**
+     * Handle TOPUP- webhook: credit DompetSaldo (SSOT), update TransaksiSaldo.
+     */
+    private function handleTopupWebhook(array $payload, ?WebhookLog $webhookLog): array
+    {
+        $orderId           = $payload['order_id'];
+        $transactionStatus = $payload['transaction_status'];
+        $statusCode        = $payload['status_code'] ?? null;
+        $grossAmount       = $payload['gross_amount'] ?? null;
+        $signatureKey      = $payload['signature_key'] ?? null;
+        $transactionId     = $payload['transaction_id'] ?? null;
+        $paymentType       = $payload['payment_type'] ?? null;
+
+        // ── Verify signature ────────────────────────────────────────
+        $serverKey = null;
+        try {
+            $gateway = \App\Models\PaymentGateway::where('name', 'midtrans')
+                ->where('is_active', true)
+                ->first();
+            if ($gateway && !empty($gateway->server_key)) {
+                $serverKey = $gateway->server_key;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[Midtrans Topup Webhook] DB key lookup failed', ['error' => $e->getMessage()]);
+        }
+        if (empty($serverKey)) {
+            $serverKey = config('services.midtrans.server_key') ?: config('midtrans.server_key', '');
+        }
+
+        $expectedSignature = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
+        if (!hash_equals($expectedSignature, $signatureKey ?? '')) {
+            Log::error('[Midtrans Topup Webhook] Invalid signature', ['order_id' => $orderId]);
+            if ($webhookLog) {
+                $webhookLog->update(['signature_valid' => false]);
+                $webhookLog->markFailed('Invalid signature');
+            }
+            return ['message' => 'Invalid signature'];
+        }
+
+        if ($webhookLog) {
+            $webhookLog->update(['signature_valid' => true]);
+        }
+
+        // ── Find TransaksiSaldo by kode_transaksi ───────────────────
+        $transaksi = \App\Models\TransaksiSaldo::where('kode_transaksi', $orderId)->first();
+
+        if (!$transaksi) {
+            Log::warning('[Midtrans Topup Webhook] TransaksiSaldo not found', ['order_id' => $orderId]);
+            if ($webhookLog) {
+                $webhookLog->markFailed('TransaksiSaldo not found');
+            }
+            return ['message' => 'Transaction not found'];
+        }
+
+        // ── Idempotent check ────────────────────────────────────────
+        if ($transaksi->status_topup === 'disetujui') {
+            Log::info('[Midtrans Topup Webhook] Already processed (idempotent)', ['order_id' => $orderId]);
+            if ($webhookLog) {
+                $webhookLog->markProcessed(json_encode(['idempotent' => true]));
+            }
+            return ['message' => 'Already processed'];
+        }
+
+        // ── Settlement / Capture → credit DompetSaldo ───────────────
+        if ($transactionStatus === 'settlement' || $transactionStatus === 'capture') {
+
+            DB::transaction(function () use ($transaksi, $orderId, $grossAmount, $transactionId, $paymentType, $payload) {
+
+                // Lock transaksi row
+                $transaksi = \App\Models\TransaksiSaldo::where('id', $transaksi->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                // Double-check idempotency inside transaction
+                if ($transaksi->status_topup === 'disetujui') {
+                    return;
+                }
+
+                // Lock DompetSaldo
+                $dompet = \App\Models\DompetSaldo::where('id', $transaksi->dompet_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$dompet) {
+                    Log::error('[Midtrans Topup Webhook] DompetSaldo not found', [
+                        'order_id'  => $orderId,
+                        'dompet_id' => $transaksi->dompet_id,
+                    ]);
+                    return;
+                }
+
+                $saldoSebelum = $dompet->saldo_tersedia;
+                $creditAmount = (int) $transaksi->nominal;
+
+                // Credit DompetSaldo (SSOT)
+                $dompet->saldo_tersedia += $creditAmount;
+                $dompet->total_topup    += $creditAmount;
+                $dompet->terakhir_topup      = now();
+                $dompet->terakhir_transaksi  = now();
+                $dompet->save();
+
+                // Update TransaksiSaldo
+                $transaksi->update([
+                    'status_topup'     => 'disetujui',
+                    'saldo_sebelum'    => $saldoSebelum,
+                    'saldo_sesudah'    => $dompet->saldo_tersedia,
+                    'metode_bayar'     => $paymentType ?? 'midtrans',
+                    'waktu_diproses'   => now(),
+                    'midtrans_response' => $payload,
+                    'catatan_admin'    => 'Auto-approved via Midtrans webhook',
+                ]);
+
+                Log::info('[Midtrans Topup Webhook] DompetSaldo credited', [
+                    'order_id'       => $orderId,
+                    'dompet_id'      => $dompet->id,
+                    'amount'         => $creditAmount,
+                    'balance_before' => $saldoSebelum,
+                    'balance_after'  => $dompet->saldo_tersedia,
+                ]);
+            });
+
+            if ($webhookLog) {
+                $webhookLog->markProcessed(json_encode([
+                    'order_id' => $orderId,
+                    'status'   => 'disetujui',
+                    'amount'   => $transaksi->nominal,
+                ]));
+            }
+
+        } elseif (in_array($transactionStatus, ['expire', 'cancel', 'deny', 'failure'])) {
+
+            $transaksi->update([
+                'status_topup'      => 'ditolak',
+                'midtrans_response' => $payload,
+                'waktu_diproses'    => now(),
+                'catatan_admin'     => 'Midtrans status: ' . $transactionStatus,
+            ]);
+
+            Log::info('[Midtrans Topup Webhook] Topup marked failed', [
+                'order_id' => $orderId,
+                'status'   => $transactionStatus,
+            ]);
+
+            if ($webhookLog) {
+                $webhookLog->markProcessed(json_encode([
+                    'order_id' => $orderId,
+                    'status'   => 'ditolak',
+                ]));
+            }
+        } else {
+            Log::info('[Midtrans Topup Webhook] Unhandled status', [
+                'order_id' => $orderId,
+                'status'   => $transactionStatus,
+            ]);
+        }
+
+        return ['message' => 'Topup webhook processed'];
     }
 }
