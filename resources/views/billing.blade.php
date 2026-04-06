@@ -557,7 +557,7 @@ document.getElementById('formTopUp')?.addEventListener('submit', function(e) {
     
     // Role check
     if (!canTopUp) {
-        showPaymentResult('error', 'Akses Ditolak', 'Anda tidak memiliki izin untuk melakukan top up. Hanya Owner atau Admin yang diizinkan.');
+        showPaymentResult('error', 'Akses Ditolak', 'Anda tidak memiliki izin untuk melakukan top up.');
         return;
     }
     
