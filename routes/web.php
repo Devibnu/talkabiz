@@ -252,6 +252,9 @@ Route::middleware(['client.access'])->group(function () {
 				$status = ($request->schedule_type === 'later' && $request->scheduled_at)
 					? 'scheduled' : 'draft';
 
+				$pricingService = app(\App\Services\PricingService::class);
+				$hargaPerPesan = (int) $pricingService->getPrice('marketing');
+
 				$campaign = \App\Models\WhatsappCampaign::create([
 					'klien_id' => $user->klien_id,
 					'template_id' => $templateId,
@@ -261,7 +264,7 @@ Route::middleware(['client.access'])->group(function () {
 					'audience_filter' => $audienceFilter,
 					'scheduled_at' => $request->scheduled_at,
 					'total_recipients' => $totalRecipients,
-					'estimated_cost' => $totalRecipients * 350,
+					'estimated_cost' => $totalRecipients * $hargaPerPesan,
 					'rate_limit_per_second' => 10,
 				]);
 
@@ -336,10 +339,58 @@ Route::middleware(['client.access'])->group(function () {
 					return back()->with('error', 'Tidak ada penerima yang ditemukan.');
 				}
 
-				// Mark as running
-				$campaign->update(['status' => 'running', 'started_at' => now()]);
+				// ============================================================
+				// SALDO: Deduct dari DompetSaldo (SSOT) sebelum kirim
+				// ============================================================
+				$pricingService = app(\App\Services\PricingService::class);
+				$hargaPerPesan = (int) $pricingService->getPrice('marketing');
+				$totalBiaya = $recipients->count() * $hargaPerPesan;
 
-				// Dispatch using MessageDispatchService
+				$dompet = \App\Models\DompetSaldo::where('klien_id', $user->klien_id)
+					->lockForUpdate()
+					->first();
+
+				if (!$dompet) {
+					return back()->with('error', 'Dompet saldo tidak ditemukan.');
+				}
+
+				if ($dompet->saldo_tersedia < $totalBiaya) {
+					$kurang = $totalBiaya - $dompet->saldo_tersedia;
+					return back()->with('error',
+						"Saldo tidak cukup. Dibutuhkan Rp " . number_format($totalBiaya, 0, ',', '.') .
+						", tersedia Rp " . number_format($dompet->saldo_tersedia, 0, ',', '.') .
+						". Top up minimal Rp " . number_format($kurang, 0, ',', '.') . " lagi."
+					);
+				}
+
+				// Potong saldo
+				$saldoSebelum = $dompet->saldo_tersedia;
+				$dompet->saldo_tersedia -= $totalBiaya;
+				$dompet->total_terpakai += $totalBiaya;
+				$dompet->terakhir_transaksi = now();
+				$dompet->save();
+
+				// Catat transaksi
+				\App\Models\TransaksiSaldo::create([
+					'kode_transaksi' => 'CAMP-' . strtoupper(\Illuminate\Support\Str::random(8)),
+					'dompet_id' => $dompet->id,
+					'klien_id' => $user->klien_id,
+					'pengguna_id' => $user->id,
+					'jenis' => 'potong',
+					'nominal' => -$totalBiaya,
+					'saldo_sebelum' => $saldoSebelum,
+					'saldo_sesudah' => $dompet->saldo_tersedia,
+					'keterangan' => "Campaign: {$campaign->name} ({$recipients->count()} penerima × Rp " . number_format($hargaPerPesan, 0, ',', '.') . ")",
+				]);
+
+				// Mark as running
+				$campaign->update([
+					'status' => 'running',
+					'started_at' => now(),
+					'estimated_cost' => $totalBiaya,
+				]);
+
+				// Dispatch using MessageDispatchService (preAuthorized = true, skip Wallet)
 				try {
 					$dispatchService = app(\App\Services\Message\MessageDispatchService::class);
 
@@ -348,7 +399,7 @@ Route::middleware(['client.access'])->group(function () {
 						'name' => $k->nama,
 					])->toArray();
 
-				$metadata = [
+					$metadata = [
 						'campaign_id' => $campaign->id,
 						'template_provider_id' => $templateProviderId,
 						'template_name' => $templateName,
@@ -361,28 +412,79 @@ Route::middleware(['client.access'])->group(function () {
 						recipients: $recipientArray,
 						messageContent: $messageBody,
 						campaignId: (string) $campaign->id,
-						preAuthorized: false,
+						preAuthorized: true,
 						metadata: $metadata,
 					);
 
 					$result = $dispatchService->dispatch($request);
 
+					// Refund saldo untuk pesan yang gagal
+					if ($result->totalFailed > 0) {
+						$refundAmount = $result->totalFailed * $hargaPerPesan;
+						$dompet = \App\Models\DompetSaldo::where('klien_id', $user->klien_id)
+							->lockForUpdate()
+							->first();
+						$saldoSebelumRefund = $dompet->saldo_tersedia;
+						$dompet->saldo_tersedia += $refundAmount;
+						$dompet->total_terpakai -= $refundAmount;
+						$dompet->terakhir_transaksi = now();
+						$dompet->save();
+
+						\App\Models\TransaksiSaldo::create([
+							'kode_transaksi' => 'RFND-' . strtoupper(\Illuminate\Support\Str::random(8)),
+							'dompet_id' => $dompet->id,
+							'klien_id' => $user->klien_id,
+							'pengguna_id' => $user->id,
+							'jenis' => 'refund',
+							'nominal' => $refundAmount,
+							'saldo_sebelum' => $saldoSebelumRefund,
+							'saldo_sesudah' => $dompet->saldo_tersedia,
+							'keterangan' => "Refund {$result->totalFailed} pesan gagal campaign: {$campaign->name}",
+						]);
+					}
+
+					$actualCost = $result->totalSent * $hargaPerPesan;
+
 					$campaign->update([
 						'sent_count' => $result->totalSent,
 						'failed_count' => $result->totalFailed,
-						'actual_cost' => $result->totalCost,
+						'actual_cost' => $actualCost,
 						'completed_at' => now(),
 						'status' => $result->totalFailed === $result->totalSent + $result->totalFailed
 							? 'cancelled' : 'completed',
 					]);
 
 					$msg = $result->totalFailed > 0
-						? "Campaign selesai. Terkirim: {$result->totalSent}, Gagal: {$result->totalFailed}"
-						: "Campaign berhasil dikirim ke {$result->totalSent} penerima.";
+						? "Campaign selesai. Terkirim: {$result->totalSent}, Gagal: {$result->totalFailed}. Saldo dipotong Rp " . number_format($actualCost, 0, ',', '.')
+						: "Campaign berhasil dikirim ke {$result->totalSent} penerima. Saldo dipotong Rp " . number_format($actualCost, 0, ',', '.');
 
 					return redirect()->route('campaign')->with('success', $msg);
 
 				} catch (\Exception $e) {
+					// Full refund karena gagal total
+					$dompet = \App\Models\DompetSaldo::where('klien_id', $user->klien_id)
+						->lockForUpdate()
+						->first();
+					if ($dompet) {
+						$saldoSebelumRefund = $dompet->saldo_tersedia;
+						$dompet->saldo_tersedia += $totalBiaya;
+						$dompet->total_terpakai -= $totalBiaya;
+						$dompet->terakhir_transaksi = now();
+						$dompet->save();
+
+						\App\Models\TransaksiSaldo::create([
+							'kode_transaksi' => 'RFND-' . strtoupper(\Illuminate\Support\Str::random(8)),
+							'dompet_id' => $dompet->id,
+							'klien_id' => $user->klien_id,
+							'pengguna_id' => $user->id,
+							'jenis' => 'refund',
+							'nominal' => $totalBiaya,
+							'saldo_sebelum' => $saldoSebelumRefund,
+							'saldo_sesudah' => $dompet->saldo_tersedia,
+							'keterangan' => "Full refund campaign gagal: {$campaign->name} - " . $e->getMessage(),
+						]);
+					}
+
 					\Log::error('Campaign send failed', ['campaign' => $id, 'error' => $e->getMessage()]);
 					$campaign->update(['status' => 'draft', 'started_at' => null]);
 					return back()->with('error', 'Gagal mengirim: ' . $e->getMessage());
