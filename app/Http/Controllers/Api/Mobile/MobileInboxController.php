@@ -8,6 +8,7 @@ use App\Models\PercakapanInbox;
 use App\Models\PesanInbox;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 class MobileInboxController extends Controller
@@ -108,7 +109,9 @@ class MobileInboxController extends Controller
     public function send(Request $request, int $percakapanId): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'message' => ['required', 'string'],
+            'message' => ['nullable', 'string'],
+            'type' => ['nullable', 'string', 'in:teks,gambar,dokumen,audio,video'],
+            'media_url' => ['nullable', 'string', 'url'],
         ]);
 
         if ($validator->fails()) {
@@ -119,10 +122,39 @@ class MobileInboxController extends Controller
             ], 422);
         }
 
-        $request->merge([
-            'tipe' => 'teks',
-            'isi_pesan' => $request->input('message'),
-        ]);
+        $tipe = $request->input('type', 'teks');
+        $mediaUrl = $request->input('media_url');
+        $message = $request->input('message', '');
+
+        // For media types, media_url is required
+        if ($tipe !== 'teks' && empty($mediaUrl)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'media_url wajib untuk tipe media',
+            ], 422);
+        }
+
+        // For text type, message is required
+        if ($tipe === 'teks' && empty(trim($message))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pesan tidak boleh kosong',
+            ], 422);
+        }
+
+        $mergeData = [
+            'tipe' => $tipe,
+            'isi_pesan' => $message,
+        ];
+
+        if ($mediaUrl) {
+            $mergeData['media_url'] = $mediaUrl;
+        }
+        if ($tipe !== 'teks' && !empty($message)) {
+            $mergeData['caption'] = $message;
+        }
+
+        $request->merge($mergeData);
 
         $response = $this->legacyInboxController->kirimPesan($percakapanId, $request);
         $payload = $response->getData(true);
@@ -141,6 +173,52 @@ class MobileInboxController extends Controller
             'message' => $payload['pesan'] ?? 'Pesan diproses',
             'data' => $data,
         ], $response->getStatusCode());
+    }
+
+    /**
+     * Upload media file and return public URL.
+     */
+    public function uploadMedia(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'file' => ['required', 'file', 'max:10240'], // 10MB max
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi gagal',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $file = $request->file('file');
+        $extension = $file->getClientOriginalExtension();
+        $mime = $file->getMimeType();
+
+        // Determine media type from mime
+        $mediaType = 'dokumen';
+        if (str_starts_with($mime, 'image/')) {
+            $mediaType = 'gambar';
+        } elseif (str_starts_with($mime, 'audio/')) {
+            $mediaType = 'audio';
+        } elseif (str_starts_with($mime, 'video/')) {
+            $mediaType = 'video';
+        }
+
+        $path = $file->store('inbox-media/' . date('Y/m'), 'public');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'File berhasil diupload',
+            'data' => [
+                'url' => Storage::disk('public')->url($path),
+                'media_type' => $mediaType,
+                'filename' => $file->getClientOriginalName(),
+                'size' => $file->getSize(),
+                'mime' => $mime,
+            ],
+        ]);
     }
 
     public function read(Request $request, int $percakapanId): JsonResponse

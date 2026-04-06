@@ -72,6 +72,7 @@ Route::middleware('auth:sanctum')->prefix('mobile')->group(function () {
         Route::get('/{percakapanId}', [MobileInboxController::class, 'show'])->name('mobile.inbox.show');
         Route::post('/{percakapanId}/send', [MobileInboxController::class, 'send'])->name('mobile.inbox.send');
         Route::post('/{percakapanId}/read', [MobileInboxController::class, 'read'])->name('mobile.inbox.read');
+        Route::post('/upload-media', [MobileInboxController::class, 'uploadMedia'])->name('mobile.inbox.upload-media');
     });
 
     Route::prefix('billing')->group(function () {
