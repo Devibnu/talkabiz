@@ -25,10 +25,12 @@ class MobileBillingController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $user->loadMissing(['klien', 'currentPlan', 'wallet']);
+        $user->loadMissing(['klien', 'currentPlan']);
 
         $klienId = $user->klien_id;
-        $balance = (int) ($user->wallet?->balance ?? $user->getWallet()?->saldo_tersedia ?? 0);
+        // SSOT: Use DompetSaldo (same source as web dashboard/navbar)
+        $dompet = $user->getWallet();
+        $balance = (int) ($dompet?->saldo_tersedia ?? 0);
 
         $subscription = null;
         if ($klienId) {
