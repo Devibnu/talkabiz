@@ -73,13 +73,23 @@ class DashboardController extends Controller
         
         // SALDO & USAGE — from DompetSaldo (SSOT, same as navbar)
         $saldo = (int) ($dompet?->saldo_tersedia ?? 0);
-        $pemakaianBulanIni = 0; // TODO: calculate from DompetSaldo transactions when available
+        
+        // Campaign & message stats from whatsapp_campaigns (SSOT)
+        $klienId = $user->klien_id;
+        $totalCampaigns = \App\Models\WhatsappCampaign::where('klien_id', $klienId)->count();
+        $pemakaianBulanIni = (int) \App\Models\WhatsappCampaign::where('klien_id', $klienId)
+            ->whereMonth('created_at', now()->month)
+            ->whereYear('created_at', now()->year)
+            ->sum('actual_cost');
+        $jumlahPesanBulanIni = (int) \App\Models\WhatsappCampaign::where('klien_id', $klienId)
+            ->whereMonth('created_at', now()->month)
+            ->whereYear('created_at', now()->year)
+            ->sum('sent_count');
         
         // Calculate message estimates based on SALDO (not quotas!)
         // Database-driven pricing (NO hardcoded prices!)
         $hargaPerPesan = $this->messageRateService->getRate('utility');
         $estimasiPesanTersisa = $hargaPerPesan > 0 ? floor($saldo / $hargaPerPesan) : 0;
-        $jumlahPesanBulanIni = $hargaPerPesan > 0 ? floor($pemakaianBulanIni / $hargaPerPesan) : 0;
         
         // Get PLAN for FEATURES (not quotas!)
         $currentPlan = $user->currentPlan;
@@ -96,6 +106,7 @@ class DashboardController extends Controller
             'hargaPerPesan',
             'estimasiPesanTersisa',
             'jumlahPesanBulanIni',
+            'totalCampaigns',
             'currentPlan',
             'activePlan',
             'daysRemaining',
@@ -127,6 +138,7 @@ class DashboardController extends Controller
             'hargaPerPesan' => $this->messageRateService->getRate('utility'),
             'estimasiPesanTersisa' => 0,
             'jumlahPesanBulanIni' => 0,
+            'totalCampaigns' => 0,
             'currentPlan' => null,
             'activePlan' => null, // Alias for currentPlan
             'daysRemaining' => 0,
