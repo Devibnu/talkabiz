@@ -20,10 +20,11 @@ class MobileDashboardController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $user->loadMissing(['klien', 'currentPlan', 'wallet']);
+        $user->loadMissing(['klien', 'currentPlan']);
 
         $klienId = $user->klien_id;
-        $balance = (int) ($user->wallet?->balance ?? $user->getWallet()?->saldo_tersedia ?? 0);
+        $dompet = $user->getWallet();
+        $balance = (int) ($dompet?->saldo_tersedia ?? 0);
 
         $connection = null;
         $contactsTotal = 0;
