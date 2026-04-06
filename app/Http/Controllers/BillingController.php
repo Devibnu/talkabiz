@@ -65,37 +65,43 @@ class BillingController extends Controller
             abort(403, 'Authentication required. Please login again.');
         }
         
-        // Get wallet for authenticated user (wallet MUST exist after onboarding)
-        try {
-            $dompet = $this->walletService->getWallet($user);
-        } catch (\RuntimeException $e) {
-            // Wallet doesn't exist - user hasn't completed onboarding
-            // This should be prevented by middleware, but fail-safe here
-            abort(403, 'Wallet not found. Please complete onboarding first.');
-        } catch (\Exception $e) {
-            // Unexpected error
-            abort(500, 'Failed to access wallet: ' . $e->getMessage());
-        }
+        // SSOT: Use DompetSaldo (same source as mobile API & navbar)
+        $klienId = $user->klien_id;
+        $dompet = $klienId ? \App\Models\DompetSaldo::where('klien_id', $klienId)->first() : null;
         
-        $saldo = $dompet->saldo_tersedia;
+        $saldo = (int) ($dompet?->saldo_tersedia ?? 0);
         
-        // Get monthly usage
-        $pemakaianBulanIni = $this->walletService->getMonthlyUsage($userId);
+        // Get monthly usage from TransaksiSaldo (SSOT)
+        $pemakaianBulanIni = $klienId
+            ? \App\Models\TransaksiSaldo::where('klien_id', $klienId)
+                ->where('jenis', 'potong')
+                ->whereYear('created_at', now()->year)
+                ->whereMonth('created_at', now()->month)
+                ->sum(\Illuminate\Support\Facades\DB::raw('ABS(nominal)'))
+            : 0;
         
-        // Get transaction history
-        $transaksi = $this->walletService->getTransactionHistory($userId, 20);
+        // Get transaction history from TransaksiSaldo (SSOT)
+        $transaksi = $klienId
+            ? \App\Models\TransaksiSaldo::where('klien_id', $klienId)
+                ->orderBy('created_at', 'desc')
+                ->limit(20)
+                ->get()
+            : collect([]);
         
         // Get pending top ups (for admin)
         $pendingTopups = [];
         if ($user->role === 'admin') {
-            $pendingTopups = $this->walletService->getPendingTopUps();
+            $pendingTopups = \App\Models\TransaksiSaldo::where('jenis', 'topup')
+                ->where('status_topup', 'pending')
+                ->orderBy('created_at', 'desc')
+                ->get();
         }
         
         // Price per message (DATABASE-DRIVEN, NO HARDCODE!)
         $hargaPerPesan = $this->messageRateService->getRate('utility');
         
-        // Get limit usage summary for UI (use userId, not klien_id)
-        $limitData = $this->limitService->getUsageSummary($userId);
+        // Get limit usage summary for UI
+        $limitData = $this->limitService->getUsageSummary($user->id);
         
         // Payment Gateway info from DB
         $activeGateway = $this->gatewayService->getActiveGateway();
