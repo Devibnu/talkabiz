@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Mobile\MobileContactsController;
 use App\Http\Controllers\Api\Mobile\MobileDashboardController;
 use App\Http\Controllers\Api\Mobile\MobileBillingController;
 use App\Http\Controllers\Api\Mobile\MobileInboxController;
+use App\Http\Controllers\Api\Mobile\MobileTemplateController;
 
 /*
 |--------------------------------------------------------------------------
@@ -82,6 +83,16 @@ Route::middleware('auth:sanctum')->prefix('mobile')->group(function () {
         Route::get('/topup-options', [MobileBillingController::class, 'topUpOptions'])->name('mobile.billing.topup-options');
         Route::post('/topup', [MobileBillingController::class, 'topUp'])->name('mobile.billing.topup');
         Route::get('/transactions', [MobileBillingController::class, 'transactions'])->name('mobile.billing.transactions');
+    });
+
+    Route::middleware('subscription.active')->prefix('templates')->group(function () {
+        Route::get('/', [MobileTemplateController::class, 'index'])->name('mobile.templates.index');
+        Route::post('/', [MobileTemplateController::class, 'store'])->name('mobile.templates.store');
+        Route::post('/sync-status', [MobileTemplateController::class, 'syncStatus'])->name('mobile.templates.sync-status');
+        Route::get('/{id}', [MobileTemplateController::class, 'show'])->name('mobile.templates.show');
+        Route::put('/{id}', [MobileTemplateController::class, 'update'])->name('mobile.templates.update');
+        Route::delete('/{id}', [MobileTemplateController::class, 'destroy'])->name('mobile.templates.destroy');
+        Route::post('/{id}/submit', [MobileTemplateController::class, 'submit'])->name('mobile.templates.submit');
     });
 });
 
