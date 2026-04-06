@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/preview/app_preview.dart';
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import '../datasources/dashboard_remote_datasource.dart';
@@ -12,6 +13,10 @@ final dashboardRemoteDatasourceProvider = Provider<DashboardRemoteDatasource>((
 });
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
+  if (kUsePreviewData) {
+    return const PreviewDashboardRepository();
+  }
+
   return DashboardRepositoryImpl(ref.watch(dashboardRemoteDatasourceProvider));
 });
 

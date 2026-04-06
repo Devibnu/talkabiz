@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/preview/app_preview.dart';
 import '../../domain/entities/inbox_conversation_detail.dart';
 import '../../domain/entities/inbox_conversation_item.dart';
 import '../../domain/repositories/inbox_repository.dart';
@@ -11,6 +12,10 @@ final inboxRemoteDatasourceProvider = Provider<InboxRemoteDatasource>((ref) {
 });
 
 final inboxRepositoryProvider = Provider<InboxRepository>((ref) {
+  if (kUsePreviewData) {
+    return const PreviewInboxRepository();
+  }
+
   return InboxRepositoryImpl(ref.watch(inboxRemoteDatasourceProvider));
 });
 
@@ -33,10 +38,20 @@ class InboxRepositoryImpl implements InboxRepository {
   Future<void> sendMessage({
     required int conversationId,
     required String message,
+    String? type,
+    String? mediaUrl,
   }) {
     return _remoteDatasource.sendMessage(
       conversationId: conversationId,
       message: message,
+      type: type,
+      mediaUrl: mediaUrl,
     );
+  }
+
+  @override
+  Future<({String url, String mediaType})> uploadMedia(String filePath) async {
+    final result = await _remoteDatasource.uploadMedia(filePath);
+    return (url: result.url, mediaType: result.mediaType);
   }
 }

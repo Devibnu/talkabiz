@@ -60,5 +60,11 @@
 	<array>
 		<string>talkabiz</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Talkabiz memerlukan akses kamera untuk mengirim foto di chat</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Talkabiz memerlukan akses galeri untuk mengirim foto di chat</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Talkabiz memerlukan akses mikrofon untuk merekam video</string>
 </dict>
 </plist>

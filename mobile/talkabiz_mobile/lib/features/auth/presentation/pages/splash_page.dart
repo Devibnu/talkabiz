@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_names.dart';
+import '../../../../core/services/push_notification_service.dart';
 import '../providers/auth_provider.dart';
 
 class SplashPage extends ConsumerStatefulWidget {
@@ -21,9 +22,20 @@ class _SplashPageState extends ConsumerState<SplashPage> {
       if (!mounted) return;
 
       final authState = ref.read(authControllerProvider);
-      context.goNamed(
-        authState.isAuthenticated ? RouteNames.dashboard : RouteNames.login,
-      );
+      if (!authState.isAuthenticated) {
+        context.goNamed(RouteNames.login);
+      } else {
+        // Initialize push notifications for authenticated users
+        try {
+          await ref.read(pushNotificationServiceProvider).initialize();
+        } catch (_) {}
+
+        if (authState.session?.user.onboardingComplete != true) {
+          context.goNamed(RouteNames.onboarding);
+        } else {
+          context.goNamed(RouteNames.dashboard);
+        }
+      }
     });
   }
 

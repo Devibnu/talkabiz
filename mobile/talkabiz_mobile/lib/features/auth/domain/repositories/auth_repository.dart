@@ -8,6 +8,11 @@ abstract class AuthRepository {
     required String deviceName,
   });
 
+  Future<AuthSession> googleLogin({
+    required String idToken,
+    required String deviceName,
+  });
+
   Future<AuthUser> me();
 
   Future<void> logout();

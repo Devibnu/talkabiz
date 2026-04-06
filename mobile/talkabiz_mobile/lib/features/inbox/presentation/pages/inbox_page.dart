@@ -32,6 +32,7 @@ class _InboxPageState extends ConsumerState<InboxPage> {
   @override
   Widget build(BuildContext context) {
     final inboxAsync = ref.watch(inboxProvider);
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Inbox')),
@@ -39,28 +40,48 @@ class _InboxPageState extends ConsumerState<InboxPage> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-            child: TextField(
-              controller: _searchController,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'Cari percakapan',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {});
-                          ref.read(inboxSearchProvider.notifier).state = '';
-                        },
-                        icon: const Icon(Icons.close_rounded),
-                      ),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFCF6),
+                borderRadius: BorderRadius.circular(24),
               ),
-              onChanged: (value) {
-                setState(() {});
-                ref.read(inboxSearchProvider.notifier).state = value;
-              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Percakapan aktif', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Pantau pesan masuk, prioritas, dan balas cepat dari mobile.',
+                    style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _searchController,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Cari percakapan',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                                ref.read(inboxSearchProvider.notifier).state =
+                                    '';
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                    ),
+                    onChanged: (value) {
+                      setState(() {});
+                      ref.read(inboxSearchProvider.notifier).state = value;
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -133,16 +154,37 @@ class _InboxConversationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
+                  Container(
+                    height: 42,
+                    width: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0x1F1959D1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _initials(conversation.contactName),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: const Color(0xFF1959D1),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       conversation.contactName,
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                   ),
                   if (conversation.unreadCount > 0)
@@ -168,15 +210,20 @@ class _InboxConversationCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 conversation.phone,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 conversation.lastMessage ?? '-',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      height: 1.35,
+                    ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   _InboxChip(label: conversation.status),
@@ -185,7 +232,10 @@ class _InboxConversationCard extends StatelessWidget {
                     const _InboxChip(label: 'Saya'),
                   ],
                   const Spacer(),
-                  Text(_formatDate(conversation.lastMessageAt)),
+                  Text(
+                    _formatDate(conversation.lastMessageAt),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ],
@@ -193,6 +243,22 @@ class _InboxConversationCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _initials(String value) {
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) {
+      return '?';
+    }
+    if (parts.length == 1) {
+      return parts.first.characters.first.toUpperCase();
+    }
+    return (parts.first.characters.first + parts.last.characters.first)
+        .toUpperCase();
   }
 
   String _formatDate(DateTime? value) {
@@ -220,7 +286,12 @@ class _InboxChip extends StatelessWidget {
         color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(label),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+      ),
     );
   }
 }

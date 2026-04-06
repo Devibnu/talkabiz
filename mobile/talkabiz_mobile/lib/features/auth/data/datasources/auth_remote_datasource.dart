@@ -28,4 +28,16 @@ class AuthRemoteDatasource {
   Future<void> logout() async {
     await _dio.post('/mobile/auth/logout');
   }
+
+  Future<AuthSessionModel> googleLogin({
+    required String idToken,
+    required String deviceName,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/mobile/auth/google',
+      data: {'id_token': idToken, 'device_name': deviceName},
+    );
+
+    return AuthSessionModel.fromJson(response.data ?? {});
+  }
 }

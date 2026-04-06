@@ -17,3 +17,5 @@ yarn-error.log
 wa-gateway/node_modules
 wa-gateway/sessions
 wa-gateway/logs
+mobile/talkabiz_mobile/.dart_tool/
+mobile/talkabiz_mobile/.flutter-plugins-dependencies

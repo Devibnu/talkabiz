@@ -5,4 +5,15 @@ abstract final class RouteNames {
   static const contacts = 'contacts';
   static const inbox = 'inbox';
   static const inboxDetail = 'inbox-detail';
+  static const billing = 'billing';
+  static const billingPlans = 'billing-plans';
+  static const billingTopUp = 'billing-topup';
+  static const transactionHistory = 'transaction-history';
+  static const settings = 'settings';
+  static const profile = 'profile';
+  static const onboarding = 'onboarding';
+  static const templates = 'templates';
+  static const templateDetail = 'template-detail';
+  static const templateCreate = 'template-create';
+  static const templateEdit = 'template-edit';
 }

@@ -30,6 +30,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
   @override
   Widget build(BuildContext context) {
     final contactsAsync = ref.watch(contactsProvider);
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Kontak')),
@@ -37,28 +38,49 @@ class _ContactsPageState extends ConsumerState<ContactsPage> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-            child: TextField(
-              controller: _searchController,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'Cari nama atau nomor',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {});
-                          ref.read(contactsSearchProvider.notifier).state = '';
-                        },
-                        icon: const Icon(Icons.close_rounded),
-                      ),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFCF6),
+                borderRadius: BorderRadius.circular(24),
               ),
-              onChanged: (value) {
-                setState(() {});
-                ref.read(contactsSearchProvider.notifier).state = value;
-              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Direktori kontak', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Cari pelanggan lebih cepat dan lihat tag penting mereka dalam satu layar.',
+                    style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _searchController,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Cari nama atau nomor',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                                ref
+                                    .read(contactsSearchProvider.notifier)
+                                    .state = '';
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                    ),
+                    onChanged: (value) {
+                      setState(() {});
+                      ref.read(contactsSearchProvider.notifier).state = value;
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -113,39 +135,61 @@ class _ContactCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: const Color(0x1425D366),
+                  radius: 24,
+                  backgroundColor: const Color(0x1F25D366),
                   foregroundColor: const Color(0xFF25D366),
                   child: Text(_initials(contact.name)),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         contact.name,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                       const SizedBox(height: 2),
-                      Text(contact.phone),
+                      Text(
+                        contact.phone,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _ContactMetaChip(
+                  icon: Icons.phone_outlined,
+                  label: contact.phone,
+                ),
+                if (contact.email != null && contact.email!.isNotEmpty)
+                  _ContactMetaChip(
+                    icon: Icons.mail_outline_rounded,
+                    label: contact.email!,
+                  ),
+              ],
+            ),
             if (contact.email != null && contact.email!.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                contact.email!,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              const SizedBox(height: 4),
             ],
             if (contact.tags.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -163,7 +207,13 @@ class _ContactCard extends StatelessWidget {
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Text(tag),
+                        child: Text(
+                          tag,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
                       ),
                     )
                     .toList(),
@@ -225,6 +275,38 @@ class _ContactsEmptyState extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ContactMetaChip extends StatelessWidget {
+  const _ContactMetaChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F2EB),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Theme.of(context).colorScheme.secondary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

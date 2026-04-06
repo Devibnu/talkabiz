@@ -6,6 +6,7 @@ class DashboardSummaryModel extends DashboardSummary {
     required super.whatsapp,
     required super.stats,
     required super.quickActions,
+    required super.subscription,
   });
 
   factory DashboardSummaryModel.fromJson(Map<String, dynamic> json) {
@@ -13,6 +14,7 @@ class DashboardSummaryModel extends DashboardSummary {
     final wallet = data['wallet'] as Map<String, dynamic>? ?? {};
     final whatsapp = data['whatsapp'] as Map<String, dynamic>? ?? {};
     final stats = data['stats'] as Map<String, dynamic>? ?? {};
+    final sub = data['subscription'] as Map<String, dynamic>? ?? {};
     final quickActions = (data['quick_actions'] as List<dynamic>? ?? [])
         .map(
           (item) => QuickActionItem(
@@ -41,6 +43,12 @@ class DashboardSummaryModel extends DashboardSummary {
         campaignsActive: stats['campaigns_active'] as int? ?? 0,
         templatesActive: stats['templates_active'] as int? ?? 0,
         contactsTotal: stats['contacts_total'] as int? ?? 0,
+      ),
+      subscription: SubscriptionSummary(
+        planName: sub['plan_name'] as String? ?? '-',
+        status: sub['status'] as String? ?? 'inactive',
+        expiresAt: sub['expires_at'] as String?,
+        daysRemaining: sub['days_remaining'] as int? ?? 0,
       ),
       quickActions: quickActions,
     );

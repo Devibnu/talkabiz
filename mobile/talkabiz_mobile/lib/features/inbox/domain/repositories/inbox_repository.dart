@@ -9,5 +9,9 @@ abstract class InboxRepository {
   Future<void> sendMessage({
     required int conversationId,
     required String message,
+    String? type,
+    String? mediaUrl,
   });
+
+  Future<({String url, String mediaType})> uploadMedia(String filePath);
 }

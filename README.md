@@ -105,6 +105,8 @@ The documentation for the Soft UI Dashboard Laravel is hosted at our [website](h
 
 For the mobile API verification workflow used in this repository, see [docs/MOBILE_VERIFICATION_WORKFLOW.md](docs/MOBILE_VERIFICATION_WORKFLOW.md).
 
+For local Flutter iPhone simulator preview and hot reload workflow, see [docs/MOBILE_IOS_SIMULATOR_WORKFLOW.md](docs/MOBILE_IOS_SIMULATOR_WORKFLOW.md).
+
 The mobile verification GitHub Actions workflows are manual-only so they do not interfere with the current production/review flow.
 
 ### Login

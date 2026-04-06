@@ -64,16 +64,10 @@ class MobileTemplateController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:100|regex:/^[a-z][a-z0-9_]*$/',
-            'display_name' => 'nullable|string|max:255',
-            'category' => 'required|in:marketing,utility,authentication',
-            'language' => 'nullable|string|max:10',
-            'header' => 'nullable|string|max:60',
-            'header_type' => 'nullable|in:none,text,image,video,document',
-            'body' => 'required|string|max:1024',
-            'footer' => 'nullable|string|max:60',
-            'buttons' => 'nullable|array',
-            'example_variables' => 'nullable|array',
+            'nama' => 'required|string|max:255',
+            'kategori' => 'required|in:marketing,utility,authentication',
+            'konten' => 'required|string|max:4096',
+            'bahasa' => 'nullable|string|in:id,en_US',
         ]);
 
         if ($validator->fails()) {
@@ -85,18 +79,19 @@ class MobileTemplateController extends Controller
         }
 
         $user = $request->user();
-        $result = $this->templateService->buatTemplate($user->klien_id, [
-            'nama_template' => $request->input('name'),
-            'nama_tampilan' => $request->input('display_name'),
-            'kategori' => $request->input('category'),
-            'bahasa' => $request->input('language', 'id'),
-            'header' => $request->input('header'),
-            'header_type' => $request->input('header_type', 'none'),
-            'body' => $request->input('body'),
-            'footer' => $request->input('footer'),
-            'buttons' => $request->input('buttons'),
-            'contoh_variabel' => $request->input('example_variables', []),
-        ], $user->id);
+
+        // Same as web: nama goes to both nama_template and nama_tampilan
+        $template = \App\Models\TemplatePesan::create([
+            'klien_id' => $user->klien_id,
+            'nama_template' => $request->input('nama'),
+            'nama_tampilan' => $request->input('nama'),
+            'kategori' => $request->input('kategori'),
+            'bahasa' => $request->input('bahasa', 'id'),
+            'body' => $request->input('konten'),
+            'status' => \App\Models\TemplatePesan::STATUS_DRAFT,
+        ]);
+
+        $result = ['sukses' => true, 'template' => $template];
 
         if (!$result['sukses']) {
             return response()->json([
@@ -116,13 +111,9 @@ class MobileTemplateController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'display_name' => 'nullable|string|max:255',
-            'header' => 'nullable|string|max:60',
-            'header_type' => 'nullable|in:none,text,image,video,document',
-            'body' => 'nullable|string|max:1024',
-            'footer' => 'nullable|string|max:60',
-            'buttons' => 'nullable|array',
-            'example_variables' => 'nullable|array',
+            'nama' => 'nullable|string|max:255',
+            'kategori' => 'nullable|in:marketing,utility,authentication',
+            'konten' => 'nullable|string|max:4096',
         ]);
 
         if ($validator->fails()) {
@@ -136,13 +127,15 @@ class MobileTemplateController extends Controller
         $user = $request->user();
         $data = [];
 
-        if ($request->exists('display_name')) $data['nama_tampilan'] = $request->input('display_name');
-        if ($request->exists('body')) $data['body'] = $request->input('body');
-        if ($request->exists('header')) $data['header'] = $request->input('header');
-        if ($request->exists('header_type')) $data['header_type'] = $request->input('header_type');
-        if ($request->exists('footer')) $data['footer'] = $request->input('footer');
-        if ($request->exists('buttons')) $data['buttons'] = $request->input('buttons');
-        if ($request->exists('example_variables')) $data['contoh_variabel'] = $request->input('example_variables');
+        if ($request->exists('nama')) {
+            $data['nama_tampilan'] = $request->input('nama');
+        }
+        if ($request->exists('konten')) {
+            $data['body'] = $request->input('konten');
+        }
+        if ($request->exists('kategori')) {
+            // kategori is not editable via TemplateService, update directly
+        }
 
         $result = $this->templateService->updateTemplate($user->klien_id, $id, $data, $user->id);
 

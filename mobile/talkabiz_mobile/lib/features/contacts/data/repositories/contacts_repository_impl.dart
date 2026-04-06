@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/preview/app_preview.dart';
 import '../../domain/entities/contact_item.dart';
 import '../../domain/repositories/contacts_repository.dart';
 import '../datasources/contacts_remote_datasource.dart';
@@ -12,6 +13,10 @@ final contactsRemoteDatasourceProvider = Provider<ContactsRemoteDatasource>((
 });
 
 final contactsRepositoryProvider = Provider<ContactsRepository>((ref) {
+  if (kUsePreviewData) {
+    return const PreviewContactsRepository();
+  }
+
   return ContactsRepositoryImpl(ref.watch(contactsRemoteDatasourceProvider));
 });
 

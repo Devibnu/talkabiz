@@ -44,4 +44,15 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> logout() {
     return _remoteDatasource.logout();
   }
+
+  @override
+  Future<AuthSession> googleLogin({
+    required String idToken,
+    required String deviceName,
+  }) {
+    return _remoteDatasource.googleLogin(
+      idToken: idToken,
+      deviceName: deviceName,
+    );
+  }
 }

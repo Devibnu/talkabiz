@@ -40,6 +40,20 @@ class DashboardStats {
   final int contactsTotal;
 }
 
+class SubscriptionSummary {
+  const SubscriptionSummary({
+    required this.planName,
+    required this.status,
+    required this.expiresAt,
+    required this.daysRemaining,
+  });
+
+  final String planName;
+  final String status;
+  final String? expiresAt;
+  final int daysRemaining;
+}
+
 class QuickActionItem {
   const QuickActionItem({
     required this.key,
@@ -58,10 +72,12 @@ class DashboardSummary {
     required this.whatsapp,
     required this.stats,
     required this.quickActions,
+    required this.subscription,
   });
 
   final WalletSummary wallet;
   final WhatsAppConnectionSummary whatsapp;
   final DashboardStats stats;
   final List<QuickActionItem> quickActions;
+  final SubscriptionSummary subscription;
 }
