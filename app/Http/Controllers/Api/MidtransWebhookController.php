@@ -514,7 +514,7 @@ class MidtransWebhookController extends Controller
                     'status_topup'     => 'disetujui',
                     'saldo_sebelum'    => $saldoSebelum,
                     'saldo_sesudah'    => $dompet->saldo_tersedia,
-                    'metode_bayar'     => $paymentType ?? 'midtrans',
+                    'metode_bayar'     => 'midtrans_snap',
                     'waktu_diproses'   => now(),
                     'midtrans_response' => $payload,
                     'catatan_admin'    => 'Auto-approved via Midtrans webhook',
