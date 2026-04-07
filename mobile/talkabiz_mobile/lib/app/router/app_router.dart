@@ -18,6 +18,9 @@ import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/template/presentation/pages/template_detail_page.dart';
 import '../../features/template/presentation/pages/template_form_page.dart';
 import '../../features/template/presentation/pages/templates_page.dart';
+import '../../features/campaigns/presentation/pages/campaigns_page.dart';
+import '../../features/campaigns/presentation/pages/campaign_detail_page.dart';
+import '../../features/campaigns/presentation/pages/campaign_create_page.dart';
 import 'route_names.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -130,6 +133,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/onboarding',
         name: RouteNames.onboarding,
         builder: (context, state) => const OnboardingPage(),
+      ),
+      GoRoute(
+        path: '/campaigns',
+        name: RouteNames.campaigns,
+        builder: (context, state) => const CampaignsPage(),
+        routes: [
+          GoRoute(
+            path: 'create',
+            name: RouteNames.campaignCreate,
+            builder: (context, state) => const CampaignCreatePage(),
+          ),
+          GoRoute(
+            path: ':id',
+            name: RouteNames.campaignDetail,
+            builder: (context, state) {
+              final id =
+                  int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+              return CampaignDetailPage(campaignId: id);
+            },
+          ),
+        ],
       ),
     ],
   );

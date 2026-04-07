@@ -188,6 +188,14 @@ class DashboardPage extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               _QuickActionTile(
+                title: 'Kampanye',
+                subtitle: 'Buat dan kelola kampanye WhatsApp blast.',
+                icon: Icons.campaign_rounded,
+                color: const Color(0xFFEF4444),
+                onTap: () => context.goNamed(RouteNames.campaigns),
+              ),
+              const SizedBox(height: 10),
+              _QuickActionTile(
                 title: 'Billing & Paket',
                 subtitle: 'Langganan, pilih paket, dan top up saldo.',
                 icon: Icons.receipt_long_rounded,

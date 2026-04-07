@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\Mobile\MobileDashboardController;
 use App\Http\Controllers\Api\Mobile\MobileBillingController;
 use App\Http\Controllers\Api\Mobile\MobileInboxController;
 use App\Http\Controllers\Api\Mobile\MobileTemplateController;
+use App\Http\Controllers\Api\Mobile\MobileCampaignController;
 
 /*
 |--------------------------------------------------------------------------
@@ -93,6 +94,19 @@ Route::middleware('auth:sanctum')->prefix('mobile')->group(function () {
         Route::put('/{id}', [MobileTemplateController::class, 'update'])->name('mobile.templates.update');
         Route::delete('/{id}', [MobileTemplateController::class, 'destroy'])->name('mobile.templates.destroy');
         Route::post('/{id}/submit', [MobileTemplateController::class, 'submit'])->name('mobile.templates.submit');
+    });
+
+    Route::middleware('subscription.active')->prefix('campaigns')->group(function () {
+        Route::get('/', [MobileCampaignController::class, 'index'])->name('mobile.campaigns.index');
+        Route::get('/stats', [MobileCampaignController::class, 'stats'])->name('mobile.campaigns.stats');
+        Route::post('/', [MobileCampaignController::class, 'store'])->name('mobile.campaigns.store');
+        Route::post('/estimate-cost', [MobileCampaignController::class, 'estimateCost'])->name('mobile.campaigns.estimate-cost');
+        Route::get('/{id}', [MobileCampaignController::class, 'show'])->name('mobile.campaigns.show');
+        Route::post('/{id}/start', [MobileCampaignController::class, 'start'])->name('mobile.campaigns.start');
+        Route::post('/{id}/pause', [MobileCampaignController::class, 'pause'])->name('mobile.campaigns.pause');
+        Route::post('/{id}/resume', [MobileCampaignController::class, 'resume'])->name('mobile.campaigns.resume');
+        Route::post('/{id}/cancel', [MobileCampaignController::class, 'cancel'])->name('mobile.campaigns.cancel');
+        Route::delete('/{id}', [MobileCampaignController::class, 'destroy'])->name('mobile.campaigns.destroy');
     });
 });
 

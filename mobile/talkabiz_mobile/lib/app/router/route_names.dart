@@ -16,4 +16,7 @@ abstract final class RouteNames {
   static const templateDetail = 'template-detail';
   static const templateCreate = 'template-create';
   static const templateEdit = 'template-edit';
+  static const campaigns = 'campaigns';
+  static const campaignDetail = 'campaign-detail';
+  static const campaignCreate = 'campaign-create';
 }
