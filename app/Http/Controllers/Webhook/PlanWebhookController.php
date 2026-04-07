@@ -48,16 +48,26 @@ class PlanWebhookController extends Controller
     {
         // Get raw payload
         $payload = $request->all();
+        $orderId = $payload['order_id'] ?? 'unknown';
 
         // Log incoming webhook (before processing)
         Log::info('Midtrans Plan Webhook received', [
-            'order_id' => $payload['order_id'] ?? 'unknown',
+            'order_id' => $orderId,
             'status' => $payload['transaction_status'] ?? 'unknown',
             'ip' => $request->ip(),
         ]);
 
         try {
-            // Process webhook via service
+            // Route TOPUP- orders to MidtransWebhookController (DompetSaldo SSOT)
+            if (str_starts_with($orderId, 'TOPUP-')) {
+                Log::info('[PlanWebhook] Routing TOPUP- to MidtransWebhookController', [
+                    'order_id' => $orderId,
+                ]);
+                $topupController = app(\App\Http\Controllers\Api\MidtransWebhookController::class);
+                return $topupController->handle($request);
+            }
+
+            // Process PLAN- webhook via service
             $result = $this->midtransService->handleWebhook($payload);
 
             // Always return 200 to Midtrans
