@@ -276,8 +276,8 @@ class MobileCampaignController extends Controller
                 category: 'marketing',
                 referenceType: 'wa_campaign',
                 referenceId: $campaign->id,
-                dispatchCallable: function ($transaction) use ($campaign) {
-                    return $this->executeCampaign($campaign, $transaction->id ?? null);
+                dispatchCallable: function ($transaction) use ($campaign, $request) {
+                    return $this->executeCampaign($campaign, $request->user()->id, $transaction->id ?? null);
                 },
             );
 
@@ -318,10 +318,8 @@ class MobileCampaignController extends Controller
     /**
      * Execute campaign dispatch (mirrors WhatsAppCampaignController::executeDirectCampaign)
      */
-    private function executeCampaign(WhatsappCampaign $campaign, ?int $revenueGuardTxId = null)
+    private function executeCampaign(WhatsappCampaign $campaign, int $userId, ?int $revenueGuardTxId = null)
     {
-        $user = $campaign->klien->users()->first();
-        $userId = $user?->id ?? 0;
 
         $recipients = $campaign->recipients()
             ->with('contact')
