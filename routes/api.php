@@ -63,6 +63,7 @@ Route::middleware('auth:sanctum')->prefix('mobile')->group(function () {
 
     Route::prefix('contacts')->group(function () {
         Route::get('/', [MobileContactsController::class, 'index'])->name('mobile.contacts.index');
+        Route::get('/tags', [MobileContactsController::class, 'tags'])->name('mobile.contacts.tags');
         Route::post('/', [MobileContactsController::class, 'store'])->name('mobile.contacts.store');
         Route::get('/{id}', [MobileContactsController::class, 'show'])->name('mobile.contacts.show');
         Route::put('/{id}', [MobileContactsController::class, 'update'])->name('mobile.contacts.update');

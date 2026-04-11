@@ -54,6 +54,38 @@ class MobileContactsController extends Controller
         ]);
     }
 
+    public function tags(Request $request): JsonResponse
+    {
+        $klienId = $request->user()?->klien_id;
+
+        if (!$klienId) {
+            return response()->json(['success' => false, 'message' => 'Klien tidak ditemukan'], 403);
+        }
+
+        $tags = Kontak::where('klien_id', $klienId)
+            ->whereNotNull('tags')
+            ->pluck('tags')
+            ->flatten()
+            ->filter()
+            ->map(fn ($t) => trim((string) $t))
+            ->filter(fn ($t) => $t !== '')
+            ->unique()
+            ->values();
+
+        // Count per tag
+        $result = $tags->map(function ($tag) use ($klienId) {
+            $count = Kontak::where('klien_id', $klienId)
+                ->whereJsonContains('tags', $tag)
+                ->count();
+            return ['name' => $tag, 'count' => $count];
+        })->sortBy('name')->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+        ]);
+    }
+
     public function show(Request $request, int $id): JsonResponse
     {
         $kontak = $this->findOwnedContact($request, $id);

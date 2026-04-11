@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import '../../../contacts/presentation/providers/contacts_provider.dart';
 import '../../../template/domain/entities/template_item.dart';
 import '../../../template/presentation/providers/template_provider.dart';
 import '../../data/repositories/campaign_repository_impl.dart';
+import '../../domain/entities/campaign_entities.dart';
 import '../providers/campaign_provider.dart';
 
 class CampaignCreatePage extends ConsumerStatefulWidget {
@@ -24,6 +26,7 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
   int? _selectedTemplateId;
   String _audience = 'all';
   Set<int> _selectedContactIds = <int>{};
+  List<String> _selectedTags = [];
   bool _submitting = false;
 
   @override
@@ -49,6 +52,13 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
       return;
     }
 
+    if (_audience == 'tag' && _selectedTags.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih minimal satu tag terlebih dahulu')),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
 
     try {
@@ -60,6 +70,7 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
             templateId: _selectedTemplateId!,
             audience: _audience,
             contactIds: _audience == 'contacts' ? _selectedContactIds.toList() : null,
+            tags: _audience == 'tag' ? _selectedTags : null,
           );
 
       ref.invalidate(campaignsProvider);
@@ -73,8 +84,13 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
       }
     } catch (e) {
       if (mounted) {
+        String errorMsg = 'Gagal membuat kampanye';
+        if (e is DioException && e.response?.data is Map) {
+          final data = e.response!.data as Map;
+          errorMsg = (data['message'] as String?) ?? errorMsg;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: $e')),
+          SnackBar(content: Text(errorMsg)),
         );
       }
     } finally {
@@ -86,6 +102,7 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
   Widget build(BuildContext context) {
     final templatesAsync = ref.watch(templatesProvider);
     final contactsAsync = ref.watch(contactsProvider);
+    final tagsAsync = ref.watch(contactTagsProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -166,9 +183,12 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
             _AudienceSelector(
               selected: _audience,
               selectedCount: _selectedContactIds.length,
+              selectedTagCount: _selectedTags.length,
               contactsAsync: contactsAsync,
+              tagsAsync: tagsAsync,
               onChanged: (v) => setState(() => _audience = v),
               onPickContacts: (contacts) => _openContactPicker(context, contacts),
+              onPickTags: (tags) => _openTagPicker(context, tags),
             ),
             const SizedBox(height: 32),
 
@@ -213,6 +233,25 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
       setState(() {
         _selectedContactIds = result;
         _audience = result.isEmpty ? 'all' : 'contacts';
+      });
+    }
+  }
+
+  Future<void> _openTagPicker(BuildContext context, List<TagItem> tags) async {
+    final result = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _TagPickerSheet(
+        tags: tags,
+        initialSelection: List<String>.from(_selectedTags),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedTags = result;
+        _audience = result.isEmpty ? 'all' : 'tag';
       });
     }
   }
@@ -301,15 +340,21 @@ class _AudienceSelector extends StatelessWidget {
   const _AudienceSelector({
     required this.selected,
     required this.selectedCount,
+    required this.selectedTagCount,
     required this.contactsAsync,
+    required this.tagsAsync,
     required this.onChanged,
     required this.onPickContacts,
+    required this.onPickTags,
   });
   final String selected;
   final int selectedCount;
+  final int selectedTagCount;
   final AsyncValue<List<ContactItem>> contactsAsync;
+  final AsyncValue<List<TagItem>> tagsAsync;
   final ValueChanged<String> onChanged;
   final ValueChanged<List<ContactItem>> onPickContacts;
+  final ValueChanged<List<TagItem>> onPickTags;
 
   @override
   Widget build(BuildContext context) {
@@ -324,6 +369,30 @@ class _AudienceSelector extends StatelessWidget {
           selected: selected == 'all',
           onTap: () => onChanged('all'),
           theme: theme,
+        ),
+        const SizedBox(height: 10),
+        tagsAsync.when(
+          data: (tags) => tags.isEmpty
+              ? const SizedBox.shrink()
+              : _AudienceOption(
+                  label: 'Kirim by Tag',
+                  subtitle: selectedTagCount > 0
+                      ? '$selectedTagCount tag dipilih'
+                      : 'Kirim berdasarkan tag kontak',
+                  icon: Icons.label_rounded,
+                  selected: selected == 'tag',
+                  onTap: () => onPickTags(tags),
+                  theme: theme,
+                ),
+          loading: () => _AudienceOption(
+            label: 'Kirim by Tag',
+            subtitle: 'Memuat tag...',
+            icon: Icons.label_rounded,
+            selected: false,
+            onTap: () {},
+            theme: theme,
+          ),
+          error: (_, __) => const SizedBox.shrink(),
         ),
         const SizedBox(height: 10),
         contactsAsync.when(
@@ -505,6 +574,125 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TagPickerSheet extends StatefulWidget {
+  const _TagPickerSheet({
+    required this.tags,
+    required this.initialSelection,
+  });
+
+  final List<TagItem> tags;
+  final List<String> initialSelection;
+
+  @override
+  State<_TagPickerSheet> createState() => _TagPickerSheetState();
+}
+
+class _TagPickerSheetState extends State<_TagPickerSheet> {
+  late Set<String> _selection;
+
+  @override
+  void initState() {
+    super.initState();
+    _selection = Set<String>.from(widget.initialSelection);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 8,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Pilih Tag',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(
+              'Kirim ke semua kontak yang memiliki tag ini.',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+            const SizedBox(height: 14),
+            ...widget.tags.map((tag) {
+              final isSelected = _selection.contains(tag.name);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Material(
+                  color: isSelected
+                      ? theme.colorScheme.primaryContainer
+                      : theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          _selection.remove(tag.name);
+                        } else {
+                          _selection.add(tag.name);
+                        }
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected
+                                ? Icons.check_circle
+                                : Icons.circle_outlined,
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              tag.name,
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          Text(
+                            '${tag.count} kontak',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: theme.colorScheme.outline),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_selection.toList()),
+                child: Text(_selection.isEmpty
+                    ? 'Gunakan Semua Kontak'
+                    : 'Pilih ${_selection.length} Tag'),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -123,3 +123,10 @@ class CostEstimate {
   final int currentBalance;
   final bool sufficientBalance;
 }
+
+class TagItem {
+  const TagItem({required this.name, required this.count});
+
+  final String name;
+  final int count;
+}

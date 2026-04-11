@@ -7,6 +7,19 @@ class CampaignRemoteDatasource {
 
   final Dio _dio;
 
+  /// Fetch available contact tags with counts
+  Future<List<TagItem>> getContactTags() async {
+    final response = await _dio.get<Map<String, dynamic>>('/mobile/contacts/tags');
+    final items = response.data?['data'] as List<dynamic>? ?? [];
+    return items
+        .map((e) => TagItem(
+              name: (e as Map<String, dynamic>)['name'] as String? ?? '',
+              count: e['count'] as int? ?? 0,
+            ))
+        .where((t) => t.name.isNotEmpty)
+        .toList();
+  }
+
   Future<List<CampaignItem>> getCampaigns({String? search, String? status}) async {
     final params = <String, dynamic>{};
     if (search != null && search.isNotEmpty) params['search'] = search;

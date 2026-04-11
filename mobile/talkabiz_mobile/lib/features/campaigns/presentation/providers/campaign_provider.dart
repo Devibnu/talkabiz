@@ -23,3 +23,7 @@ final campaignDetailProvider =
     FutureProvider.autoDispose.family<CampaignDetail, int>((ref, id) async {
   return ref.watch(campaignRepositoryProvider).getCampaign(id);
 });
+
+final contactTagsProvider = FutureProvider.autoDispose<List<TagItem>>((ref) async {
+  return ref.watch(campaignRemoteDatasourceProvider).getContactTags();
+});
