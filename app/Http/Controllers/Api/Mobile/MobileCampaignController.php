@@ -261,57 +261,41 @@ class MobileCampaignController extends Controller
 
         try {
             $revenueGuard = app(RevenueGuardService::class);
-            $userId = $request->user()->id;
-            $totalRecipients = $campaign->total_recipients;
+            $recipientCount = $campaign->total_recipients ?? $campaign->recipients()->where('status', 'pending')->count();
 
-            $result = $revenueGuard->chargeAndExecute(
-                userId: $userId,
-                messageCount: $totalRecipients,
-                category: 'utility',
-                referenceType: 'campaign',
+            if ($recipientCount <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kampanye tidak memiliki penerima.',
+                ], 422);
+            }
+
+            $guardResult = $revenueGuard->chargeAndExecute(
+                userId: $request->user()->id,
+                messageCount: $recipientCount,
+                category: 'marketing',
+                referenceType: 'wa_campaign',
                 referenceId: $campaign->id,
-                dispatchCallable: function () use ($campaign, $request) {
-                    $campaign->start();
-
-                    $pendingRecipients = $campaign->recipients()
-                        ->where('status', WhatsappCampaignRecipient::STATUS_PENDING)
-                        ->get();
-
-                    foreach ($pendingRecipients as $recipient) {
-                        $recipient->markAsQueued();
-
-                        try {
-                            $dispatchRequest = new MessageDispatchRequest(
-                                userId: $request->user()->id,
-                                phoneNumber: $recipient->phone_number,
-                                templateId: $campaign->template_id,
-                                variables: $campaign->template_variables ?? [],
-                                campaignId: $campaign->id,
-                            );
-
-                            $this->messageDispatch->dispatch($dispatchRequest);
-                            $recipient->markAsSent();
-                            $campaign->increment('sent_count');
-                        } catch (Exception $e) {
-                            $recipient->markAsFailed($e->getCode(), $e->getMessage());
-                            $campaign->increment('failed_count');
-                        }
-                    }
-
-                    if ($campaign->recipients()->where('status', 'pending')->count() === 0) {
-                        $campaign->complete();
-                    }
-
-                    return $campaign->fresh();
-                }
+                dispatchCallable: function ($transaction) use ($campaign) {
+                    return $this->executeCampaign($campaign, $transaction->id ?? null);
+                },
             );
 
-            $updatedCampaign = $result['dispatch_result'] ?? $campaign->fresh();
+            if ($guardResult['duplicate'] ?? false) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $guardResult['message'],
+                    'data' => $this->formatCampaign($campaign->fresh(['template'])),
+                ]);
+            }
+
+            $dispatchResult = $guardResult['dispatch_result'];
+            $message = 'Kampanye berhasil dikirim ke ' . ($dispatchResult->totalSent ?? 0) . ' penerima';
 
             return response()->json([
                 'success' => true,
-                'message' => 'Kampanye sedang dikirim.',
-                'data' => $this->formatCampaign($updatedCampaign),
+                'message' => $message,
+                'data' => $this->formatCampaign($campaign->fresh(['template'])),
             ]);
         } catch (InsufficientBalanceException $e) {
             return response()->json([
@@ -329,6 +313,69 @@ class MobileCampaignController extends Controller
                 'message' => 'Gagal memulai kampanye: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Execute campaign dispatch (mirrors WhatsAppCampaignController::executeDirectCampaign)
+     */
+    private function executeCampaign(WhatsappCampaign $campaign, ?int $revenueGuardTxId = null)
+    {
+        $user = $campaign->klien->users()->first();
+        $userId = $user?->id ?? 0;
+
+        $recipients = $campaign->recipients()
+            ->with('contact')
+            ->where('status', WhatsappCampaignRecipient::STATUS_PENDING)
+            ->get()
+            ->map(fn ($r) => [
+                'phone' => $r->phone_number,
+                'contact_id' => $r->contact_id,
+                'name' => $r->contact?->nama ?? 'Unknown',
+            ])
+            ->toArray();
+
+        if (empty($recipients)) {
+            throw new Exception('Tidak ada penerima yang dapat diproses');
+        }
+
+        $template = $campaign->template;
+        if (!$template) {
+            throw new Exception('Template kampanye tidak ditemukan');
+        }
+
+        $messageContent = $template->getBodyText() ?? $template->sample_text ?? $template->name;
+        $templateVars = $campaign->template_variables ?? [];
+
+        $dispatchRequest = MessageDispatchRequest::fromCampaign(
+            userId: $userId,
+            recipients: $recipients,
+            messageContent: $messageContent,
+            campaignId: (string) $campaign->id,
+            preAuthorized: $revenueGuardTxId !== null,
+            metadata: [
+                'template_provider_id' => $template->template_id,
+                'template_name' => $template->name,
+                'template_language' => $template->language,
+                'template_params' => array_values($templateVars),
+            ],
+            revenueGuardTransactionId: $revenueGuardTxId,
+        );
+
+        $campaign->update(['status' => WhatsappCampaign::STATUS_RUNNING]);
+
+        $result = $this->messageDispatch->dispatch($dispatchRequest);
+
+        // Update campaign stats from result
+        $campaign->update([
+            'status' => ($result->totalFailed ?? 0) > 0 && ($result->totalSent ?? 0) === 0
+                ? WhatsappCampaign::STATUS_CANCELLED
+                : WhatsappCampaign::STATUS_COMPLETED,
+            'sent_count' => $result->totalSent ?? 0,
+            'failed_count' => $result->totalFailed ?? 0,
+            'completed_at' => now(),
+        ]);
+
+        return $result;
     }
 
     /**
