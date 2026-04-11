@@ -266,9 +266,11 @@ class MobileCampaignController extends Controller
 
             $result = $revenueGuard->chargeAndExecute(
                 userId: $userId,
-                recipientCount: $totalRecipients,
-                operationName: "Campaign: {$campaign->name}",
-                callback: function () use ($campaign, $request) {
+                messageCount: $totalRecipients,
+                category: 'utility',
+                referenceType: 'campaign',
+                referenceId: $campaign->id,
+                dispatchCallable: function () use ($campaign, $request) {
                     $campaign->start();
 
                     $pendingRecipients = $campaign->recipients()
@@ -304,10 +306,12 @@ class MobileCampaignController extends Controller
                 }
             );
 
+            $updatedCampaign = $result['dispatch_result'] ?? $campaign->fresh();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Kampanye sedang dikirim.',
-                'data' => $this->formatCampaign($result),
+                'data' => $this->formatCampaign($updatedCampaign),
             ]);
         } catch (InsufficientBalanceException $e) {
             return response()->json([

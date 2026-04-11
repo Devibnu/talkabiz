@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -265,8 +266,13 @@ class _ActionButtonsState extends State<_ActionButtons> {
       }
     } catch (e) {
       if (mounted) {
+        String errorMsg = 'Gagal menjalankan aksi';
+        if (e is DioException && e.response?.data is Map) {
+          final data = e.response!.data as Map;
+          errorMsg = (data['message'] as String?) ?? errorMsg;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: $e')),
+          SnackBar(content: Text(errorMsg)),
         );
       }
     } finally {
