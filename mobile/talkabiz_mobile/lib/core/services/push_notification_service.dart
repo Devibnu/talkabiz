@@ -19,12 +19,12 @@ class PushNotificationService {
   PushNotificationService(this._ref);
 
   final Ref _ref;
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
 
   /// Call once after Firebase.initializeApp() and successful login.
   Future<void> initialize() async {
+    final messaging = FirebaseMessaging.instance;
     // Request permission (iOS will show system dialog)
-    final settings = await _messaging.requestPermission(
+    final settings = await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -36,13 +36,13 @@ class PushNotificationService {
     }
 
     // Get and register token
-    final token = await _messaging.getToken();
+    final token = await messaging.getToken();
     if (token != null) {
       await _registerToken(token);
     }
 
     // Listen for token refresh
-    _messaging.onTokenRefresh.listen(_registerToken);
+    messaging.onTokenRefresh.listen(_registerToken);
 
     // Foreground messages
     FirebaseMessaging.onMessage.listen((message) {
