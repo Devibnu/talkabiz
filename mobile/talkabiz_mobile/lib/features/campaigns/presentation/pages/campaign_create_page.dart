@@ -372,18 +372,18 @@ class _AudienceSelector extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         tagsAsync.when(
-          data: (tags) => tags.isEmpty
-              ? const SizedBox.shrink()
-              : _AudienceOption(
-                  label: 'Kirim by Tag',
-                  subtitle: selectedTagCount > 0
-                      ? '$selectedTagCount tag dipilih'
-                      : 'Kirim berdasarkan tag kontak',
-                  icon: Icons.label_rounded,
-                  selected: selected == 'tag',
-                  onTap: () => onPickTags(tags),
-                  theme: theme,
-                ),
+          data: (tags) => _AudienceOption(
+            label: 'Kirim by Tag',
+            subtitle: selectedTagCount > 0
+                ? '$selectedTagCount tag dipilih'
+                : tags.isEmpty
+                    ? 'Belum ada tag di kontak'
+                    : 'Kirim berdasarkan tag kontak',
+            icon: Icons.label_rounded,
+            selected: selected == 'tag',
+            onTap: tags.isEmpty ? () {} : () => onPickTags(tags),
+            theme: theme,
+          ),
           loading: () => _AudienceOption(
             label: 'Kirim by Tag',
             subtitle: 'Memuat tag...',
@@ -392,7 +392,14 @@ class _AudienceSelector extends StatelessWidget {
             onTap: () {},
             theme: theme,
           ),
-          error: (_, __) => const SizedBox.shrink(),
+          error: (_, __) => _AudienceOption(
+            label: 'Kirim by Tag',
+            subtitle: 'Gagal memuat tag',
+            icon: Icons.label_rounded,
+            selected: false,
+            onTap: () {},
+            theme: theme,
+          ),
         ),
         const SizedBox(height: 10),
         contactsAsync.when(
