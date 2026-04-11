@@ -147,7 +147,7 @@ class MobileCampaignController extends Controller
             'contact_ids' => 'nullable|array',
             'contact_ids.*' => [
                 'integer',
-                Rule::exists('kontaks', 'id')->where('klien_id', $klien->id),
+                Rule::exists('kontak', 'id')->where('klien_id', $klien->id),
             ],
             'tags' => 'nullable|array',
             'tags.*' => 'string',
@@ -443,7 +443,7 @@ class MobileCampaignController extends Controller
             'contact_ids' => 'nullable|array',
             'contact_ids.*' => [
                 'integer',
-                Rule::exists('kontaks', 'id')->where('klien_id', $klien->id),
+                Rule::exists('kontak', 'id')->where('klien_id', $klien->id),
             ],
             'tags' => 'nullable|array',
         ]);
