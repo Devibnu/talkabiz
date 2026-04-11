@@ -869,6 +869,124 @@ class MidtransPlanService
         return true;
     }
 
+    /**
+     * Reconcile a plan transaction against Midtrans status API.
+     *
+     * This is a recovery path for missed webhooks or stale local state.
+     */
+    public function reconcileTransactionByOrderId(string $orderId): array
+    {
+        if (!$orderId || !str_starts_with($orderId, 'PLAN-')) {
+            return [
+                'success' => false,
+                'state' => 'invalid_order',
+                'message' => 'Order ID tidak valid untuk transaksi paket.',
+            ];
+        }
+
+        $transaction = PlanTransaction::findByPgOrderId($orderId);
+        if (!$transaction) {
+            return [
+                'success' => false,
+                'state' => 'not_found',
+                'message' => 'Transaksi lokal tidak ditemukan.',
+            ];
+        }
+
+        $this->refreshConfig();
+
+        try {
+            $providerResponse = \Midtrans\Transaction::status($orderId);
+            $payload = json_decode(json_encode($providerResponse), true) ?: [];
+        } catch (\Throwable $e) {
+            Log::error('Midtrans reconcile failed: status API error', [
+                'order_id' => $orderId,
+                'transaction_id' => $transaction->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'state' => 'provider_error',
+                'message' => 'Gagal mengecek status pembayaran ke Midtrans.',
+            ];
+        }
+
+        $providerStatus = $payload['transaction_status'] ?? null;
+        $fraudStatus = $payload['fraud_status'] ?? 'accept';
+        $paymentType = $payload['payment_type'] ?? null;
+
+        if (in_array($providerStatus, ['capture', 'settlement'], true) && ($fraudStatus === 'accept' || empty($fraudStatus))) {
+            DB::transaction(function () use ($transaction, $payload, $paymentType) {
+                $lockedTransaction = PlanTransaction::where('id', $transaction->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$lockedTransaction) {
+                    throw new Exception('Transaction missing during reconcile.');
+                }
+
+                if ($lockedTransaction->status !== PlanTransaction::STATUS_SUCCESS) {
+                    $lockedTransaction->status = PlanTransaction::STATUS_SUCCESS;
+                    $lockedTransaction->paid_at = $lockedTransaction->paid_at ?? now();
+                    $lockedTransaction->processed_at = now();
+                    $lockedTransaction->pg_transaction_id = $payload['transaction_id'] ?? $lockedTransaction->pg_transaction_id;
+                    $lockedTransaction->payment_method = $paymentType ?? $lockedTransaction->payment_method;
+                    $lockedTransaction->payment_channel = $this->extractPaymentChannel($payload) ?? $lockedTransaction->payment_channel;
+                    $lockedTransaction->pg_response_payload = $payload;
+                    $lockedTransaction->failure_reason = null;
+                    $lockedTransaction->save();
+                } else {
+                    $lockedTransaction->pg_response_payload = $payload;
+                    $lockedTransaction->save();
+                }
+            });
+
+            $transaction->refresh();
+
+            $userPlan = $transaction->user_plan_id
+                ? \App\Models\UserPlan::find($transaction->user_plan_id)
+                : $this->activationService->activateFromPayment($transaction->idempotency_key);
+
+            if (!$userPlan) {
+                Log::critical('Midtrans reconcile failed: activation returned null', [
+                    'order_id' => $orderId,
+                    'transaction_id' => $transaction->id,
+                    'idempotency_key' => $transaction->idempotency_key,
+                ]);
+
+                return [
+                    'success' => false,
+                    'state' => 'activation_failed',
+                    'message' => 'Pembayaran terdeteksi sukses, tetapi aktivasi paket gagal.',
+                ];
+            }
+
+            app(SubscriptionPolicy::class)->invalidateCache($transaction->klien_id);
+
+            Log::info('Midtrans reconcile success', [
+                'order_id' => $orderId,
+                'transaction_id' => $transaction->id,
+                'user_plan_id' => $userPlan->id,
+                'provider_status' => $providerStatus,
+            ]);
+
+            return [
+                'success' => true,
+                'state' => 'success',
+                'message' => 'Pembayaran berhasil direkonsiliasi dan paket diaktifkan.',
+                'user_plan_id' => $userPlan->id,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'state' => $providerStatus ?? 'unknown',
+            'message' => 'Status pembayaran saat ini: ' . ($providerStatus ?? 'unknown'),
+            'payload' => $payload,
+        ];
+    }
+
     // checkStatus() and syncMidtransStatus() REMOVED
     // → Webhook-only architecture: status updates via Midtrans webhook callback only
 }

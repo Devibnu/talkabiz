@@ -147,7 +147,6 @@ class PlanWebhookController extends Controller
     public function finish(Request $request)
     {
         $orderId = $request->get('order_id');
-        $statusCode = $request->get('status_code');
         $transactionStatus = $request->get('transaction_status');
 
         Log::info('Plan payment finish redirect', [
@@ -155,10 +154,23 @@ class PlanWebhookController extends Controller
             'status' => $transactionStatus,
         ]);
 
-        // Redirect ke halaman billing dengan pesan sesuai status
+        $reconcileResult = $orderId
+            ? $this->midtransService->reconcileTransactionByOrderId($orderId)
+            : ['success' => false, 'state' => 'missing_order'];
+
+        if (($reconcileResult['state'] ?? null) === 'success') {
+            return redirect()->route('subscription.index')
+                ->with('success', 'Pembayaran berhasil diverifikasi dan paket Anda sudah aktif.');
+        }
+
+        if (in_array($reconcileResult['state'] ?? null, ['pending', 'authorize'], true)) {
+            return redirect()->route('subscription.index')
+                ->with('info', 'Pembayaran masih diproses. Paket akan aktif setelah Midtrans mengonfirmasi pembayaran.');
+        }
+
         if (in_array($transactionStatus, ['capture', 'settlement'])) {
             return redirect()->route('subscription.index')
-                ->with('success', 'Pembayaran berhasil! Paket Anda akan segera aktif.');
+                ->with('warning', 'Pembayaran terdeteksi di Midtrans, tetapi paket belum tersinkron otomatis. Silakan muat ulang halaman beberapa saat lagi.');
         }
 
         if ($transactionStatus === 'pending') {

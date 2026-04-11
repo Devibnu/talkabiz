@@ -9,6 +9,7 @@ abstract class CampaignRepository {
     String? description,
     required int templateId,
     required String audience,
+    List<int>? contactIds,
     List<String>? tags,
     Map<String, dynamic>? templateVariables,
     String? scheduledAt,
@@ -21,6 +22,7 @@ abstract class CampaignRepository {
   Future<CostEstimate> estimateCost({
     required int templateId,
     required String audience,
+    List<int>? contactIds,
     List<String>? tags,
   });
 }

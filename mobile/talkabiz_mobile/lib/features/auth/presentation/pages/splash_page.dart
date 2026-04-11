@@ -25,10 +25,8 @@ class _SplashPageState extends ConsumerState<SplashPage> {
       if (!authState.isAuthenticated) {
         context.goNamed(RouteNames.login);
       } else {
-        // Initialize push notifications for authenticated users
-        try {
-          await ref.read(pushNotificationServiceProvider).initialize();
-        } catch (_) {}
+        // Initialize push notifications (fire-and-forget, don't block navigation)
+        ref.read(pushNotificationServiceProvider).initialize().catchError((_) {});
 
         if (authState.session?.user.onboardingComplete != true) {
           context.goNamed(RouteNames.onboarding);

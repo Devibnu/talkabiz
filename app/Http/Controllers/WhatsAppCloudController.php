@@ -9,8 +9,10 @@ use App\Models\TemplatePesan;
 use App\Services\GupshupService;
 use App\Services\RevenueGuardService;
 use App\Services\PlanLimitService;
+use App\Services\WaBlastService;
 use App\Services\WhatsAppProviderService;
 use App\Exceptions\Subscription\PlanLimitExceededException;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +20,10 @@ use Exception;
 
 class WhatsAppCloudController extends Controller
 {
+    public function __construct(protected WaBlastService $waBlastService)
+    {
+    }
+
     /**
      * WhatsApp main page - show connection status
      */
@@ -54,12 +60,39 @@ class WhatsAppCloudController extends Controller
         }
 
         $connection = WhatsappConnection::where('klien_id', $klien->id)->first();
+
+        if ($connection && $connection->status === WhatsappConnection::STATUS_CONNECTED) {
+            try {
+                $this->waBlastService->syncTemplatesIfStale($connection);
+            } catch (\Throwable $e) {
+                Log::warning('[WhatsApp.index] Passive template sync failed', [
+                    'klien_id' => $klien->id,
+                    'connection_id' => $connection->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $templates = WhatsappTemplate::where('klien_id', $klien->id)
             ->approved()
             ->latest()
             ->get();
 
-        return view('whatsapp.cloud-index', compact('connection', 'templates', 'klien'));
+        $latestTemplateSyncAt = WhatsappTemplate::where('klien_id', $klien->id)
+            ->whereNotNull('synced_at')
+            ->max('synced_at');
+
+        if ($latestTemplateSyncAt) {
+            $latestTemplateSyncAt = Carbon::parse($latestTemplateSyncAt);
+        }
+
+        return view('whatsapp.cloud-index', [
+            'connection' => $connection,
+            'templates' => $templates,
+            'klien' => $klien,
+            'latestTemplateSyncAt' => $latestTemplateSyncAt,
+            'templateAutoSyncCooldownMinutes' => (int) ceil(WaBlastService::TEMPLATE_AUTO_SYNC_COOLDOWN / 60),
+        ]);
     }
 
     /**

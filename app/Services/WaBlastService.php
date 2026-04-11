@@ -63,6 +63,9 @@ class WaBlastService
     // Cost per message (IDR)
     const COST_PER_MESSAGE = 350;
 
+    // Auto-sync cooldown in seconds for passive page loads
+    const TEMPLATE_AUTO_SYNC_COOLDOWN = 300;
+
     // Fail reasons - aligned with SubscriptionPolicy reason codes
     const REASON_QUOTA_EXCEEDED = 'limit_exceeded';
     const REASON_NO_SUBSCRIPTION = 'no_subscription';
@@ -161,6 +164,42 @@ class WaBlastService
                 'error' => $e->getMessage(),
             ]);
             throw $e;
+        }
+    }
+
+    /**
+     * Sync templates only when the cooldown window has elapsed.
+     * This keeps status reasonably fresh without requiring users to
+     * manually press sync every time they open the page.
+     *
+     * @return array{attempted: bool, synced?: int, failed?: int, templates?: array}
+     */
+    public function syncTemplatesIfStale(WhatsappConnection $connection, int $cooldownSeconds = self::TEMPLATE_AUTO_SYNC_COOLDOWN): array
+    {
+        $cacheKey = sprintf('wa_blast:auto_sync_templates:%d', $connection->klien_id);
+        $lockKey = sprintf('wa_blast:auto_sync_templates_lock:%d', $connection->klien_id);
+
+        if (Cache::has($cacheKey)) {
+            return ['attempted' => false];
+        }
+
+        $lock = Cache::lock($lockKey, 30);
+
+        if (!$lock->get()) {
+            return ['attempted' => false];
+        }
+
+        try {
+            if (Cache::has($cacheKey)) {
+                return ['attempted' => false];
+            }
+
+            $result = $this->syncTemplates($connection);
+            Cache::put($cacheKey, now()->toIso8601String(), $cooldownSeconds);
+
+            return ['attempted' => true] + $result;
+        } finally {
+            optional($lock)->release();
         }
     }
 

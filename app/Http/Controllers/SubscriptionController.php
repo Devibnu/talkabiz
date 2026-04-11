@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Plan;
 use App\Models\Klien;
+use App\Models\User;
 use App\Models\Subscription;
 use App\Models\SubscriptionInvoice;
 use App\Models\SubscriptionNotification;
@@ -79,6 +80,29 @@ class SubscriptionController extends Controller
                 ? 'https://app.midtrans.com/snap/snap.js'
                 : 'https://app.sandbox.midtrans.com/snap/snap.js')
             : null;
+
+        if ($user->klien_id && $user->current_plan_id && $user->plan_status === User::PLAN_STATUS_TRIAL_SELECTED) {
+            $latestPlanTransaction = PlanTransaction::where('klien_id', $user->klien_id)
+                ->where('plan_id', $user->current_plan_id)
+                ->whereNotNull('pg_order_id')
+                ->latest('id')
+                ->first();
+
+            if ($latestPlanTransaction?->pg_order_id) {
+                try {
+                    $this->midtransService->reconcileTransactionByOrderId($latestPlanTransaction->pg_order_id);
+                    $user->refresh();
+                    $klien = $this->getKlienForUser($user);
+                } catch (\Throwable $e) {
+                    Log::warning('Subscription self-heal reconcile failed', [
+                        'user_id' => $user->id,
+                        'transaction_id' => $latestPlanTransaction->id,
+                        'order_id' => $latestPlanTransaction->pg_order_id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
 
         if (!$user->current_plan_id) {
             $selectedPlan = $selectedPlanCode

@@ -708,7 +708,7 @@
             <li>Buat template baru dengan tombol "Tambah Template"</li>
             <li>Klik tombol <strong>"Submit ke WhatsApp"</strong> pada template yang sudah dibuat</li>
             <li>Tunggu approval dari Meta (biasanya beberapa menit - beberapa jam)</li>
-            <li>Klik <strong>"Sync Templates"</strong> di halaman <a href="{{ route('whatsapp.index') }}" style="color: #fff; text-decoration: underline;">Nomor WhatsApp</a> untuk memperbarui status</li>
+            <li>Halaman ini akan auto-sync status Meta maksimal setiap {{ $templateAutoSyncCooldownMinutes ?? 5 }} menit. Anda tetap bisa klik <strong>"Sync Templates"</strong> di halaman <a href="{{ route('whatsapp.index') }}" style="color: #fff; text-decoration: underline;">Nomor WhatsApp</a> jika ingin paksa refresh.</li>
             <li>Template yang sudah <span class="badge bg-success">Approved</span> akan otomatis muncul di halaman <a href="{{ route('whatsapp.campaigns.create') }}" style="color: #fff; text-decoration: underline;">Buat Kampanye WA Blast</a></li>
         </ol>
     </div>
@@ -731,14 +731,28 @@
     {{-- Template Card --}}
     <div class="template-card">
         <div class="template-card-header">
-            <h6 class="template-card-title">Daftar Template</h6>
-            <span class="badge bg-gradient-primary">{{ isset($templates) ? $templates->count() : 0 }} template</span>
+            <div>
+                <h6 class="template-card-title mb-0">Daftar Template</h6>
+                <p class="text-xs text-muted mb-0 mt-1">
+                    Status Meta auto-sync maksimal setiap {{ $templateAutoSyncCooldownMinutes ?? 5 }} menit
+                    @if(!empty($latestTemplateSyncAt))
+                        • terakhir sync {{ $latestTemplateSyncAt->format('d M Y H:i') }}
+                    @endif
+                </p>
+            </div>
+            <span class="badge bg-gradient-primary">{{ isset($templates) ? $templates->count() : 0 }} internal / {{ $syncedTemplateCount ?? 0 }} Meta</span>
         </div>
         <div class="template-card-body">
+            @if(isset($metaOnlyTemplates) && $metaOnlyTemplates->count() > 0)
+            <div class="alert alert-info text-white" style="background: linear-gradient(310deg, #17c1e8 0%, #3a416f 100%); border: 0;">
+                Halaman ini sekarang menampilkan status hasil sync Meta. Ada {{ $metaOnlyTemplates->count() }} template yang hanya ada di Meta dan belum dibuat dari form internal Talkabiz.
+            </div>
+            @endif
             @if(isset($templates) && $templates->count() > 0)
             {{-- Template Grid --}}
             <div class="template-grid">
                 @foreach($templates as $template)
+                @php($effectiveStatus = $template->effective_status ?? $template->status)
                 <div class="template-item" data-template-id="{{ $template->id }}" data-kategori="{{ $template->kategori ?? 'other' }}">
                     {{-- Hidden full content for edit --}}
                     <script type="text/template" class="template-full-content">{{ $template->body ?? '' }}</script>
@@ -753,17 +767,17 @@
                     </div>
                     {{-- Card Footer --}}
                     <div class="template-item-footer">
-                        @if($template->status == 'disetujui')
+                        @if($effectiveStatus == 'disetujui')
                             <span class="status-badge status-approved"><i class="ni ni-check-bold"></i> Approved Meta</span>
-                        @elseif($template->status == 'diajukan')
+                        @elseif($effectiveStatus == 'diajukan')
                             <span class="status-badge status-pending"><i class="ni ni-time-alarm"></i> Menunggu Review Meta</span>
-                        @elseif($template->status == 'ditolak')
+                        @elseif($effectiveStatus == 'ditolak')
                             <span class="status-badge status-rejected"><i class="ni ni-fat-remove"></i> Ditolak Meta</span>
                         @else
                             <span class="status-badge status-draft"><i class="ni ni-single-copy-04"></i> Draft</span>
                         @endif
                         <div class="template-item-actions">
-                            @if($template->status == 'draft' || $template->status == 'ditolak')
+                            @if($effectiveStatus == 'draft' || $effectiveStatus == 'ditolak')
                                 <form id="submitMetaForm-{{ $template->id }}" action="{{ route('template.submit-meta', $template->id) }}" method="POST" class="d-inline">
                                     @csrf
                                     <button type="button" class="btn-template-action btn-submit-meta" title="Submit ke WhatsApp untuk review" onclick="konfirmasiSubmitMeta({{ $template->id }})">
@@ -779,9 +793,49 @@
                             </button>
                         </div>
                     </div>
+                    @if(!empty($template->meta_synced))
+                    <div style="padding: 0 1.25rem 1rem; font-size: 0.75rem; color: #8392ab;">
+                        Status disinkron dari Meta{{ !empty($template->meta_template_name) ? ': ' . $template->meta_template_name : '' }}
+                        @if(!empty($template->meta_rejection_reason))
+                            <br>Alasan: {{ $template->meta_rejection_reason }}
+                        @endif
+                    </div>
+                    @endif
                 </div>
                 @endforeach
             </div>
+
+            @if(isset($metaOnlyTemplates) && $metaOnlyTemplates->count() > 0)
+            <div class="mt-4 pt-3" style="border-top: 1px solid #e9ecef;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="template-card-title mb-0">Template Dari Meta</h6>
+                    <span class="badge bg-gradient-info">{{ $metaOnlyTemplates->count() }} template</span>
+                </div>
+                <div class="template-grid">
+                    @foreach($metaOnlyTemplates as $template)
+                    <div class="template-item" data-kategori="{{ strtolower($template->category ?? 'other') }}">
+                        <div class="template-item-header">
+                            <h6 class="template-item-name" title="{{ $template->name }}">{{ $template->name }}</h6>
+                            <span class="template-item-category">{{ strtolower($template->category ?? 'umum') }}</span>
+                        </div>
+                        <div class="template-item-body">
+                            <p class="template-item-preview">{{ $template->getBodyText() ?? $template->sample_text ?? 'Template hasil sync dari Meta' }}</p>
+                        </div>
+                        <div class="template-item-footer">
+                            @if($template->status === 'approved')
+                                <span class="status-badge status-approved"><i class="ni ni-check-bold"></i> Approved Meta</span>
+                            @elseif($template->status === 'rejected')
+                                <span class="status-badge status-rejected"><i class="ni ni-fat-remove"></i> Ditolak Meta</span>
+                            @else
+                                <span class="status-badge status-pending"><i class="ni ni-time-alarm"></i> Status Meta: {{ ucfirst($template->status) }}</span>
+                            @endif
+                            <div style="font-size: 0.75rem; color: #8392ab;">Hasil sync Meta</div>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
             @else
             {{-- Empty State --}}
             <div class="empty-state-container" id="templateEmptyState">
@@ -824,21 +878,25 @@
                                 <option value="payment_remind">💰 Pengingat Pembayaran</option>
                                 <option value="event_invite">🎉 Undangan Acara / Event</option>
                                 <option value="feedback">⭐ Minta Ulasan / Feedback</option>
+                                <option value="otp_login">🔐 Kode Login / OTP</option>
                             </optgroup>
                             <optgroup label="🏪 Toko / Retail / Online Shop">
                                 <option value="order_confirm">📦 Konfirmasi Pesanan</option>
                                 <option value="shipping">🚚 Notifikasi Pengiriman</option>
                                 <option value="restock">🔔 Produk Tersedia Kembali</option>
+                                <option value="payment_due">🧾 Tagihan Pesanan</option>
                             </optgroup>
                             <optgroup label="🔧 Jasa / Layanan">
                                 <option value="booking_confirm">📋 Konfirmasi Booking</option>
                                 <option value="appointment_remind">⏰ Pengingat Jadwal</option>
                                 <option value="service_done">✅ Layanan Selesai</option>
+                                <option value="service_verification">🛡️ Verifikasi Jadwal</option>
                             </optgroup>
                             <optgroup label="🎓 Sekolah / Pendidikan">
                                 <option value="school_info">📢 Info Sekolah / Pengumuman</option>
                                 <option value="school_payment">💳 Tagihan SPP / Biaya</option>
                                 <option value="school_event">🏫 Undangan Kegiatan Sekolah</option>
+                                <option value="school_otp">🔢 Kode Verifikasi Orang Tua</option>
                             </optgroup>
                             <optgroup label="🏢 Kantor / Perusahaan">
                                 <option value="meeting_invite">📅 Undangan Rapat / Meeting</option>
@@ -861,6 +919,8 @@
                     <div class="mb-3">
                         <label class="form-label-soft">Nama Template</label>
                         <input type="text" name="nama" id="createNama" class="form-control form-control-soft" placeholder="Contoh: Promo Akhir Tahun" required>
+                        <small class="text-muted d-block mt-1">Nama aman untuk Meta akan dibuat otomatis dari nama ini.</small>
+                        <small class="text-primary d-block mt-1" id="createMetaNamePreview" style="display:none;"></small>
                     </div>
 
                     {{-- Kategori --}}
@@ -897,6 +957,10 @@
                             <span class="variable-tag variable-tag-auto" onclick="insertVariable('nama', 'createKonten')" title="Nama penerima dari data Kontak">+ Nama Penerima</span>
                             <span class="variable-tag variable-tag-auto" onclick="insertVariable('telepon', 'createKonten')" title="No HP penerima dari data Kontak">+ No HP</span>
                             <span class="variable-tag variable-tag-auto" onclick="insertVariable('email', 'createKonten')" title="Email penerima dari data Kontak">+ Email</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('kode', 'createKonten')" title="Kode verifikasi atau referensi">+ Kode</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('otp', 'createKonten')" title="Kode OTP verifikasi">+ OTP</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('no_order', 'createKonten')" title="Nomor order atau invoice">+ No Order</span>
+                            <span class="variable-tag variable-tag-auto" onclick="insertVariable('tanggal', 'createKonten')" title="Tanggal jatuh tempo atau jadwal">+ Tanggal</span>
                         </div>
                     </div>
 
@@ -905,6 +969,15 @@
                         <label class="form-label-soft">Preview — Contoh pesan yang diterima pelanggan:</label>
                         <div class="alert border" id="createPreview" style="white-space: pre-wrap; font-size: 0.875rem; background: #f0fdf4; border-color: #bbf7d0 !important;"></div>
                         <small class="text-muted"><i class="ni ni-bell-55 me-1"></i>Nama, No HP, Email otomatis diisi dari data Kontak setiap penerima.</small>
+                    </div>
+
+                    <div class="alert alert-light border mt-3 mb-0" id="createTemplateChecklist" style="font-size: 0.85rem;">
+                        Mulai isi nama, kategori, dan konten untuk melihat checklist kelolosan dasar.
+                    </div>
+
+                    <div class="mt-3" id="createRiskWrap" style="display:none;">
+                        <label class="form-label-soft mb-2">Risiko Review Meta</label>
+                        <div id="createRiskBadge"></div>
                     </div>
                 </form>
             </div>
@@ -934,6 +1007,7 @@
                     <div class="mb-3">
                         <label class="form-label-soft">Nama Template</label>
                         <input type="text" name="nama" id="editNama" class="form-control form-control-soft" required>
+                        <small class="text-primary d-block mt-1" id="editMetaNamePreview" style="display:none;"></small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label-soft">Kategori</label>
@@ -946,6 +1020,13 @@
                     <div class="mb-3">
                         <label class="form-label-soft">Isi Pesan</label>
                         <textarea name="konten" id="editKonten" class="form-control form-control-soft textarea-soft" required></textarea>
+                    </div>
+                    <div class="alert alert-light border mt-3 mb-0" id="editTemplateChecklist" style="font-size: 0.85rem;">
+                        Checklist kelolosan dasar akan muncul di sini.
+                    </div>
+                    <div class="mt-3" id="editRiskWrap" style="display:none;">
+                        <label class="form-label-soft mb-2">Risiko Review Meta</label>
+                        <div id="editRiskBadge"></div>
                     </div>
                 </form>
             </div>
@@ -970,119 +1051,139 @@ const quickTemplates = {
     welcome: {
         nama: 'Selamat Datang',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, selamat datang! 👋\n\nTerima kasih telah bergabung bersama kami. Kami siap membantu kebutuhan Anda.\n\nJika ada pertanyaan, silakan hubungi kami kapan saja.'
+        konten: 'Halo {{nama}}, selamat datang di layanan kami.\n\nTerima kasih telah bergabung. Jika Anda memerlukan bantuan atau informasi lebih lanjut, silakan hubungi kami.\n\nSalam hormat.'
     },
     thank_you: {
         nama: 'Ucapan Terima Kasih',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, terima kasih atas kepercayaan Anda! 🙏\n\nKami sangat menghargai Anda sebagai pelanggan kami. Semoga kami bisa terus memberikan layanan terbaik.\n\nSampai jumpa kembali!'
+        konten: 'Halo {{nama}}, terima kasih telah menggunakan layanan kami.\n\nKami menghargai kepercayaan Anda dan siap membantu jika masih ada kebutuhan lanjutan.\n\nSalam hangat dari tim kami.'
     },
     promo: {
         nama: 'Promo Diskon',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, ada promo spesial untuk Anda! 🔥\n\nDapatkan diskon hingga 50% untuk semua produk kami.\n\nPromo berlaku sampai akhir bulan ini. Jangan sampai kelewatan!\n\nInfo lebih lanjut hubungi kami.'
+        konten: 'Halo {{nama}}, saat ini tersedia penawaran khusus untuk {{produk}}.\n\nPeriode penawaran berlaku sampai {{tanggal}}. Jika Anda ingin detail harga atau syaratnya, silakan balas pesan ini.\n\nTerima kasih.'
     },
     payment_remind: {
         nama: 'Pengingat Pembayaran',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, ini pengingat pembayaran Anda. 💰\n\nMohon segera selesaikan pembayaran agar layanan bisa diproses.\n\nJika sudah bayar, abaikan pesan ini. Terima kasih!'
+        konten: 'Halo {{nama}}, ini adalah pengingat pembayaran untuk layanan atau transaksi Anda.\n\nMohon lakukan pembayaran sebelum {{tanggal}} agar proses dapat dilanjutkan. Jika pembayaran sudah dilakukan, abaikan pesan ini.\n\nTerima kasih.'
     },
     event_invite: {
         nama: 'Undangan Acara',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, Anda diundang ke acara spesial kami! 🎉\n\nJangan lewatkan! Kami tunggu kehadiran Anda.\n\nUntuk info lengkap, silakan hubungi kami.'
+        konten: 'Halo {{nama}}, kami ingin mengundang Anda ke acara yang kami selenggarakan pada {{tanggal}}.\n\nJika Anda berkenan hadir, silakan balas pesan ini untuk informasi lebih lanjut.\n\nTerima kasih.'
     },
     feedback: {
         nama: 'Minta Ulasan',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, terima kasih telah menggunakan layanan kami! ⭐\n\nKami ingin tahu pendapat Anda. Mohon luangkan waktu sebentar untuk memberikan ulasan.\n\nMasukan Anda sangat berarti bagi kami. Terima kasih! 🙏'
+        konten: 'Halo {{nama}}, terima kasih telah menggunakan layanan kami.\n\nJika berkenan, kami sangat terbantu bila Anda memberikan masukan singkat mengenai pengalaman Anda.\n\nTerima kasih atas waktunya.'
+    },
+    otp_login: {
+        nama: 'Kode Login',
+        kategori: 'authentication',
+        konten: 'Halo {{nama}}, kode verifikasi login Anda adalah {{otp}}.\n\nKode ini berlaku sampai {{tanggal}} dan mohon tidak dibagikan kepada siapa pun.'
     },
 
     // === TOKO / RETAIL / ONLINE SHOP ===
     order_confirm: {
         nama: 'Konfirmasi Pesanan',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, pesanan Anda sudah kami terima! 📦\n\nPesanan sedang diproses dan kami akan kabari jika sudah dikirim.\n\nTerima kasih telah berbelanja!'
+        konten: 'Halo {{nama}}, pesanan Anda dengan nomor {{no_order}} telah kami terima.\n\nSaat ini pesanan sedang diproses. Kami akan mengirimkan informasi lanjutan setelah status pengiriman tersedia.\n\nTerima kasih.'
     },
     shipping: {
         nama: 'Notifikasi Pengiriman',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, pesanan Anda sudah dikirim! 🚚\n\nSilakan cek status pengiriman secara berkala.\n\nTerima kasih telah berbelanja!'
+        konten: 'Halo {{nama}}, pesanan Anda dengan nomor {{no_order}} sudah dikirim.\n\nSilakan lakukan pengecekan status pengiriman secara berkala melalui kanal informasi yang telah kami sampaikan.\n\nTerima kasih.'
     },
     restock: {
         nama: 'Produk Tersedia Kembali',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, kabar baik! 🔔\n\nProduk yang Anda tunggu sudah tersedia kembali.\n\nSegera pesan sebelum kehabisan lagi. Stok terbatas!'
+        konten: 'Halo {{nama}}, {{produk}} yang sebelumnya Anda tanyakan saat ini sudah tersedia kembali.\n\nJika Anda ingin kami bantu proses pemesanan, silakan balas pesan ini.\n\nTerima kasih.'
+    },
+    payment_due: {
+        nama: 'Tagihan Pesanan',
+        kategori: 'utility',
+        konten: 'Halo {{nama}}, tagihan untuk pesanan {{no_order}} akan jatuh tempo pada {{tanggal}}.\n\nSilakan lakukan pembayaran sesuai instruksi yang telah Anda terima.\n\nTerima kasih.'
     },
 
     // === JASA / LAYANAN ===
     booking_confirm: {
         nama: 'Konfirmasi Booking',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, booking Anda sudah dikonfirmasi! 📋\n\nMohon hadir tepat waktu sesuai jadwal.\n\nJika perlu reschedule, silakan hubungi kami. Terima kasih!'
+        konten: 'Halo {{nama}}, jadwal booking Anda telah dikonfirmasi untuk tanggal {{tanggal}}.\n\nMohon hadir sesuai waktu yang telah ditentukan. Jika Anda perlu melakukan penyesuaian jadwal, silakan hubungi kami.\n\nTerima kasih.'
     },
     appointment_remind: {
         nama: 'Pengingat Jadwal',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, ini pengingat untuk jadwal Anda besok. ⏰\n\nJika perlu reschedule, silakan hubungi kami segera.\n\nTerima kasih!'
+        konten: 'Halo {{nama}}, ini adalah pengingat untuk jadwal Anda pada {{tanggal}}.\n\nJika Anda memerlukan perubahan jadwal, silakan hubungi kami sesegera mungkin.\n\nTerima kasih.'
     },
     service_done: {
         nama: 'Layanan Selesai',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, layanan Anda sudah selesai! ✅\n\nTerima kasih telah mempercayakan kepada kami.\n\nSemoga puas dengan hasilnya! 🙏'
+        konten: 'Halo {{nama}}, layanan yang Anda ajukan telah selesai diproses.\n\nJika ada hal yang masih perlu ditindaklanjuti, silakan hubungi tim kami.\n\nTerima kasih atas kepercayaan Anda.'
+    },
+    service_verification: {
+        nama: 'Verifikasi Jadwal',
+        kategori: 'authentication',
+        konten: 'Halo {{nama}}, kode verifikasi untuk konfirmasi jadwal Anda adalah {{kode}}.\n\nMasukkan kode ini pada sistem kami sebelum {{tanggal}}.'
     },
 
     // === SEKOLAH / PENDIDIKAN ===
     school_info: {
         nama: 'Info Sekolah',
         kategori: 'utility',
-        konten: 'Kepada Bapak/Ibu {{nama}}, 📢\n\nDengan ini kami sampaikan informasi penting dari sekolah.\n\nSilakan hubungi pihak sekolah untuk informasi lebih lanjut.\n\nTerima kasih atas perhatiannya.'
+        konten: 'Kepada Bapak/Ibu {{nama}},\n\nDengan ini kami menyampaikan informasi penting dari sekolah pada tanggal {{tanggal}}.\n\nUntuk detail lebih lanjut, silakan menghubungi pihak sekolah melalui kanal resmi.\n\nTerima kasih atas perhatian Bapak/Ibu.'
     },
     school_payment: {
         nama: 'Tagihan SPP',
         kategori: 'utility',
-        konten: 'Kepada Bapak/Ibu {{nama}}, 💳\n\nMohon segera melakukan pembayaran SPP/biaya sekolah sebelum jatuh tempo.\n\nJika sudah membayar, abaikan pesan ini.\n\nTerima kasih.'
+        konten: 'Kepada Bapak/Ibu {{nama}},\n\nIni adalah pengingat pembayaran SPP atau biaya sekolah yang jatuh tempo pada {{tanggal}}.\n\nJika pembayaran sudah dilakukan, mohon abaikan pesan ini.\n\nTerima kasih.'
     },
     school_event: {
         nama: 'Undangan Kegiatan Sekolah',
         kategori: 'marketing',
-        konten: 'Kepada Bapak/Ibu {{nama}}, 🏫\n\nDengan ini kami mengundang Bapak/Ibu untuk hadir pada kegiatan sekolah.\n\nKehadiran Bapak/Ibu sangat kami harapkan.\n\nTerima kasih.'
+        konten: 'Kepada Bapak/Ibu {{nama}},\n\nKami mengundang Bapak/Ibu untuk menghadiri kegiatan sekolah pada {{tanggal}}.\n\nUntuk informasi waktu dan lokasi, silakan hubungi pihak sekolah.\n\nTerima kasih.'
+    },
+    school_otp: {
+        nama: 'Kode Verifikasi Orang Tua',
+        kategori: 'authentication',
+        konten: 'Kepada Bapak/Ibu {{nama}}, kode verifikasi akses portal sekolah adalah {{otp}}.\n\nKode ini bersifat rahasia dan berlaku sampai {{tanggal}}.'
     },
 
     // === KANTOR / PERUSAHAAN ===
     meeting_invite: {
         nama: 'Undangan Rapat',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, 📅\n\nAnda diundang untuk menghadiri rapat.\n\nMohon konfirmasi kehadiran Anda. Terima kasih.'
+        konten: 'Halo {{nama}}, Anda dijadwalkan menghadiri rapat pada {{tanggal}}.\n\nMohon lakukan konfirmasi kehadiran sesuai prosedur yang berlaku.\n\nTerima kasih.'
     },
     company_announce: {
         nama: 'Pengumuman Perusahaan',
         kategori: 'utility',
-        konten: 'Kepada {{nama}}, 📣\n\nBerikut informasi penting dari perusahaan.\n\nDemikian pengumuman ini disampaikan. Terima kasih atas perhatiannya.'
+        konten: 'Kepada {{nama}},\n\nBerikut kami sampaikan informasi penting dari perusahaan untuk perhatian Anda.\n\nApabila diperlukan tindak lanjut, silakan menghubungi pihak terkait.\n\nTerima kasih.'
     },
 
     // === F&B / RESTORAN / KAFE ===
     order_ready: {
         nama: 'Pesanan Siap',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, pesanan Anda sudah siap! 🍔\n\nSilakan diambil.\n\nSelamat menikmati! 😊'
+        konten: 'Halo {{nama}}, pesanan Anda dengan nomor {{no_order}} sudah siap.\n\nSilakan lakukan pengambilan sesuai jadwal atau ketentuan yang berlaku.\n\nTerima kasih.'
     },
     menu_promo: {
         nama: 'Promo Menu Baru',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, ada menu baru yang wajib dicoba! 🍕\n\nDapatkan harga spesial untuk menu terbaru kami.\n\nYuk, pesan sekarang!'
+        konten: 'Halo {{nama}}, kami ingin menginformasikan bahwa saat ini tersedia menu baru di tempat kami.\n\nJika Anda ingin melihat detail menu atau harga, silakan balas pesan ini.\n\nTerima kasih.'
     },
 
     // === KESEHATAN / KLINIK ===
     appointment_health: {
         nama: 'Pengingat Jadwal Kontrol',
         kategori: 'utility',
-        konten: 'Halo {{nama}}, ini pengingat jadwal kontrol kesehatan Anda. 🩺\n\nMohon hadir tepat waktu.\n\nJika perlu ubah jadwal, segera hubungi kami. Terima kasih!'
+        konten: 'Halo {{nama}}, ini adalah pengingat untuk jadwal kontrol kesehatan Anda pada {{tanggal}}.\n\nMohon hadir sesuai waktu yang telah ditentukan. Jika perlu perubahan jadwal, silakan hubungi kami.\n\nTerima kasih.'
     },
     health_promo: {
         nama: 'Promo Layanan Kesehatan',
         kategori: 'marketing',
-        konten: 'Halo {{nama}}, jaga kesehatan Anda! 💊\n\nDapatkan promo spesial untuk layanan kesehatan kami.\n\nSegera daftarkan diri Anda. Kesehatan adalah investasi terbaik!'
+        konten: 'Halo {{nama}}, saat ini tersedia informasi layanan kesehatan untuk periode {{tanggal}}.\n\nJika Anda ingin mengetahui jadwal, biaya, atau jenis layanan yang tersedia, silakan hubungi kami.\n\nTerima kasih.'
     }
 };
 
@@ -1096,6 +1197,7 @@ function applyQuickTemplate() {
     document.getElementById('createKategori').value = t.kategori;
     document.getElementById('createKonten').value = t.konten;
     updatePreview('createKonten', 'createPreview', 'createPreviewWrap');
+    updateTemplateGuidance('create');
 }
 
 // Insert variable at cursor position in textarea
@@ -1110,6 +1212,141 @@ function insertVariable(varName, textareaId) {
     textarea.selectionStart = textarea.selectionEnd = start + variable.length;
     textarea.focus();
     updatePreview(textareaId, textareaId === 'createKonten' ? 'createPreview' : null, textareaId === 'createKonten' ? 'createPreviewWrap' : null);
+    updateTemplateGuidance(textareaId === 'createKonten' ? 'create' : 'edit');
+}
+
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function toMetaSafeName(value) {
+    return value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function updateTemplateGuidance(prefix) {
+    const nameInput = document.getElementById(prefix + 'Nama');
+    const categoryInput = document.getElementById(prefix + 'Kategori');
+    const contentInput = document.getElementById(prefix + 'Konten');
+    const checklist = document.getElementById(prefix + 'TemplateChecklist');
+    const metaNamePreview = document.getElementById(prefix + 'MetaNamePreview');
+    const riskWrap = document.getElementById(prefix + 'RiskWrap');
+    const riskBadge = document.getElementById(prefix + 'RiskBadge');
+
+    if (!nameInput || !categoryInput || !contentInput || !checklist || !metaNamePreview || !riskWrap || !riskBadge) {
+        return;
+    }
+
+    const allowedVariables = ['nama', 'telepon', 'email', 'kode', 'otp', 'produk', 'harga', 'tanggal', 'no_order'];
+    const promoPattern = /\b(promo|diskon|cashback|voucher|gratis|sale|penawaran|flash sale|stok terbatas|beli sekarang|pesan sekarang)\b|%/i;
+    const authPattern = /\b(otp|kode|verifikasi|verification|password|pin|login)\b/i;
+    const shortenerPattern = /(bit\.ly|tinyurl\.com|cutt\.ly|s\.id)/i;
+    const highRiskPattern = /\b(slot|judi|casino|pinjaman online|paylater tanpa syarat|investasi pasti untung|jamin untung|cepat kaya|hadiah tunai instan)\b/i;
+    const urlPattern = /https?:\/\//i;
+
+    const displayName = nameInput.value.trim();
+    const safeName = toMetaSafeName(displayName);
+    const category = categoryInput.value;
+    const body = contentInput.value.trim();
+    const variableMatches = [...contentInput.value.matchAll(/\{\{([^{}]+)\}\}/g)].map(match => match[1].trim().toLowerCase());
+    const invalidVariables = [...new Set(variableMatches.filter(value => !allowedVariables.includes(value)))];
+
+    if (safeName) {
+        metaNamePreview.style.display = 'block';
+        metaNamePreview.textContent = 'Nama aman untuk Meta: ' + safeName;
+    } else {
+        metaNamePreview.style.display = 'none';
+    }
+
+    const checks = [
+        {
+            ok: displayName.length >= 3,
+            text: displayName.length >= 3 ? 'Nama template cukup jelas.' : 'Nama template minimal 3 karakter.'
+        },
+        {
+            ok: body.length >= 15,
+            text: body.length >= 15 ? 'Isi pesan cukup spesifik.' : 'Isi pesan terlalu pendek untuk review Meta.'
+        },
+        {
+            ok: invalidVariables.length === 0,
+            text: invalidVariables.length === 0
+                ? 'Variabel yang dipakai didukung sistem.'
+                : 'Variabel tidak didukung: ' + invalidVariables.join(', ')
+        },
+        {
+            ok: !shortenerPattern.test(body),
+            text: !shortenerPattern.test(body)
+                ? 'Tidak ada short link berisiko.'
+                : 'Hindari short link seperti bit.ly atau s.id.'
+        },
+        {
+            ok: !highRiskPattern.test(body),
+            text: !highRiskPattern.test(body)
+                ? 'Tidak ada kata berisiko tinggi.'
+                : 'Ada kata berisiko tinggi yang sering memicu penolakan review.'
+        },
+        {
+            ok: category !== 'utility' || !promoPattern.test(body),
+            text: category !== 'utility' || !promoPattern.test(body)
+                ? 'Kategori sesuai isi pesan.'
+                : 'Isi terdeteksi promosi. Lebih aman pakai kategori Marketing.'
+        },
+        {
+            ok: category !== 'authentication' || authPattern.test(body),
+            text: category !== 'authentication' || authPattern.test(body)
+                ? 'Kategori Authentication sesuai.'
+                : 'Authentication sebaiknya hanya untuk OTP, PIN, login, atau verifikasi.'
+        },
+        {
+            ok: category !== 'authentication' || !urlPattern.test(body),
+            text: category !== 'authentication' || !urlPattern.test(body)
+                ? 'Authentication tidak memakai link.'
+                : 'Authentication sebaiknya tidak menyertakan link.'
+        }
+    ];
+
+    const failedChecks = checks.filter(item => !item.ok).length;
+    let riskLevel = 'Rendah';
+    let riskColor = '#2dce89';
+    let riskBackground = '#ecfdf3';
+    let riskMessage = 'Template terlihat aman untuk disimpan dan diajukan, tetapi tetap review isi akhirnya sebelum submit.';
+
+    if (failedChecks >= 3) {
+        riskLevel = 'Tinggi';
+        riskColor = '#f5365c';
+        riskBackground = '#fff1f2';
+        riskMessage = 'Ada beberapa indikator berisiko yang bisa memicu penolakan. Perbaiki poin merah terlebih dahulu.';
+    } else if (failedChecks >= 1) {
+        riskLevel = 'Sedang';
+        riskColor = '#fb6340';
+        riskBackground = '#fff7ed';
+        riskMessage = 'Masih ada beberapa hal yang sebaiknya dirapikan agar peluang lolos review lebih baik.';
+    }
+
+    if (displayName || category || body) {
+        riskWrap.style.display = 'block';
+        riskBadge.innerHTML = '<div style="border:1px solid ' + riskColor + ';background:' + riskBackground + ';color:' + riskColor + ';border-radius:12px;padding:12px 14px;">'
+            + '<div style="font-weight:700;margin-bottom:4px;">Risiko ' + riskLevel + '</div>'
+            + '<div style="font-size:0.85rem;line-height:1.5;">' + escapeHtml(riskMessage) + '</div>'
+            + '</div>';
+    } else {
+        riskWrap.style.display = 'none';
+    }
+
+    checklist.innerHTML = checks.map(item => {
+        const color = item.ok ? '#2dce89' : '#f5365c';
+        const icon = item.ok ? 'ni ni-check-bold' : 'ni ni-fat-remove';
+        return '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">'
+            + '<i class="' + icon + '" style="color:' + color + ';margin-top:2px;"></i>'
+            + '<span>' + escapeHtml(item.text) + '</span>'
+            + '</div>';
+    }).join('');
 }
 
 // Live preview
@@ -1126,6 +1363,8 @@ function updatePreview(textareaId, previewId, wrapId) {
             .replace(/\{\{nama\}\}/g, '<span style="background:#2dce89;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Nama Penerima</span>')
             .replace(/\{\{telepon\}\}/g, '<span style="background:#2dce89;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">No HP Penerima</span>')
             .replace(/\{\{email\}\}/g, '<span style="background:#2dce89;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Email Penerima</span>')
+            .replace(/\{\{kode\}\}/g, '<span style="background:#11cdef;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Kode Verifikasi</span>')
+            .replace(/\{\{otp\}\}/g, '<span style="background:#11cdef;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">OTP</span>')
             .replace(/\{\{produk\}\}/g, '<span style="background:#5e72e4;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Produk</span>')
             .replace(/\{\{harga\}\}/g, '<span style="background:#5e72e4;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Harga</span>')
             .replace(/\{\{tanggal\}\}/g, '<span style="background:#5e72e4;color:#fff;padding:2px 8px;border-radius:10px;font-size:0.8em;">Tanggal</span>')
@@ -1144,8 +1383,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (createKonten) {
         createKonten.addEventListener('input', function() {
             updatePreview('createKonten', 'createPreview', 'createPreviewWrap');
+            updateTemplateGuidance('create');
         });
     }
+
+    ['createNama', 'createKategori'].forEach(function(id) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', function() { updateTemplateGuidance('create'); });
+            element.addEventListener('change', function() { updateTemplateGuidance('create'); });
+        }
+    });
+
+    ['editNama', 'editKategori', 'editKonten'].forEach(function(id) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', function() { updateTemplateGuidance('edit'); });
+            element.addEventListener('change', function() { updateTemplateGuidance('edit'); });
+        }
+    });
+
+    updateTemplateGuidance('create');
 });
 
 // Edit template
@@ -1165,6 +1423,7 @@ function editTemplate(id) {
     document.getElementById('editKategori').value = kategori;
     document.getElementById('editKonten').value = konten;
     document.getElementById('editTemplateForm').action = '/template/' + id;
+    updateTemplateGuidance('edit');
     new bootstrap.Modal(document.getElementById('editTemplateModal')).show();
 }
 

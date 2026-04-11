@@ -143,7 +143,12 @@ class MobileCampaignController extends Controller
                 'required',
                 Rule::exists('whatsapp_templates', 'id')->where('klien_id', $klien->id),
             ],
-            'audience' => 'required|string|in:all,tag',
+            'audience' => 'required|string|in:all,tag,contacts',
+            'contact_ids' => 'nullable|array',
+            'contact_ids.*' => [
+                'integer',
+                Rule::exists('kontaks', 'id')->where('klien_id', $klien->id),
+            ],
             'tags' => 'nullable|array',
             'tags.*' => 'string',
             'template_variables' => 'nullable|array',
@@ -159,6 +164,23 @@ class MobileCampaignController extends Controller
                 $audienceQuery->whereJsonContains('tags', $tag);
             }
             $filter = ['tags' => $request->tags];
+        } elseif ($request->audience === 'contacts') {
+            $contactIds = collect($request->input('contact_ids', []))
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            if (empty($contactIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pilih minimal satu kontak untuk audience ini.',
+                ], 422);
+            }
+
+            $audienceQuery->whereIn('id', $contactIds);
+            $filter = ['contact_ids' => $contactIds];
         }
 
         $totalRecipients = $audienceQuery->count();
@@ -417,7 +439,12 @@ class MobileCampaignController extends Controller
                 'required',
                 Rule::exists('whatsapp_templates', 'id')->where('klien_id', $klien->id),
             ],
-            'audience' => 'required|string|in:all,tag',
+            'audience' => 'required|string|in:all,tag,contacts',
+            'contact_ids' => 'nullable|array',
+            'contact_ids.*' => [
+                'integer',
+                Rule::exists('kontaks', 'id')->where('klien_id', $klien->id),
+            ],
             'tags' => 'nullable|array',
         ]);
 
@@ -427,6 +454,22 @@ class MobileCampaignController extends Controller
             foreach ($request->tags as $tag) {
                 $audienceQuery->whereJsonContains('tags', $tag);
             }
+        } elseif ($request->audience === 'contacts') {
+            $contactIds = collect($request->input('contact_ids', []))
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            if (empty($contactIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pilih minimal satu kontak untuk audience ini.',
+                ], 422);
+            }
+
+            $audienceQuery->whereIn('id', $contactIds);
         }
 
         $totalRecipients = $audienceQuery->count();

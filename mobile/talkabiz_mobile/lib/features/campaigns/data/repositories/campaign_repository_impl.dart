@@ -34,6 +34,7 @@ class CampaignRepositoryImpl implements CampaignRepository {
     String? description,
     required int templateId,
     required String audience,
+    List<int>? contactIds,
     List<String>? tags,
     Map<String, dynamic>? templateVariables,
     String? scheduledAt,
@@ -43,6 +44,7 @@ class CampaignRepositoryImpl implements CampaignRepository {
         description: description,
         templateId: templateId,
         audience: audience,
+        contactIds: contactIds,
         tags: tags,
         templateVariables: templateVariables,
         scheduledAt: scheduledAt,
@@ -67,11 +69,13 @@ class CampaignRepositoryImpl implements CampaignRepository {
   Future<CostEstimate> estimateCost({
     required int templateId,
     required String audience,
+    List<int>? contactIds,
     List<String>? tags,
   }) =>
       _remote.estimateCost(
         templateId: templateId,
         audience: audience,
+        contactIds: contactIds,
         tags: tags,
       );
 }

@@ -6,6 +6,8 @@ use App\Models\TemplatePesan;
 use App\Models\WhatsappConnection;
 use App\Models\WhatsappTemplate;
 use App\Services\OnboardingService;
+use App\Services\WaBlastService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -14,11 +16,25 @@ use Illuminate\Support\Facades\Validator;
 
 class TemplatePesanController extends Controller
 {
-    protected OnboardingService $onboardingService;
+    private const ALLOWED_TEMPLATE_VARIABLES = [
+        'nama',
+        'telepon',
+        'email',
+        'kode',
+        'otp',
+        'produk',
+        'harga',
+        'tanggal',
+        'no_order',
+    ];
 
-    public function __construct(OnboardingService $onboardingService)
+    protected OnboardingService $onboardingService;
+    protected WaBlastService $waBlastService;
+
+    public function __construct(OnboardingService $onboardingService, WaBlastService $waBlastService)
     {
         $this->onboardingService = $onboardingService;
+        $this->waBlastService = $waBlastService;
     }
 
     /**
@@ -27,14 +43,180 @@ class TemplatePesanController extends Controller
     public function index()
     {
         $klienId = Auth::user()->klien_id;
+
+        $connection = WhatsappConnection::where('klien_id', $klienId)
+            ->where('status', WhatsappConnection::STATUS_CONNECTED)
+            ->first();
+
+        if ($connection) {
+            try {
+                $this->waBlastService->syncTemplatesIfStale($connection);
+            } catch (\Throwable $e) {
+                Log::warning('Passive template sync failed on template page', [
+                    'klien_id' => $klienId,
+                    'connection_id' => $connection->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $templates = TemplatePesan::where('klien_id', $klienId)
             ->orderBy('created_at', 'desc')
             ->get();
+
+        $syncedTemplates = WhatsappTemplate::where('klien_id', $klienId)
+            ->orderBy('name')
+            ->get();
+
+        $latestTemplateSyncAt = $syncedTemplates
+            ->pluck('synced_at')
+            ->filter()
+            ->map(fn ($value) => $value instanceof Carbon ? $value : Carbon::parse($value))
+            ->sortDesc()
+            ->first();
+
+        $syncedByName = $syncedTemplates->keyBy(function (WhatsappTemplate $template) {
+            return $this->normalizeTemplateName($template->name);
+        });
+
+        $matchedTemplateNames = [];
+
+        $templates = $templates->map(function (TemplatePesan $template) use ($syncedByName, &$matchedTemplateNames) {
+            $normalizedName = $this->normalizeTemplateName($template->nama_template ?: $template->nama_tampilan);
+            $syncedTemplate = $syncedByName->get($normalizedName);
+
+            $template->effective_status = $template->status;
+            $template->meta_synced = false;
+            $template->meta_rejection_reason = null;
+
+            if ($syncedTemplate) {
+                $matchedTemplateNames[$normalizedName] = true;
+                $template->effective_status = $this->mapSyncedStatusToInternal($syncedTemplate->status);
+                $template->meta_synced = true;
+                $template->meta_status = $syncedTemplate->status;
+                $template->meta_rejection_reason = $syncedTemplate->rejection_reason;
+                $template->meta_template_name = $syncedTemplate->name;
+            }
+
+            return $template;
+        });
+
+        $metaOnlyTemplates = $syncedTemplates
+            ->filter(function (WhatsappTemplate $template) use ($matchedTemplateNames) {
+                return !isset($matchedTemplateNames[$this->normalizeTemplateName($template->name)]);
+            })
+            ->values();
         
         // Auto-track onboarding step: template_viewed
         $this->onboardingService->trackTemplateViewed(Auth::user());
             
-        return view('template', compact('templates'));
+        return view('template', [
+            'templates' => $templates,
+            'metaOnlyTemplates' => $metaOnlyTemplates,
+            'syncedTemplateCount' => $syncedTemplates->count(),
+            'latestTemplateSyncAt' => $latestTemplateSyncAt,
+            'templateAutoSyncCooldownMinutes' => (int) ceil(WaBlastService::TEMPLATE_AUTO_SYNC_COOLDOWN / 60),
+        ]);
+    }
+
+    private function normalizeTemplateName(?string $name): string
+    {
+        $normalized = strtolower((string) $name);
+        $normalized = preg_replace('/[^a-z0-9]+/', '_', $normalized) ?? '';
+
+        return trim($normalized, '_');
+    }
+
+    private function mapSyncedStatusToInternal(string $status): string
+    {
+        return match (strtolower($status)) {
+            WhatsappTemplate::STATUS_APPROVED => TemplatePesan::STATUS_DISETUJUI,
+            WhatsappTemplate::STATUS_REJECTED => TemplatePesan::STATUS_DITOLAK,
+            WhatsappTemplate::STATUS_PAUSED => TemplatePesan::STATUS_ARSIP,
+            default => TemplatePesan::STATUS_DIAJUKAN,
+        };
+    }
+
+    private function validateTemplateDraft(string $displayName, string $category, string $body, int $klienId, ?int $ignoreTemplateId = null): array
+    {
+        $errors = [];
+        $normalizedName = $this->normalizeTemplateName($displayName);
+        $trimmedBody = trim($body);
+        $utilityPromoPattern = '/\b(promo|diskon|cashback|voucher|gratis|sale|penawaran|flash sale|stok terbatas|beli sekarang|pesan sekarang)\b|%/i';
+        $authPattern = '/\b(otp|kode|verifikasi|verification|password|pin|login)\b/i';
+        $highRiskPattern = '/\b(slot|judi|casino|pinjaman online|paylater tanpa syarat|investasi pasti untung|jamin untung|cepat kaya|hadiah tunai instan)\b/i';
+
+        if (mb_strlen(trim($displayName)) < 3) {
+            $errors[] = 'Nama template minimal 3 karakter.';
+        }
+
+        if ($normalizedName === '') {
+            $errors[] = 'Nama template harus mengandung huruf atau angka agar aman untuk Meta.';
+        }
+
+        $duplicateQuery = TemplatePesan::where('klien_id', $klienId)
+            ->where('nama_template', $normalizedName);
+
+        if ($ignoreTemplateId) {
+            $duplicateQuery->where('id', '!=', $ignoreTemplateId);
+        }
+
+        if ($duplicateQuery->exists()) {
+            $errors[] = 'Nama template bentrok dengan template lain. Ganti nama agar unik.';
+        }
+
+        if (mb_strlen($trimmedBody) < 15) {
+            $errors[] = 'Isi pesan terlalu pendek. Jelaskan tujuan pesan dengan lebih spesifik.';
+        }
+
+        if (substr_count($body, '{{') !== substr_count($body, '}}')) {
+            $errors[] = 'Format variabel tidak valid. Pastikan pasangan {{ dan }} lengkap.';
+        }
+
+        preg_match_all('/\{\{([^{}]+)\}\}/', $body, $matches);
+        $variables = collect($matches[1] ?? [])
+            ->map(fn ($value) => strtolower(trim((string) $value)))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $invalidVariables = $variables
+            ->reject(fn ($value) => in_array($value, self::ALLOWED_TEMPLATE_VARIABLES, true))
+            ->values();
+
+        if ($invalidVariables->isNotEmpty()) {
+            $errors[] = 'Variabel tidak didukung: ' . $invalidVariables->implode(', ') . '. Gunakan hanya: ' . implode(', ', self::ALLOWED_TEMPLATE_VARIABLES) . '.';
+        }
+
+        if ($variables->count() > 5) {
+            $errors[] = 'Gunakan maksimal 5 variabel agar template lebih mudah di-review Meta.';
+        }
+
+        if (preg_match('/(bit\.ly|tinyurl\.com|cutt\.ly|s\.id)/i', $body)) {
+            $errors[] = 'Hindari short link seperti bit.ly atau s.id. Gunakan link penuh jika memang perlu.';
+        }
+
+        if (preg_match($highRiskPattern, $body)) {
+            $errors[] = 'Isi pesan mengandung kata berisiko tinggi untuk review Meta. Gunakan bahasa yang lebih netral dan informatif.';
+        }
+
+        if ($category === 'utility' && preg_match($utilityPromoPattern, $body)) {
+            $errors[] = 'Isi pesan terlihat promosi, jadi kategori yang lebih aman adalah Marketing, bukan Utility.';
+        }
+
+        if ($category === 'authentication' && !preg_match($authPattern, $body)) {
+            $errors[] = 'Kategori Authentication sebaiknya hanya dipakai untuk OTP, PIN, login, atau verifikasi akun.';
+        }
+
+        if ($category === 'authentication' && preg_match('/https?:\/\//i', $body)) {
+            $errors[] = 'Template Authentication sebaiknya tidak berisi link. Fokuskan hanya pada kode atau instruksi verifikasi.';
+        }
+
+        if ($category === 'authentication' && preg_match($utilityPromoPattern, $body)) {
+            $errors[] = 'Template Authentication tidak boleh berisi promo atau ajakan penjualan.';
+        }
+
+        return $errors;
     }
 
     /**
@@ -78,9 +260,29 @@ class TemplatePesanController extends Controller
             return back()->withErrors($validator)->withInput();
         }
 
+        $displayName = trim((string) $request->nama);
+        $safeTemplateName = $this->normalizeTemplateName($displayName);
+        $guardrailErrors = $this->validateTemplateDraft(
+            $displayName,
+            (string) $request->kategori,
+            (string) $request->konten,
+            (int) Auth::user()->klien_id,
+        );
+
+        if (!empty($guardrailErrors)) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => ['template' => $guardrailErrors],
+                ], 422);
+            }
+
+            return back()->withErrors(['template' => $guardrailErrors])->withInput();
+        }
+
         $template = TemplatePesan::create([
-            'nama_template' => $request->nama,
-            'nama_tampilan' => $request->nama,
+            'nama_template' => $safeTemplateName,
+            'nama_tampilan' => $displayName,
             'kategori' => $request->kategori,
             'bahasa' => 'id',
             'body' => $request->konten,
@@ -124,9 +326,30 @@ class TemplatePesanController extends Controller
             return back()->withErrors($validator)->withInput();
         }
 
+        $displayName = trim((string) $request->nama);
+        $safeTemplateName = $this->normalizeTemplateName($displayName);
+        $guardrailErrors = $this->validateTemplateDraft(
+            $displayName,
+            (string) $request->kategori,
+            (string) $request->konten,
+            (int) Auth::user()->klien_id,
+            (int) $template->id,
+        );
+
+        if (!empty($guardrailErrors)) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => ['template' => $guardrailErrors],
+                ], 422);
+            }
+
+            return back()->withErrors(['template' => $guardrailErrors])->withInput();
+        }
+
         $template->update([
-            'nama_template' => $request->nama,
-            'nama_tampilan' => $request->nama,
+            'nama_template' => $safeTemplateName,
+            'nama_tampilan' => $displayName,
             'kategori' => $request->kategori,
             'body' => $request->konten,
         ]);

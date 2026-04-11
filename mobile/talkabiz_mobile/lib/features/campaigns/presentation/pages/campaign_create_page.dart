@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../contacts/domain/entities/contact_item.dart';
+import '../../../contacts/presentation/providers/contacts_provider.dart';
 import '../../../template/domain/entities/template_item.dart';
 import '../../../template/presentation/providers/template_provider.dart';
 import '../../data/repositories/campaign_repository_impl.dart';
@@ -21,6 +23,7 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
 
   int? _selectedTemplateId;
   String _audience = 'all';
+  Set<int> _selectedContactIds = <int>{};
   bool _submitting = false;
 
   @override
@@ -39,6 +42,13 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
       return;
     }
 
+    if (_audience == 'contacts' && _selectedContactIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih minimal satu kontak terlebih dahulu')),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
 
     try {
@@ -49,6 +59,7 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
                 : _descriptionController.text.trim(),
             templateId: _selectedTemplateId!,
             audience: _audience,
+            contactIds: _audience == 'contacts' ? _selectedContactIds.toList() : null,
           );
 
       ref.invalidate(campaignsProvider);
@@ -74,6 +85,7 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
   @override
   Widget build(BuildContext context) {
     final templatesAsync = ref.watch(templatesProvider);
+    final contactsAsync = ref.watch(contactsProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -153,7 +165,10 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
             const SizedBox(height: 8),
             _AudienceSelector(
               selected: _audience,
+              selectedCount: _selectedContactIds.length,
+              contactsAsync: contactsAsync,
               onChanged: (v) => setState(() => _audience = v),
+              onPickContacts: (contacts) => _openContactPicker(context, contacts),
             ),
             const SizedBox(height: 32),
 
@@ -180,6 +195,26 @@ class _CampaignCreatePageState extends ConsumerState<CampaignCreatePage> {
         ),
       ),
     );
+  }
+
+  Future<void> _openContactPicker(BuildContext context, List<ContactItem> contacts) async {
+    final initialSelection = Set<int>.from(_selectedContactIds);
+    final result = await showModalBottomSheet<Set<int>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _ContactPickerSheet(
+        contacts: contacts,
+        initialSelection: initialSelection,
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedContactIds = result;
+        _audience = result.isEmpty ? 'all' : 'contacts';
+      });
+    }
   }
 }
 
@@ -263,9 +298,18 @@ class _TemplateSelector extends StatelessWidget {
 }
 
 class _AudienceSelector extends StatelessWidget {
-  const _AudienceSelector({required this.selected, required this.onChanged});
+  const _AudienceSelector({
+    required this.selected,
+    required this.selectedCount,
+    required this.contactsAsync,
+    required this.onChanged,
+    required this.onPickContacts,
+  });
   final String selected;
+  final int selectedCount;
+  final AsyncValue<List<ContactItem>> contactsAsync;
   final ValueChanged<String> onChanged;
+  final ValueChanged<List<ContactItem>> onPickContacts;
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +325,188 @@ class _AudienceSelector extends StatelessWidget {
           onTap: () => onChanged('all'),
           theme: theme,
         ),
+        const SizedBox(height: 10),
+        contactsAsync.when(
+          data: (contacts) => _AudienceOption(
+            label: 'Pilih Kontak Tertentu',
+            subtitle: selectedCount > 0
+                ? '$selectedCount kontak dipilih'
+                : 'Pilih satu atau beberapa nomor kontak',
+            icon: Icons.how_to_reg_rounded,
+            selected: selected == 'contacts',
+            onTap: () => onPickContacts(contacts),
+            theme: theme,
+          ),
+          loading: () => _AudienceOption(
+            label: 'Pilih Kontak Tertentu',
+            subtitle: 'Memuat daftar kontak...',
+            icon: Icons.how_to_reg_rounded,
+            selected: false,
+            onTap: () {},
+            theme: theme,
+          ),
+          error: (_, __) => _AudienceOption(
+            label: 'Pilih Kontak Tertentu',
+            subtitle: 'Gagal memuat kontak. Buka halaman Kontak lalu coba lagi.',
+            icon: Icons.how_to_reg_rounded,
+            selected: false,
+            onTap: () {},
+            theme: theme,
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _ContactPickerSheet extends StatefulWidget {
+  const _ContactPickerSheet({
+    required this.contacts,
+    required this.initialSelection,
+  });
+
+  final List<ContactItem> contacts;
+  final Set<int> initialSelection;
+
+  @override
+  State<_ContactPickerSheet> createState() => _ContactPickerSheetState();
+}
+
+class _ContactPickerSheetState extends State<_ContactPickerSheet> {
+  late final TextEditingController _searchController;
+  late Set<int> _selection;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _selection = Set<int>.from(widget.initialSelection);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final filteredContacts = widget.contacts.where((contact) {
+      final query = _query.trim().toLowerCase();
+      if (query.isEmpty) return true;
+      return contact.name.toLowerCase().contains(query) ||
+          contact.phone.toLowerCase().contains(query) ||
+          (contact.email?.toLowerCase().contains(query) ?? false);
+    }).toList();
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 8,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.78,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Pilih Kontak', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(
+                'Pilih satu atau beberapa kontak untuk kampanye ini.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: 'Cari nama atau nomor',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: filteredContacts.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Kontak tidak ditemukan.',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: filteredContacts.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final contact = filteredContacts[index];
+                          final isSelected = _selection.contains(contact.id);
+                          return Material(
+                            color: isSelected
+                                ? theme.colorScheme.primaryContainer
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(14),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selection.remove(contact.id);
+                                  } else {
+                                    _selection.add(contact.id);
+                                  }
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isSelected ? Icons.check_circle : Icons.circle_outlined,
+                                      color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outline,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(contact.name, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                                          const SizedBox(height: 2),
+                                          Text(contact.phone, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
+                                          if ((contact.email ?? '').isNotEmpty)
+                                            Text(contact.email!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(_selection),
+                  child: Text(_selection.isEmpty ? 'Gunakan Semua Kontak' : 'Pilih ${_selection.length} Kontak'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

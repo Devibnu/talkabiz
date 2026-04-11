@@ -104,7 +104,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ),
                             const SizedBox(height: 28),
                             Text(
-                              'Masuk ke\nTalkabiz Mobile',
+                              'Masuk ke\nTalkabiz',
                               style: theme.textTheme.headlineMedium?.copyWith(
                                 color: Colors.white,
                                 height: 1.05,

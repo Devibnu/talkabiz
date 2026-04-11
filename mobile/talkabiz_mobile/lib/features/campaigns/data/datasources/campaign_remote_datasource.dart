@@ -44,6 +44,7 @@ class CampaignRemoteDatasource {
     String? description,
     required int templateId,
     required String audience,
+    List<int>? contactIds,
     List<String>? tags,
     Map<String, dynamic>? templateVariables,
     String? scheduledAt,
@@ -55,6 +56,7 @@ class CampaignRemoteDatasource {
         'description': description,
         'template_id': templateId,
         'audience': audience,
+        if (contactIds != null) 'contact_ids': contactIds,
         if (tags != null) 'tags': tags,
         if (templateVariables != null) 'template_variables': templateVariables,
         if (scheduledAt != null) 'scheduled_at': scheduledAt,
@@ -95,6 +97,7 @@ class CampaignRemoteDatasource {
   Future<CostEstimate> estimateCost({
     required int templateId,
     required String audience,
+    List<int>? contactIds,
     List<String>? tags,
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
@@ -102,6 +105,7 @@ class CampaignRemoteDatasource {
       data: {
         'template_id': templateId,
         'audience': audience,
+        if (contactIds != null) 'contact_ids': contactIds,
         if (tags != null) 'tags': tags,
       },
     );

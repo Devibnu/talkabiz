@@ -33,12 +33,10 @@ class _CampaignsPageState extends ConsumerState<CampaignsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kampanye'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
-            onPressed: () => context.pushNamed(RouteNames.campaignCreate),
-          ),
-        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.pushNamed(RouteNames.campaignCreate),
+        child: const Icon(Icons.add_rounded),
       ),
       body: RefreshIndicator(
         onRefresh: () async {

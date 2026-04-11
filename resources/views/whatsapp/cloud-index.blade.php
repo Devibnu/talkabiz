@@ -86,6 +86,14 @@
                         </p>
                         @endif
 
+                        <p class="text-xs text-muted mb-0 mt-2">
+                            <i class="fas fa-sync me-1"></i>
+                            Template auto-sync maksimal setiap {{ $templateAutoSyncCooldownMinutes ?? 5 }} menit
+                            @if(!empty($latestTemplateSyncAt))
+                                • terakhir sync {{ $latestTemplateSyncAt->format('d M Y H:i') }}
+                            @endif
+                        </p>
+
                         <hr class="horizontal dark my-3">
 
                         <div class="d-flex justify-content-between">
@@ -196,7 +204,12 @@
                 <div class="card-header pb-0 d-flex justify-content-between align-items-center">
                     <div>
                         <h6 class="mb-0">Template Pesan</h6>
-                        <p class="text-xs text-muted mb-0">Template yang disetujui untuk broadcast</p>
+                        <p class="text-xs text-muted mb-0">
+                            Template yang disetujui untuk broadcast
+                            @if(!empty($latestTemplateSyncAt))
+                                • terakhir sync {{ $latestTemplateSyncAt->format('d M Y H:i') }}
+                            @endif
+                        </p>
                     </div>
                     @if(!$__isViewOnly)
                     <button type="button" class="btn btn-sm btn-outline-primary" id="btnSyncTemplates2">

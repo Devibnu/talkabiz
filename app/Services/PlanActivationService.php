@@ -447,6 +447,8 @@ class PlanActivationService
                     ]);
             }
 
+                    app(SubscriptionPolicy::class)->invalidateCache($transaction->klien_id);
+
             // 10. Update User plan fields (denormalized for fast access)
             $user = User::where('klien_id', $transaction->klien_id)->first();
             if ($user) {

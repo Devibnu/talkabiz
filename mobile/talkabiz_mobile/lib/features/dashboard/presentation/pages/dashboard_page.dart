@@ -18,7 +18,7 @@ class DashboardPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Talkabiz Mobile'),
+        title: const Text('Talkabiz'),
       ),
       body: dashboardAsync.when(
         data: (summary) {

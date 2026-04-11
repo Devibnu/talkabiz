@@ -57,19 +57,22 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      final token = await _storage.readToken();
+      final token = await _storage.readToken()
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
       if (token == null || token.isEmpty) {
         state = state.copyWith(isLoading: false, isReady: true);
         return;
       }
 
-      final user = await _repository.me();
+      final user = await _repository.me()
+          .timeout(const Duration(seconds: 8));
       state = AuthState(
         session: AuthSession(token: token, tokenType: 'Bearer', user: user),
         isLoading: false,
         isReady: true,
       );
-    } catch (_) {
+    } catch (e) {
+      developer.log('restoreSession failed: $e', name: 'Auth');
       await _storage.clearToken();
       state = const AuthState(isLoading: false, isReady: true);
     }
