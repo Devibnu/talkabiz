@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\WhatsappConnection;
 use App\Models\WhatsappTemplate;
 use App\Models\WhatsappContact;
+use App\Models\WhatsappMessageLog;
+use App\Models\WebhookEvent;
 use App\Models\TemplatePesan;
 use App\Services\GupshupService;
 use App\Services\RevenueGuardService;
@@ -92,6 +94,70 @@ class WhatsAppCloudController extends Controller
             'klien' => $klien,
             'latestTemplateSyncAt' => $latestTemplateSyncAt,
             'templateAutoSyncCooldownMinutes' => (int) ceil(WaBlastService::TEMPLATE_AUTO_SYNC_COOLDOWN / 60),
+        ]);
+    }
+
+    /**
+     * Lightweight dedicated page for Meta App Review recordings.
+     */
+    public function metaReview()
+    {
+        $user = auth()->user();
+        $klien = $user->klien;
+
+        if (!$klien) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Profil klien diperlukan untuk membuka halaman review Meta.');
+        }
+
+        $connection = WhatsappConnection::where('klien_id', $klien->id)->first();
+
+        $templates = WhatsappTemplate::where('klien_id', $klien->id)
+            ->approved()
+            ->latest()
+            ->take(10)
+            ->get();
+
+        $contacts = WhatsappContact::where('klien_id', $klien->id)
+            ->orderByDesc('updated_at')
+            ->take(10)
+            ->get();
+
+        $recentLogs = WhatsappMessageLog::where('klien_id', $klien->id)
+            ->latest()
+            ->take(10)
+            ->get();
+
+        $recentWebhookEvents = collect();
+        if ($connection) {
+            $recentWebhookEvents = WebhookEvent::where('whatsapp_connection_id', $connection->id)
+                ->latest()
+                ->take(10)
+                ->get();
+        }
+
+        $defaultRecipient = old('phone_number')
+            ?: optional($contacts->first())->phone_number
+            ?: optional($recentLogs->first())->phone_number;
+
+        $metaConfig = [
+            'app_id' => $connection?->meta_app_id ?: config('services.facebook.app_id'),
+            'business_manager_id' => $connection?->meta_business_id,
+            'waba_id' => $connection?->waba_id,
+            'phone_number_id' => $connection?->phone_number_id,
+            'business_number' => $connection?->phone_number ? '+' . ltrim($connection->phone_number, '+') : null,
+            'verify_token' => $connection?->webhook_verify_token ? 'Configured' : null,
+            'callback_url' => url('/api/waba/webhook'),
+        ];
+
+        return view('whatsapp.meta-review', [
+            'connection' => $connection,
+            'templates' => $templates,
+            'contacts' => $contacts,
+            'recentLogs' => $recentLogs,
+            'recentWebhookEvents' => $recentWebhookEvents,
+            'defaultRecipient' => $defaultRecipient,
+            'metaConfig' => $metaConfig,
         ]);
     }
 
@@ -839,6 +905,92 @@ class WhatsAppCloudController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Gagal mengirim pesan: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Send a plain text message for Meta review proof.
+     */
+    public function sendReviewTextMessage(Request $request)
+    {
+        if (auth()->user()->isImpersonating()) {
+            return response()->json(['success' => false, 'message' => 'Aksi tidak diizinkan dalam mode lihat saja.'], 403);
+        }
+
+        $request->validate([
+            'phone_number' => 'required|string',
+            'message' => 'required|string|max:1000',
+        ]);
+
+        $klien = auth()->user()->klien;
+        if (!$klien) {
+            return response()->json(['success' => false, 'message' => 'Klien tidak ditemukan.'], 404);
+        }
+
+        $connection = WhatsappConnection::where('klien_id', $klien->id)->first();
+        if (!$connection || !$connection->isConnected()) {
+            return response()->json(['success' => false, 'message' => 'WhatsApp tidak terhubung.'], 400);
+        }
+
+        try {
+            $revenueGuard = app(RevenueGuardService::class);
+            $sendRef = abs(crc32("review_text_{$klien->id}_" . floor(time() / 5)));
+
+            $guardResult = $revenueGuard->chargeAndExecute(
+                userId: auth()->id(),
+                messageCount: 1,
+                category: 'utility',
+                referenceType: 'review_text_message',
+                referenceId: $sendRef,
+                dispatchCallable: function ($transaction) use ($request, $klien) {
+                    $service = app(WhatsAppProviderService::class);
+
+                    return $service->sendText(
+                        phone: $request->phone_number,
+                        message: $request->message,
+                        klienId: $klien->id,
+                        penggunaId: auth()->id()
+                    );
+                },
+                costPreview: $request->attributes->get('revenue_guard', []),
+            );
+
+            if ($guardResult['duplicate'] ?? false) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $guardResult['message'],
+                ]);
+            }
+
+            $result = $guardResult['dispatch_result'];
+            $messageId = $result['message_id']
+                ?? $result['messageId']
+                ?? $result['response']['messages'][0]['id']
+                ?? $result['response']['messageId']
+                ?? null;
+
+            return response()->json([
+                'success' => true,
+                'message_id' => $messageId,
+                'message' => 'Pesan text berhasil dikirim.',
+            ]);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'insufficient_balance',
+                'message' => $e->getMessage(),
+                'topup_url' => route('billing'),
+            ], 402);
+        } catch (Exception $e) {
+            Log::error('[WhatsApp.metaReview] Failed to send review text message', [
+                'klien_id' => $klien->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengirim pesan text: ' . $e->getMessage(),
             ], 500);
         }
     }

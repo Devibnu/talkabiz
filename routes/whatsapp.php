@@ -19,6 +19,9 @@ Route::middleware(['auth', 'impersonate.client', 'share.subscription.status', 's
     // ==================== CONNECTION ====================
     // Main WhatsApp page - show connection status
     Route::get('/', [WhatsAppCloudController::class, 'index'])->name('whatsapp.index');
+
+    // Dedicated lightweight page for Meta App Review recordings
+    Route::get('/meta-review', [WhatsAppCloudController::class, 'metaReview'])->name('whatsapp.meta-review');
     
     // Setup page for credentials
     Route::get('/setup', [WhatsAppCloudController::class, 'setup'])->name('whatsapp.setup');
@@ -59,6 +62,11 @@ Route::middleware(['auth', 'impersonate.client', 'share.subscription.status', 's
     // Sends real WA message — requires plan quota + wallet balance
     Route::post('/test-message', [WhatsAppCloudController::class, 'sendTestMessage'])
         ->name('whatsapp.test-message')
+        ->middleware(['plan.limit:message', 'wallet.cost.guard:utility']);
+
+    // Sends a plain text message for Meta review proof within the allowed conversation window
+    Route::post('/review-text-message', [WhatsAppCloudController::class, 'sendReviewTextMessage'])
+        ->name('whatsapp.review-text-message')
         ->middleware(['plan.limit:message', 'wallet.cost.guard:utility']);
     
     // ==================== CAMPAIGNS (WA BLAST) ====================
