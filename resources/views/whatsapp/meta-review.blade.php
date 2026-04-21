@@ -163,6 +163,19 @@
         .config-item input {
             background: #fbfbfc;
         }
+        .placeholder-card {
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        .full-width-button {
+            width: 100%;
+            justify-content: center;
+        }
+        .plain-input {
+            background: #fff;
+        }
         .notice {
             margin-bottom: 16px;
             border-radius: 16px;
@@ -278,16 +291,14 @@
                             <label>Nomor tujuan</label>
                             <input type="text" name="phone_number" value="{{ $defaultRecipient }}" placeholder="62812xxxxxxx">
                         </div>
-                        <div class="field">
-                            <label>Template</label>
-                            <select name="template_id">
-                                @foreach($templates as $template)
-                                    <option value="{{ $template->id }}">{{ $template->name }} ({{ strtoupper($template->language ?? 'id') }})</option>
-                                @endforeach
-                            </select>
-                        </div>
+                        <input type="hidden" name="template_id" value="{{ optional($templates->first())->id }}">
                         <button type="submit" {{ !$connection?->isConnected() || $templates->isEmpty() ? 'disabled' : '' }}>Kirim Template Default</button>
                     </form>
+
+                    <div class="placeholder-card">
+                        <h3>Kirim pesan text</h3>
+                        <div class="muted">Gunakan setelah nomor sudah berada dalam percakapan yang diizinkan.</div>
+                    </div>
 
                     <form class="form-block" id="textForm" action="{{ route('whatsapp.review-text-message') }}" method="post">
                         @csrf
@@ -329,15 +340,18 @@
                 <div class="card">
                     <div class="eyebrow">Konfigurasi Akun</div>
                     <div class="config-list">
-                        <div class="config-item field"><label>App ID</label><input value="{{ $metaConfig['app_id'] ?: '' }}" readonly></div>
-                        <div class="config-item field"><label>WhatsApp Business Account ID</label><input value="{{ $metaConfig['waba_id'] ?: '' }}" readonly></div>
-                        <div class="config-item field"><label>Business Manager ID</label><input value="{{ $metaConfig['business_manager_id'] ?: '' }}" readonly></div>
-                        <div class="config-item field"><label>Phone Number ID</label><input value="{{ $metaConfig['phone_number_id'] ?: '' }}" readonly></div>
-                        <div class="config-item field"><label>Nomor bisnis</label><input value="{{ $metaConfig['business_number'] ?: '' }}" readonly></div>
-                        <div class="config-item field"><label>Nomor default tujuan uji</label><input value="{{ $defaultRecipient ?: '' }}" readonly></div>
-                        <div class="config-item field"><label>Webhook verify token</label><input value="{{ $metaConfig['verify_token'] ?: '' }}" readonly></div>
-                        <div class="config-item field"><label>Webhook callback URL</label><input value="{{ $metaConfig['callback_url'] }}" readonly></div>
+                        <div class="config-item field"><label>App ID</label><input class="plain-input" value="{{ $metaConfig['app_id'] ?: '' }}" readonly></div>
+                        <div class="config-item field"><label>App Secret</label><textarea class="plain-input" readonly></textarea></div>
+                        <div class="config-item field"><label>Access Token</label><textarea class="plain-input" readonly></textarea></div>
+                        <div class="config-item field"><label>WhatsApp Business Account ID</label><input class="plain-input" value="{{ $metaConfig['waba_id'] ?: '' }}" readonly></div>
+                        <div class="config-item field"><label>Business Manager ID</label><input class="plain-input" value="{{ $metaConfig['business_manager_id'] ?: '' }}" readonly></div>
+                        <div class="config-item field"><label>Phone Number ID</label><input class="plain-input" value="{{ $metaConfig['phone_number_id'] ?: '' }}" readonly></div>
+                        <div class="config-item field"><label>Nomor bisnis</label><input class="plain-input" value="{{ $metaConfig['business_number'] ?: '' }}" readonly></div>
+                        <div class="config-item field"><label>Nomor default tujuan uji</label><input class="plain-input" value="{{ $defaultRecipient ?: '' }}" readonly></div>
+                        <div class="config-item field"><label>Webhook verify token</label><input class="plain-input" value="{{ $metaConfig['verify_token'] ?: '' }}" readonly></div>
+                        <div class="config-item field"><label>Webhook callback URL</label><input class="plain-input" value="{{ $metaConfig['callback_url'] }}" readonly></div>
                     </div>
+                    <button type="button" class="full-width-button" disabled>Simpan Konfigurasi</button>
                 </div>
 
                 <div class="card">
